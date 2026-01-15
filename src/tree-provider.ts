@@ -628,3 +628,107 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         return item;
     }
 }
+
+/**
+ * Drag-and-drop controller for moving items between status groups
+ */
+export class ProjectItemDragAndDropController implements vscode.TreeDragAndDropController<TreeElement> {
+    readonly dropMimeTypes = ['application/vnd.code.tree.ghprojects.item'];
+    readonly dragMimeTypes = ['application/vnd.code.tree.ghprojects.item'];
+
+    constructor(
+        private api: GitHubAPI,
+        private boardProvider: ProjectBoardProvider
+    ) {}
+
+    handleDrag(
+        source: readonly TreeElement[],
+        dataTransfer: vscode.DataTransfer,
+        _token: vscode.CancellationToken
+    ): void {
+        // Only allow dragging ItemNodes
+        const items = source.filter((el): el is ItemNode => el.type === 'item');
+        if (items.length === 0) {
+            return;
+        }
+
+        // Serialize the dragged items
+        const dragData = items.map(node => ({
+            itemId: node.item.id,
+            projectId: node.project.id,
+            currentStatus: node.item.status,
+            title: node.item.title,
+        }));
+
+        dataTransfer.set(
+            'application/vnd.code.tree.ghprojects.item',
+            new vscode.DataTransferItem(dragData)
+        );
+    }
+
+    async handleDrop(
+        target: TreeElement | undefined,
+        dataTransfer: vscode.DataTransfer,
+        _token: vscode.CancellationToken
+    ): Promise<void> {
+        // Must drop onto a StatusGroupNode
+        if (!target || target.type !== 'statusGroup') {
+            return;
+        }
+
+        const transferItem = dataTransfer.get('application/vnd.code.tree.ghprojects.item');
+        if (!transferItem) {
+            return;
+        }
+
+        const dragData = transferItem.value as Array<{
+            itemId: string;
+            projectId: string;
+            currentStatus: string | null;
+            title: string;
+        }>;
+
+        const targetStatus = target.status;
+        const project = target.project;
+
+        // Find the Status field and target option
+        const statusInfo = this.api.findStatusFieldAndOption(project, targetStatus);
+        if (!statusInfo) {
+            vscode.window.showErrorMessage(`Could not find status "${targetStatus}" in project`);
+            return;
+        }
+
+        // Update each dragged item
+        for (const item of dragData) {
+            if (item.currentStatus === targetStatus) {
+                continue; // Already in this status
+            }
+
+            try {
+                const success = await this.api.updateItemStatus(
+                    project.id,
+                    item.itemId,
+                    statusInfo.fieldId,
+                    statusInfo.optionId
+                );
+
+                if (success) {
+                    vscode.window.showInformationMessage(
+                        `Moved "${item.title}" to ${targetStatus}`
+                    );
+                } else {
+                    vscode.window.showErrorMessage(
+                        `Failed to move "${item.title}"`
+                    );
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Error moving "${item.title}": ${error}`
+                );
+            }
+        }
+
+        // Refresh the tree to show updated positions
+        this.boardProvider.refresh();
+    }
+}

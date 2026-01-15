@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GitHubAPI } from './github-api';
-import { ProjectBoardProvider, ItemNode, ViewNode } from './tree-provider';
+import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropController } from './tree-provider';
 import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
 import { executeStartWorking } from './start-working';
@@ -29,10 +29,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
     statusBar.show();
 
+    // Create drag-and-drop controller for moving items between statuses
+    const dragDropController = new ProjectItemDragAndDropController(api, boardProvider);
+
     // Register tree view - single unified view showing project boards
     const boardView = vscode.window.createTreeView('ghProjects.board', {
         treeDataProvider: boardProvider,
         showCollapseAll: true,
+        dragAndDropController: dragDropController,
+        canSelectMany: true, // Allow multi-select for bulk moves
     });
 
     context.subscriptions.push(boardView, statusBar);

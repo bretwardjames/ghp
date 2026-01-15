@@ -319,6 +319,10 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         // Get status order from project
         const statusOrder = await this.api.getProjectStatusOptions(project.id);
 
+        // Check if we should show empty status groups
+        const statusConfig = vscode.workspace.getConfiguration('ghProjects');
+        const showEmptyStatuses = statusConfig.get<boolean>('showEmptyColumns', false);
+
         // Group items by status
         const itemsByStatus = new Map<string, NormalizedProjectItem[]>();
         for (const item of visibleItems) {
@@ -333,14 +337,14 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         const groups: StatusGroupNode[] = [];
 
         for (const status of statusOrder) {
-            const items = itemsByStatus.get(status);
-            if (items && items.length > 0) {
+            const items = itemsByStatus.get(status) || [];
+            if (items.length > 0 || showEmptyStatuses) {
                 groups.push(new StatusGroupNode(status, items, project));
-                itemsByStatus.delete(status);
             }
+            itemsByStatus.delete(status);
         }
 
-        // Add any remaining statuses not in the order
+        // Add any remaining statuses not in the order (only if they have items)
         for (const [status, items] of itemsByStatus) {
             if (items.length > 0) {
                 groups.push(new StatusGroupNode(status, items, project));

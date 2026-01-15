@@ -207,27 +207,21 @@ export class GitHubAPI {
                                     nodes {
                                         __typename
                                         ... on ProjectV2ItemFieldSingleSelectValue {
-                                            name
-                                            field {
-                                                ... on ProjectV2SingleSelectField {
-                                                    name
-                                                }
+                                            singleSelectName: name
+                                            singleSelectField: field {
+                                                name
                                             }
                                         }
                                         ... on ProjectV2ItemFieldTextValue {
-                                            text
-                                            field {
-                                                ... on ProjectV2Field {
-                                                    name
-                                                }
+                                            textValue: text
+                                            textField: field {
+                                                name
                                             }
                                         }
                                         ... on ProjectV2ItemFieldIterationValue {
-                                            title
-                                            field {
-                                                ... on ProjectV2IterationField {
-                                                    name
-                                                }
+                                            iterationTitle: title
+                                            iterationField: field {
+                                                name
                                             }
                                         }
                                     }
@@ -679,23 +673,34 @@ export class GitHubAPI {
         const fields = new Map<string, string>();
         let status: string | null = null;
 
-        // Extract field values
+        // Extract field values (using aliased field names from GraphQL query)
         for (const fieldValue of item.fieldValues.nodes) {
-            if (!fieldValue || !('field' in fieldValue)) continue;
+            if (!fieldValue) continue;
 
-            const fieldName = (fieldValue as { field?: { name?: string } }).field?.name;
-            if (!fieldName) continue;
+            // Cast through unknown since GraphQL response uses aliased field names
+            const fv = fieldValue as unknown as Record<string, unknown>;
 
             if (fieldValue.__typename === 'ProjectV2ItemFieldSingleSelectValue') {
-                const selectValue = fieldValue as SingleSelectFieldValue;
-                fields.set(fieldName, selectValue.name);
-                if (fieldName.toLowerCase() === statusFieldName.toLowerCase()) {
-                    status = selectValue.name;
+                const fieldName = (fv.singleSelectField as { name?: string })?.name;
+                const valueName = fv.singleSelectName as string;
+                if (fieldName && valueName) {
+                    fields.set(fieldName, valueName);
+                    if (fieldName.toLowerCase() === statusFieldName.toLowerCase()) {
+                        status = valueName;
+                    }
                 }
             } else if (fieldValue.__typename === 'ProjectV2ItemFieldTextValue') {
-                fields.set(fieldName, (fieldValue as { text: string }).text);
+                const fieldName = (fv.textField as { name?: string })?.name;
+                const textValue = fv.textValue as string;
+                if (fieldName && textValue) {
+                    fields.set(fieldName, textValue);
+                }
             } else if (fieldValue.__typename === 'ProjectV2ItemFieldIterationValue') {
-                fields.set(fieldName, (fieldValue as { title: string }).title);
+                const fieldName = (fv.iterationField as { name?: string })?.name;
+                const iterationTitle = fv.iterationTitle as string;
+                if (fieldName && iterationTitle) {
+                    fields.set(fieldName, iterationTitle);
+                }
             }
         }
 

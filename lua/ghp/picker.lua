@@ -99,17 +99,18 @@ local function snacks_pick(args, title, opts, on_select)
       title = title .. " [s:start d:done c:comment a:assign p:pr m:move w:switch l:link ?:help]",
       items = items,
       format = "text",
-      preview = function(ctx)
-        local item = ctx.item
+      preview = function(ctx, item)
+        -- snacks passes (ctx, item) or just item depending on version
+        item = item or ctx
         if not item or not item.issue then
-          return { lines = { "No issue selected" } }
+          return "Select an issue to preview"
         end
         local num = item.issue.number
         -- Use cached preview if available
         if not preview_cache[num] then
-          preview_cache[num] = fetch_issue_details_sync(num)
+          preview_cache[num] = table.concat(fetch_issue_details_sync(num), "\n")
         end
-        return { lines = preview_cache[num] }
+        return preview_cache[num]
       end,
       confirm = function(picker, item)
         picker:close()

@@ -162,31 +162,36 @@ function M.config_edit()
 end
 
 -- Telescope pickers
-function M.telescope_plan(opts)
-  local ok, _ = pcall(require, "telescope")
+local function load_telescope_extension()
+  local ok, telescope = pcall(require, "telescope")
   if not ok then
     vim.notify("Telescope not installed", vim.log.levels.ERROR)
-    return
+    return nil
   end
-  require("telescope").extensions.ghp.plan(opts)
+  -- Load the ghp extension
+  telescope.load_extension("ghp")
+  return telescope
+end
+
+function M.telescope_plan(opts)
+  local telescope = load_telescope_extension()
+  if telescope then
+    telescope.extensions.ghp.plan(opts)
+  end
 end
 
 function M.telescope_work(opts)
-  local ok, _ = pcall(require, "telescope")
-  if not ok then
-    vim.notify("Telescope not installed", vim.log.levels.ERROR)
-    return
+  local telescope = load_telescope_extension()
+  if telescope then
+    telescope.extensions.ghp.work(opts)
   end
-  require("telescope").extensions.ghp.work(opts)
 end
 
 function M.telescope_issues(opts)
-  local ok, _ = pcall(require, "telescope")
-  if not ok then
-    vim.notify("Telescope not installed", vim.log.levels.ERROR)
-    return
+  local telescope = load_telescope_extension()
+  if telescope then
+    telescope.extensions.ghp.issues(opts)
   end
-  require("telescope").extensions.ghp.issues(opts)
 end
 
 function M.setup()

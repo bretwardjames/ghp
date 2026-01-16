@@ -80,11 +80,11 @@ local function snacks_pick(args, title, opts, on_select)
       table.insert(items, {
         text = issue.display,
         issue = issue,
-        preview = {
-          text = table.concat(fetch_issue_details_sync(issue.number), "\n"),
-        },
       })
     end
+
+    -- Cache for lazy-loaded previews
+    local preview_cache = {}
 
     local commands = require("ghp.commands")
     local ghp_path = get_ghp_path()
@@ -99,7 +99,18 @@ local function snacks_pick(args, title, opts, on_select)
       title = title .. " [s:start d:done c:comment a:assign p:pr m:move w:switch l:link ?:help]",
       items = items,
       format = "text",
-      preview = "preview",
+      preview = function(ctx)
+        local item = ctx.item
+        if not item or not item.issue then
+          return { lines = { "No issue selected" } }
+        end
+        local num = item.issue.number
+        -- Use cached preview if available
+        if not preview_cache[num] then
+          preview_cache[num] = fetch_issue_details_sync(num)
+        end
+        return { lines = preview_cache[num] }
+      end,
       confirm = function(picker, item)
         picker:close()
         if item and item.issue then

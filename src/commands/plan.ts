@@ -10,6 +10,7 @@ interface PlanOptions {
     mine?: boolean;
     unassigned?: boolean;
     list?: boolean;
+    sort?: string;
     slice?: string[];
 }
 
@@ -177,6 +178,37 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
         }
     }
 
+    // Sort items if requested
+    if (options.sort) {
+        const sortFields = options.sort.split(',').map(f => f.trim());
+        filteredItems.sort((a, b) => {
+            for (const field of sortFields) {
+                const ascending = field.startsWith('-');
+                const fieldName = ascending ? field.slice(1) : field;
+
+                // Get field values (handle special fields and custom fields)
+                let aVal: any = getFieldValue(a, fieldName);
+                let bVal: any = getFieldValue(b, fieldName);
+
+                // Compare
+                if (aVal === bVal) continue;
+                if (aVal === null || aVal === undefined) return ascending ? -1 : 1;
+                if (bVal === null || bVal === undefined) return ascending ? 1 : -1;
+
+                // String comparison
+                if (typeof aVal === 'string' && typeof bVal === 'string') {
+                    const cmp = aVal.localeCompare(bVal);
+                    return ascending ? cmp : -cmp;
+                }
+
+                // Number comparison
+                if (aVal < bVal) return ascending ? -1 : 1;
+                if (aVal > bVal) return ascending ? 1 : -1;
+            }
+            return 0;
+        });
+    }
+
     // Display based on mode
     if (options.list) {
         // Simple list view (one item per line, for pickers)
@@ -187,6 +219,24 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
     } else {
         // Board view
         displayBoardView(filteredItems, targetProjects, options);
+    }
+}
+
+function getFieldValue(item: ProjectItem, fieldName: string): any {
+    const lower = fieldName.toLowerCase();
+
+    // Built-in fields
+    switch (lower) {
+        case 'number': return item.number;
+        case 'title': return item.title;
+        case 'status': return item.status;
+        case 'type': return item.type;
+        default:
+            // Check custom fields
+            const customField = Object.entries(item.fields || {}).find(
+                ([k]) => k.toLowerCase() === lower
+            );
+            return customField ? customField[1] : null;
     }
 }
 

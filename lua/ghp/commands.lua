@@ -5,6 +5,14 @@ local function get_ghp_path()
   return require("ghp").config.ghp_path
 end
 
+local function get_icon(name)
+  local icons = require("ghp").config.icons
+  if icons and icons[name] then
+    return icons[name]
+  end
+  return ""
+end
+
 local function run_ghp(args, callback)
   local cmd = get_ghp_path() .. " " .. args
   vim.fn.jobstart(cmd, {
@@ -42,7 +50,7 @@ function M.plan(opts)
   end
 
   run_ghp(args, function(lines)
-    ui.show_float(lines, { title = "GitHub Projects - Plan" })
+    ui.show_float(lines, { title = get_icon("plan") .. "Project Board" })
   end)
 end
 
@@ -54,7 +62,7 @@ function M.work(opts)
   end
 
   run_ghp(args, function(lines)
-    ui.show_float(lines, { title = "GitHub Projects - My Work" })
+    ui.show_float(lines, { title = get_icon("work") .. "My Work" })
   end)
 end
 
@@ -65,7 +73,7 @@ function M.open(issue_number)
   if issue_number == "" then return end
 
   run_ghp("open " .. issue_number, function(lines)
-    ui.show_float(lines, { title = "Issue #" .. issue_number })
+    ui.show_float(lines, { title = get_icon("issue") .. "Issue #" .. issue_number })
   end)
 end
 
@@ -144,7 +152,7 @@ function M.pr(opts)
     ui.show_terminal("ghp " .. args)
   else
     run_ghp(args, function(lines)
-      ui.show_float(lines, { title = "Pull Request Status" })
+      ui.show_float(lines, { title = get_icon("pr") .. "Pull Request" })
     end)
   end
 end

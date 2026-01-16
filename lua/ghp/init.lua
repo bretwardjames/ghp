@@ -11,6 +11,13 @@ M.config = {
     width = 0.8,
     height = 0.8,
   },
+  -- Icons (set to false to disable)
+  icons = {
+    plan = " ",
+    work = " ",
+    issue = " ",
+    pr = " ",
+  },
 }
 
 function M.setup(opts)

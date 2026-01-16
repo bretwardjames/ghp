@@ -443,7 +443,16 @@ export class PlanningBoardPanel {
     private async _showNewIssueForm(): Promise<void> {
         // Read issue templates from workspace
         const { templates, blankIssuesEnabled } = await this._getIssueTemplates();
-        this._panel.webview.html = this._getNewIssueFormHtml(templates, blankIssuesEnabled);
+
+        // Get default template from settings
+        const config = vscode.workspace.getConfiguration('ghProjects');
+        const defaultTemplate = config.get<string>('defaultIssueTemplate', '');
+
+        // Debug logging
+        console.log('[GH Projects] Default template setting:', JSON.stringify(defaultTemplate));
+        console.log('[GH Projects] Available templates:', templates.map(t => t.filename));
+
+        this._panel.webview.html = this._getNewIssueFormHtml(templates, blankIssuesEnabled, defaultTemplate);
     }
 
     private async _getIssueTemplates(): Promise<{
@@ -617,11 +626,29 @@ export class PlanningBoardPanel {
 
     private _getNewIssueFormHtml(
         templates: Array<{ name: string; filename: string; body: string; labels?: string[] }>,
-        blankIssuesEnabled: boolean
+        blankIssuesEnabled: boolean,
+        defaultTemplate: string = ''
     ): string {
+        // Helper to check if a template matches the default setting
+        // Matches with or without file extension (e.g., "bug_report" matches "bug_report.md")
+        const isDefaultTemplate = (filename: string): boolean => {
+            if (!defaultTemplate) return false;
+            const normalizedDefault = defaultTemplate.toLowerCase();
+            const normalizedFilename = filename.toLowerCase();
+            return normalizedFilename === normalizedDefault ||
+                   normalizedFilename === `${normalizedDefault}.md` ||
+                   normalizedFilename === `${normalizedDefault}.yml` ||
+                   normalizedFilename === `${normalizedDefault}.yaml`;
+        };
+
         // Build template options - templates first, then blank at the end if allowed
         const templateOptions = templates
-            .map(t => `<option value="${this._escapeHtml(t.filename)}">${this._escapeHtml(t.name)}</option>`)
+            .map(t => {
+                const isMatch = isDefaultTemplate(t.filename);
+                console.log(`[GH Projects] Template "${t.filename}" match default "${defaultTemplate}": ${isMatch}`);
+                const selected = isMatch ? ' selected' : '';
+                return `<option value="${this._escapeHtml(t.filename)}"${selected}>${this._escapeHtml(t.name)}</option>`;
+            })
             .join('');
 
         const blankOption = blankIssuesEnabled ? '<option value="">Blank Issue</option>' : '';

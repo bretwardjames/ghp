@@ -96,6 +96,50 @@ require("ghp").setup({
 | `:GhpComment [issue]` | Add comment to an issue |
 | `:GhpPr [create\|open]` | View PR status, create PR, or open in browser |
 | `:GhpConfig` | Edit ghp-cli config file |
+| `:GhpTelescopePlan [shortcut]` | Telescope picker for project board |
+| `:GhpTelescopeWork` | Telescope picker for your work |
+| `:GhpTelescopeIssues` | Telescope picker for issues |
+
+## Telescope Integration
+
+If you have [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) installed, you can use fuzzy-finding pickers for issues:
+
+```lua
+-- LazyVim with telescope
+return {
+  "bretwardjames/ghp.nvim",
+  dependencies = { "nvim-telescope/telescope.nvim" },
+  keys = {
+    { "<leader>gp", "<cmd>GhpTelescopePlan<cr>", desc = "Project Board (Telescope)" },
+    { "<leader>gw", "<cmd>GhpTelescopeWork<cr>", desc = "My Work (Telescope)" },
+    { "<leader>ga", "<cmd>GhpAdd<cr>", desc = "Add Issue" },
+    { "<leader>gs", "<cmd>GhpStart<cr>", desc = "Start Issue" },
+  },
+  opts = {},
+}
+```
+
+Or load the extension directly:
+
+```lua
+require("telescope").load_extension("ghp")
+
+-- Then use:
+require("telescope").extensions.ghp.plan()
+require("telescope").extensions.ghp.work()
+require("telescope").extensions.ghp.issues()
+require("telescope").extensions.ghp.backlog()
+require("telescope").extensions.ghp.in_progress()
+```
+
+### Telescope Keymaps
+
+| Key | Mode | Action |
+|-----|------|--------|
+| `<CR>` | n/i | Open issue details |
+| `<C-s>` / `s` | i/n | Start working on issue |
+| `<C-d>` / `d` | i/n | Mark issue as done |
+| `<C-c>` / `c` | i/n | Comment on issue |
 
 ## Keymaps in Float Windows
 

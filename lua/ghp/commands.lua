@@ -161,6 +161,34 @@ function M.config_edit()
   ui.show_terminal("ghp config --edit")
 end
 
+-- Telescope pickers
+function M.telescope_plan(opts)
+  local ok, _ = pcall(require, "telescope")
+  if not ok then
+    vim.notify("Telescope not installed", vim.log.levels.ERROR)
+    return
+  end
+  require("telescope").extensions.ghp.plan(opts)
+end
+
+function M.telescope_work(opts)
+  local ok, _ = pcall(require, "telescope")
+  if not ok then
+    vim.notify("Telescope not installed", vim.log.levels.ERROR)
+    return
+  end
+  require("telescope").extensions.ghp.work(opts)
+end
+
+function M.telescope_issues(opts)
+  local ok, _ = pcall(require, "telescope")
+  if not ok then
+    vim.notify("Telescope not installed", vim.log.levels.ERROR)
+    return
+  end
+  require("telescope").extensions.ghp.issues(opts)
+end
+
 function M.setup()
   -- Register user commands
   vim.api.nvim_create_user_command("GhpPlan", function(opts)
@@ -209,6 +237,20 @@ function M.setup()
 
   vim.api.nvim_create_user_command("GhpConfig", function()
     M.config_edit()
+  end, {})
+
+  -- Telescope commands
+  vim.api.nvim_create_user_command("GhpTelescopePlan", function(opts)
+    local shortcut = opts.args ~= "" and opts.args or nil
+    M.telescope_plan({ shortcut = shortcut })
+  end, { nargs = "?" })
+
+  vim.api.nvim_create_user_command("GhpTelescopeWork", function()
+    M.telescope_work()
+  end, {})
+
+  vim.api.nvim_create_user_command("GhpTelescopeIssues", function()
+    M.telescope_issues()
   end, {})
 end
 

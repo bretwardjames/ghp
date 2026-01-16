@@ -75,19 +75,18 @@ local function snacks_pick(args, title, opts, on_select)
       return
     end
 
+    -- Pre-fetch all previews (simpler, slightly slower but works)
     local items = {}
     for _, issue in ipairs(issues) do
+      local details = fetch_issue_details_sync(issue.number)
       table.insert(items, {
         text = issue.display,
         issue = issue,
         preview = {
-          text = "Loading...",
+          text = table.concat(details, "\n"),
         },
       })
     end
-
-    -- Cache for lazy-loaded previews
-    local preview_cache = {}
 
     local commands = require("ghp.commands")
     local ghp_path = get_ghp_path()
@@ -102,20 +101,7 @@ local function snacks_pick(args, title, opts, on_select)
       title = title .. " [s:start d:done c:comment a:assign p:pr m:move w:switch l:link ?:help]",
       items = items,
       format = "text",
-      preview = function(ctx)
-        local item = ctx.item
-        if not item or not item.issue then
-          return true
-        end
-        local num = item.issue.number
-        -- Fetch and cache preview
-        if not preview_cache[num] then
-          preview_cache[num] = fetch_issue_details_sync(num)
-        end
-        -- Set buffer content
-        vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, preview_cache[num])
-        return true
-      end,
+      preview = "preview",
       confirm = function(picker, item)
         picker:close()
         if item and item.issue then

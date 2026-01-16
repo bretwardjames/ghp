@@ -42,16 +42,66 @@ local function fetch_issues(args, callback)
   })
 end
 
--- Check if telescope is available and preferred
-local function use_telescope()
-  -- Check config preference first
+-- Check which picker to use
+local function get_picker()
   local config = require("ghp").config
   if config.picker == "telescope" then
     local ok, _ = pcall(require, "telescope")
-    return ok
+    if ok then return "telescope" end
   end
-  -- Default to vim.ui.select (faster, works with snacks/dressing)
-  return false
+  -- Try snacks.picker for preview support
+  local ok, snacks = pcall(require, "snacks")
+  if ok and snacks.picker then
+    return "snacks"
+  end
+  -- Fallback to vim.ui.select
+  return "select"
+end
+
+-- Fetch issue details synchronously for preview
+local function fetch_issue_details_sync(issue_number)
+  local cmd = get_ghp_path() .. " open " .. issue_number
+  local result = vim.fn.system(cmd)
+  -- Clean ANSI codes and split into lines
+  local clean = result:gsub("\27%[[%d;]*m", "")
+  return vim.split(clean, "\n")
+end
+
+-- Use snacks.picker with preview
+local function snacks_pick(args, title, opts, on_select)
+  fetch_issues(args, function(issues)
+    if #issues == 0 then
+      vim.notify("No issues found", vim.log.levels.INFO)
+      return
+    end
+
+    local items = {}
+    for _, issue in ipairs(issues) do
+      table.insert(items, {
+        text = issue.display,
+        issue = issue,
+      })
+    end
+
+    require("snacks").picker({
+      title = title,
+      items = items,
+      format = function(item)
+        return { { item.text } }
+      end,
+      preview = function(item)
+        if not item or not item.issue then return { lines = {} } end
+        local lines = fetch_issue_details_sync(item.issue.number)
+        return { lines = lines }
+      end,
+      confirm = function(picker, item)
+        picker:close()
+        if item and item.issue and on_select then
+          on_select(item.issue)
+        end
+      end,
+    })
+  end)
 end
 
 -- Use telescope picker
@@ -122,12 +172,18 @@ local function show_actions(issue)
   end)
 end
 
--- Main picker function - uses vim.ui.select by default, telescope if configured
+-- Main picker function - snacks (with preview) > vim.ui.select > telescope if configured
 function M.pick(args, title, opts)
   opts = opts or {}
 
-  if use_telescope() then
+  local picker = get_picker()
+
+  if picker == "telescope" then
     telescope_pick(args, title, opts)
+  elseif picker == "snacks" then
+    snacks_pick(args, title, opts, function(issue)
+      show_actions(issue)
+    end)
   else
     select_pick(args, title, opts, function(issue)
       show_actions(issue)

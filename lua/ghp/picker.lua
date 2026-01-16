@@ -86,18 +86,134 @@ local function snacks_pick(args, title, opts, on_select)
       })
     end
 
+    local commands = require("ghp.commands")
+    local ghp_path = get_ghp_path()
+
+    -- Helper to run ghp command in terminal
+    local function run_in_terminal(cmd)
+      require("ghp.ui").show_terminal(cmd)
+    end
+
     require("snacks").picker.pick({
       source = "ghp",
-      title = title,
+      title = title .. " [s:start d:done c:comment a:assign p:pr m:move w:switch l:link ?:help]",
       items = items,
       format = "text",
       preview = "preview",
       confirm = function(picker, item)
         picker:close()
-        if item and item.issue and on_select then
-          on_select(item.issue)
+        if item and item.issue then
+          commands.open(tostring(item.issue.number))
         end
       end,
+      win = {
+        input = {
+          keys = {
+            ["<C-s>"] = { "start", mode = { "i", "n" } },
+            ["<C-d>"] = { "done", mode = { "i", "n" } },
+            ["<C-c>"] = { "comment", mode = { "i", "n" } },
+            ["<C-a>"] = { "assign", mode = { "i", "n" } },
+            ["<C-p>"] = { "pr", mode = { "i", "n" } },
+            ["<C-w>"] = { "switch", mode = { "i", "n" } },
+            ["<C-m>"] = { "move", mode = { "i", "n" } },
+            ["<C-l>"] = { "link", mode = { "i", "n" } },
+          },
+        },
+        list = {
+          keys = {
+            ["s"] = { "start", mode = { "n" } },
+            ["d"] = { "done", mode = { "n" } },
+            ["c"] = { "comment", mode = { "n" } },
+            ["a"] = { "assign", mode = { "n" } },
+            ["p"] = { "pr", mode = { "n" } },
+            ["w"] = { "switch", mode = { "n" } },
+            ["m"] = { "move", mode = { "n" } },
+            ["l"] = { "link", mode = { "n" } },
+            ["?"] = { "help", mode = { "n" } },
+          },
+        },
+      },
+      actions = {
+        start = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            run_in_terminal(ghp_path .. " start " .. item.issue.number)
+          end
+        end,
+        done = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            commands.done(tostring(item.issue.number))
+          end
+        end,
+        comment = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            run_in_terminal(ghp_path .. " comment " .. item.issue.number)
+          end
+        end,
+        assign = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            local result = vim.fn.system(ghp_path .. " assign " .. item.issue.number)
+            vim.notify("Assigned #" .. item.issue.number .. " to you", vim.log.levels.INFO)
+          end
+        end,
+        pr = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            run_in_terminal(ghp_path .. " pr --create " .. item.issue.number)
+          end
+        end,
+        switch = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            local result = vim.fn.system(ghp_path .. " switch " .. item.issue.number)
+            if vim.v.shell_error == 0 then
+              vim.notify("Switched to branch for #" .. item.issue.number, vim.log.levels.INFO)
+            else
+              vim.notify(result, vim.log.levels.ERROR)
+            end
+          end
+        end,
+        move = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            vim.ui.input({ prompt = "Move #" .. item.issue.number .. " to status: " }, function(status)
+              if status and status ~= "" then
+                commands.move(tostring(item.issue.number), status)
+              end
+            end)
+          end
+        end,
+        link = function(picker, item)
+          picker:close()
+          if item and item.issue then
+            local result = vim.fn.system(ghp_path .. " link-branch " .. item.issue.number)
+            if vim.v.shell_error == 0 then
+              vim.notify("Linked current branch to #" .. item.issue.number, vim.log.levels.INFO)
+            else
+              vim.notify(result, vim.log.levels.ERROR)
+            end
+          end
+        end,
+        help = function(picker)
+          vim.notify([[
+ghp.nvim picker keymaps:
+  Enter     Open issue details
+  s         Start working (create branch, update status)
+  d         Mark as done
+  c         Add comment
+  a         Assign to yourself
+  p         Create/view PR
+  w         Switch to linked branch
+  m         Move to different status
+  l         Link current branch to issue
+  ?         Show this help
+  Esc/q     Close picker
+]], vim.log.levels.INFO)
+        end,
+      },
     })
   end)
 end

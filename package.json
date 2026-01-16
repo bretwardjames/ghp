@@ -1,5 +1,5 @@
 {
-  "name": "ghp-cli",
+  "name": "@bretwardjames/ghp-cli",
   "version": "0.1.0",
   "description": "GitHub Projects CLI - manage project boards from your terminal",
   "main": "./dist/index.js",

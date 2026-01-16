@@ -219,8 +219,8 @@ function M.in_progress(opts)
   M.issues(opts)
 end
 
--- Register telescope extension
-return telescope.register_extension({
+-- Export extension definition (for telescope/_extensions/ghp.lua)
+M._extension = {
   exports = {
     issues = M.issues,
     plan = M.plan,
@@ -228,4 +228,6 @@ return telescope.register_extension({
     backlog = M.backlog,
     in_progress = M.in_progress,
   },
-})
+}
+
+return M

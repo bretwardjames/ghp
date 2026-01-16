@@ -80,20 +80,18 @@ local function snacks_pick(args, title, opts, on_select)
       table.insert(items, {
         text = issue.display,
         issue = issue,
+        preview = {
+          text = table.concat(fetch_issue_details_sync(issue.number), "\n"),
+        },
       })
     end
 
-    require("snacks").picker({
+    require("snacks").picker.pick({
+      source = "ghp",
       title = title,
       items = items,
-      format = function(item)
-        return { { item.text } }
-      end,
-      preview = function(item)
-        if not item or not item.issue then return { lines = {} } end
-        local lines = fetch_issue_details_sync(item.issue.number)
-        return { lines = lines }
-      end,
+      format = "text",
+      preview = "preview",
       confirm = function(picker, item)
         picker:close()
         if item and item.issue and on_select then
@@ -194,7 +192,7 @@ end
 -- Convenience functions
 function M.plan(opts)
   opts = opts or {}
-  local args = "plan"
+  local args = "plan --list"  -- Use list format for picker
   if opts.status then
     args = args .. " --status '" .. opts.status .. "'"
   end
@@ -209,7 +207,7 @@ end
 
 function M.work(opts)
   opts = opts or {}
-  local args = "work"
+  local args = "work --list"  -- Use list format for picker
   if opts.status then
     args = args .. " --status '" .. opts.status .. "'"
   end

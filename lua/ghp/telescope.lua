@@ -20,16 +20,18 @@ end
 local function parse_issues(lines)
   local issues = {}
   for _, line in ipairs(lines) do
-    -- Match lines with issue numbers: #123
-    local num = line:match("#(%d+)")
-    if num then
-      -- Clean ANSI codes
-      local clean = line:gsub("\27%[[%d;]*m", ""):gsub("^%s+", "")
-      table.insert(issues, {
-        number = tonumber(num),
-        display = clean,
-        raw = line,
-      })
+    if line and line ~= "" then
+      -- Match lines with issue numbers: #123
+      local num = line:match("#(%d+)")
+      if num then
+        -- Clean ANSI codes
+        local clean = line:gsub("\27%[[%d;]*m", ""):gsub("^%s+", "")
+        table.insert(issues, {
+          number = tonumber(num),
+          display = clean,
+          raw = line,
+        })
+      end
     end
   end
   return issues
@@ -64,7 +66,9 @@ local function fetch_issue_details(issue_number, callback)
         -- Clean ANSI codes
         local clean = {}
         for _, line in ipairs(data) do
-          table.insert(clean, line:gsub("\27%[[%d;]*m", ""))
+          if line and line ~= "" then
+            table.insert(clean, line:gsub("\27%[[%d;]*m", ""))
+          end
         end
         callback(clean)
       end

@@ -8,14 +8,16 @@ end
 local function parse_issues(lines)
   local issues = {}
   for _, line in ipairs(lines) do
-    local num = line:match("#(%d+)")
-    if num then
-      local clean = line:gsub("\27%[[%d;]*m", ""):gsub("^%s+", "")
-      table.insert(issues, {
-        number = tonumber(num),
-        display = clean,
-        raw = line,
-      })
+    if line and line ~= "" then
+      local num = line:match("#(%d+)")
+      if num then
+        local clean = line:gsub("\27%[[%d;]*m", ""):gsub("^%s+", "")
+        table.insert(issues, {
+          number = tonumber(num),
+          display = clean,
+          raw = line,
+        })
+      end
     end
   end
   return issues

@@ -9,6 +9,7 @@ interface PlanOptions {
     status?: string;
     mine?: boolean;
     unassigned?: boolean;
+    list?: boolean;
     slice?: string[];
 }
 
@@ -181,12 +182,23 @@ export async function planCommand(shortcutOrOptions?: string | PlanOptions, cliO
     }
 
     // Display based on mode
-    if (options.status) {
+    if (options.list) {
+        // Simple list view (one item per line, for pickers)
+        displaySimpleList(filteredItems);
+    } else if (options.status) {
         // List view for single status
         displayListView(filteredItems, options.status, options);
     } else {
         // Board view
         displayBoardView(filteredItems, targetProjects, options);
+    }
+}
+
+function displaySimpleList(items: ProjectItem[]): void {
+    for (const item of items) {
+        const num = item.number ? `#${item.number}` : '';
+        const status = item.status ? `[${item.status}]` : '';
+        console.log(`${num} ${item.title} ${status}`);
     }
 }
 

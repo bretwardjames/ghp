@@ -7,6 +7,7 @@ interface WorkOptions {
     all?: boolean;
     status?: string;
     hideDone?: boolean;
+    list?: boolean;
 }
 
 export async function workCommand(options: WorkOptions): Promise<void> {
@@ -97,12 +98,24 @@ export async function workCommand(options: WorkOptions): Promise<void> {
         return aIdx - bIdx;
     });
 
+    // Simple list output for pickers
+    if (options.list) {
+        for (const status of sortedStatuses) {
+            const items = byStatus.get(status)!;
+            for (const item of items) {
+                const num = item.number ? `#${item.number}` : '';
+                console.log(`${num} ${item.title} [${status}]`);
+            }
+        }
+        return;
+    }
+
     // Display
     for (const status of sortedStatuses) {
         const items = byStatus.get(status)!;
         const statusColor = getStatusColor(status);
         console.log(statusColor(`■ ${status}`) + chalk.dim(` (${items.length})`));
-        
+
         for (const item of items) {
             const num = item.number ? chalk.cyan(`#${item.number}`) : chalk.dim('draft');
             const typeIcon = item.type === 'pull_request' ? chalk.magenta('⎇') : ' ';

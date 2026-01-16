@@ -51,6 +51,7 @@ program
     .option('-a, --all', 'Show all items, not just assigned to me')
     .option('-s, --status <status>', 'Filter by status')
     .option('--hide-done', 'Hide completed items')
+    .option('-l, --list', 'Output as simple list (one item per line, for pickers)')
     .action(workCommand);
 
 program
@@ -61,6 +62,7 @@ program
     .option('-s, --status <status>', 'Show only items in this status (list view)')
     .option('-m, --mine', 'Show only items assigned to me')
     .option('-u, --unassigned', 'Show only unassigned items')
+    .option('-l, --list', 'Output as simple list (one item per line, for pickers)')
     .option('--slice <field=value>', 'Filter by field (repeatable: --slice label=bug --slice Priority=High)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .action(planCommand);
 

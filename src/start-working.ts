@@ -90,6 +90,9 @@ export async function executeStartWorking(
         await updateItemStatus(api, project, item, targetStatus);
     }
 
+    // Step 4: Apply active label to track current work
+    await applyActiveLabel(api, item);
+
     return true;
 }
 
@@ -245,5 +248,31 @@ async function linkBranchToIssue(branchName: string, item: NormalizedProjectItem
     } catch (error) {
         // Non-fatal - just log it
         console.warn('Failed to auto-link branch to issue:', error);
+    }
+}
+
+/**
+ * Apply the active label to the current issue
+ * This removes the label from any other issues first, ensuring only one is "active"
+ */
+async function applyActiveLabel(api: GitHubAPI, item: NormalizedProjectItem): Promise<void> {
+    if (!item.number || !item.repository) {
+        return; // Can't apply label without issue number and repository
+    }
+
+    const [owner, repo] = item.repository.split('/');
+    if (!owner || !repo) {
+        return;
+    }
+
+    try {
+        const success = await api.transferActiveLabel(owner, repo, item.number);
+        if (success) {
+            const labelName = api.getActiveLabelName();
+            console.log(`Applied ${labelName} label to #${item.number}`);
+        }
+    } catch (error) {
+        // Non-fatal - just log it
+        console.warn('Failed to apply active label:', error);
     }
 }

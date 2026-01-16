@@ -1544,4 +1544,278 @@ export class GitHubAPI {
             throw new Error(`Failed to add issue to project: ${errorMessage}`);
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Active Label Methods
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Get the active label name for the current user (e.g., "@username:active")
+     */
+    getActiveLabelName(): string {
+        if (!this.currentUser) {
+            throw new Error('Not authenticated');
+        }
+        return `@${this.currentUser}:active`;
+    }
+
+    /**
+     * Ensure a label exists in a repository, creating it if needed
+     * @returns The label ID
+     */
+    async ensureLabel(
+        owner: string,
+        repo: string,
+        labelName: string,
+        color: string = '1d76db',
+        description: string = ''
+    ): Promise<string | null> {
+        if (!this.graphqlClient) {
+            throw new Error('Not authenticated');
+        }
+
+        // First check if label exists
+        try {
+            const checkResponse = await this.graphqlClient<{
+                repository: {
+                    label: { id: string; name: string } | null;
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $name: String!) {
+                    repository(owner: $owner, name: $repo) {
+                        label(name: $name) {
+                            id
+                            name
+                        }
+                    }
+                }
+            `, { owner, repo, name: labelName });
+
+            if (checkResponse.repository.label) {
+                return checkResponse.repository.label.id;
+            }
+        } catch {
+            // Label doesn't exist, will create it
+        }
+
+        // Get repository ID for creating label
+        const repositoryId = await this.getRepositoryId(owner, repo);
+        if (!repositoryId) {
+            return null;
+        }
+
+        // Create the label
+        try {
+            const createResponse = await this.graphqlClient<{
+                createLabel: {
+                    label: { id: string };
+                };
+            }>(`
+                mutation($input: CreateLabelInput!) {
+                    createLabel(input: $input) {
+                        label {
+                            id
+                        }
+                    }
+                }
+            `, {
+                input: {
+                    repositoryId,
+                    name: labelName,
+                    color,
+                    description,
+                },
+            });
+
+            return createResponse.createLabel.label.id;
+        } catch (error) {
+            console.error('Failed to create label:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Add a label to an issue (public method)
+     */
+    async addLabelToIssue(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        labelName: string
+    ): Promise<boolean> {
+        if (!this.graphqlClient) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            // Get issue ID and label ID
+            const response = await this.graphqlClient<{
+                repository: {
+                    issue: { id: string };
+                    label: { id: string } | null;
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $number: Int!, $labelName: String!) {
+                    repository(owner: $owner, name: $repo) {
+                        issue(number: $number) {
+                            id
+                        }
+                        label(name: $labelName) {
+                            id
+                        }
+                    }
+                }
+            `, { owner, repo, number: issueNumber, labelName });
+
+            if (!response.repository.label) {
+                console.error(`Label "${labelName}" not found`);
+                return false;
+            }
+
+            await this.graphqlClient(`
+                mutation($issueId: ID!, $labelIds: [ID!]!) {
+                    addLabelsToLabelable(input: { labelableId: $issueId, labelIds: $labelIds }) {
+                        clientMutationId
+                    }
+                }
+            `, {
+                issueId: response.repository.issue.id,
+                labelIds: [response.repository.label.id],
+            });
+
+            return true;
+        } catch (error) {
+            console.error('Failed to add label:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Remove a label from an issue
+     */
+    async removeLabelFromIssue(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        labelName: string
+    ): Promise<boolean> {
+        if (!this.graphqlClient) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            // Get issue ID and label ID
+            const response = await this.graphqlClient<{
+                repository: {
+                    issue: { id: string };
+                    label: { id: string } | null;
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $number: Int!, $labelName: String!) {
+                    repository(owner: $owner, name: $repo) {
+                        issue(number: $number) {
+                            id
+                        }
+                        label(name: $labelName) {
+                            id
+                        }
+                    }
+                }
+            `, { owner, repo, number: issueNumber, labelName });
+
+            if (!response.repository.label) {
+                // Label doesn't exist, nothing to remove
+                return true;
+            }
+
+            await this.graphqlClient(`
+                mutation($issueId: ID!, $labelIds: [ID!]!) {
+                    removeLabelsFromLabelable(input: { labelableId: $issueId, labelIds: $labelIds }) {
+                        clientMutationId
+                    }
+                }
+            `, {
+                issueId: response.repository.issue.id,
+                labelIds: [response.repository.label.id],
+            });
+
+            return true;
+        } catch (error) {
+            console.error('Failed to remove label:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Find issues in a repository that have a specific label
+     */
+    async findIssuesWithLabel(
+        owner: string,
+        repo: string,
+        labelName: string
+    ): Promise<Array<{ number: number; title: string }>> {
+        if (!this.graphqlClient) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            const response = await this.graphqlClient<{
+                repository: {
+                    issues: {
+                        nodes: Array<{ number: number; title: string }>;
+                    };
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $labels: [String!]!) {
+                    repository(owner: $owner, name: $repo) {
+                        issues(first: 50, states: [OPEN], labels: $labels) {
+                            nodes {
+                                number
+                                title
+                            }
+                        }
+                    }
+                }
+            `, { owner, repo, labels: [labelName] });
+
+            return response.repository.issues.nodes;
+        } catch (error) {
+            console.error('Failed to find issues with label:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Transfer the active label from any other issues to the specified issue
+     * This ensures only one issue has the active label at a time
+     */
+    async transferActiveLabel(
+        owner: string,
+        repo: string,
+        targetIssueNumber: number
+    ): Promise<boolean> {
+        const labelName = this.getActiveLabelName();
+
+        // Ensure the label exists
+        await this.ensureLabel(
+            owner,
+            repo,
+            labelName,
+            '1d76db', // blue color
+            `Currently active issue for @${this.currentUser}`
+        );
+
+        // Find other issues with this label
+        const issuesWithLabel = await this.findIssuesWithLabel(owner, repo, labelName);
+
+        // Remove label from other issues
+        for (const issue of issuesWithLabel) {
+            if (issue.number !== targetIssueNumber) {
+                await this.removeLabelFromIssue(owner, repo, issue.number, labelName);
+            }
+        }
+
+        // Add label to target issue
+        return await this.addLabelToIssue(owner, repo, targetIssueNumber, labelName);
+    }
 }

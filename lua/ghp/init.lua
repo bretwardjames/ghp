@@ -3,6 +3,8 @@ local M = {}
 M.config = {
   -- Path to ghp CLI (defaults to finding in PATH)
   ghp_path = "ghp",
+  -- Picker: "select" (default, uses vim.ui.select/snacks) or "telescope"
+  picker = "select",
   -- Default keymaps (set to false to disable all, or override individual)
   keymaps = false, -- Let lazy.nvim handle keymaps by default
   -- Floating window settings

@@ -42,10 +42,16 @@ local function fetch_issues(args, callback)
   })
 end
 
--- Check if telescope is available
-local function has_telescope()
-  local ok, _ = pcall(require, "telescope")
-  return ok
+-- Check if telescope is available and preferred
+local function use_telescope()
+  -- Check config preference first
+  local config = require("ghp").config
+  if config.picker == "telescope" then
+    local ok, _ = pcall(require, "telescope")
+    return ok
+  end
+  -- Default to vim.ui.select (faster, works with snacks/dressing)
+  return false
 end
 
 -- Use telescope picker
@@ -116,11 +122,11 @@ local function show_actions(issue)
   end)
 end
 
--- Main picker function - uses telescope if available, otherwise vim.ui.select
+-- Main picker function - uses vim.ui.select by default, telescope if configured
 function M.pick(args, title, opts)
   opts = opts or {}
 
-  if has_telescope() then
+  if use_telescope() then
     telescope_pick(args, title, opts)
   else
     select_pick(args, title, opts, function(issue)

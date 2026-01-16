@@ -71,3 +71,19 @@ vim.api.nvim_create_user_command("GhpConfig", function()
   ensure_setup()
   require("ghp.commands").config_edit()
 end, {})
+
+-- Telescope commands
+vim.api.nvim_create_user_command("GhpTelescopePlan", function(opts)
+  ensure_setup()
+  require("ghp.commands").telescope_plan({ shortcut = opts.args ~= "" and opts.args or nil })
+end, { nargs = "?" })
+
+vim.api.nvim_create_user_command("GhpTelescopeWork", function()
+  ensure_setup()
+  require("ghp.commands").telescope_work()
+end, {})
+
+vim.api.nvim_create_user_command("GhpTelescopeIssues", function()
+  ensure_setup()
+  require("ghp.commands").telescope_issues()
+end, {})

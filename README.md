@@ -2,6 +2,10 @@
 
 View and manage GitHub Project boards directly in VS Code. This extension mirrors your project views exactly as configured on GitHub, bringing your kanban boards, tables, and roadmaps into your editor.
 
+### A note from Bret, the "Developer"
+
+This project was _entirely_ vibe coded by Claude Code. I just know how I want it to work and told it what to do (like a good little vibe coder). Suggestions, contributions, etc are welcome!
+
 ## Features
 
 ### Project Board Sidebar

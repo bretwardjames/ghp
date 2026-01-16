@@ -96,7 +96,10 @@ local function snacks_pick(args, title, opts, on_select)
       title = title .. " [Enter:open s:start d:done c:comment a:assign p:pr m:move w:switch l:link]",
       items = items,
       format = "text",
-      preview = false,  -- No preview, fast loading
+      preview = "none",  -- Disable preview entirely
+      layout = {
+        preview = false,  -- Hide preview window
+      },
       confirm = function(picker, item)
         picker:close()
         if item and item.issue then

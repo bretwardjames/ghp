@@ -75,16 +75,11 @@ local function snacks_pick(args, title, opts, on_select)
       return
     end
 
-    -- Pre-fetch all previews (simpler, slightly slower but works)
     local items = {}
     for _, issue in ipairs(issues) do
-      local details = fetch_issue_details_sync(issue.number)
       table.insert(items, {
         text = issue.display,
         issue = issue,
-        preview = {
-          text = table.concat(details, "\n"),
-        },
       })
     end
 
@@ -98,10 +93,10 @@ local function snacks_pick(args, title, opts, on_select)
 
     require("snacks").picker.pick({
       source = "ghp",
-      title = title .. " [s:start d:done c:comment a:assign p:pr m:move w:switch l:link ?:help]",
+      title = title .. " [Enter:open s:start d:done c:comment a:assign p:pr m:move w:switch l:link]",
       items = items,
       format = "text",
-      preview = "preview",
+      preview = false,  -- No preview, fast loading
       confirm = function(picker, item)
         picker:close()
         if item and item.issue then

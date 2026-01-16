@@ -1,9 +1,30 @@
 import { graphql } from '@octokit/graphql';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import chalk from 'chalk';
 import type { RepoInfo, ProjectItem, Project, StatusField } from './types.js';
 
 const execAsync = promisify(exec);
+
+/**
+ * Check if an error is due to insufficient OAuth scopes
+ */
+function handleScopeError(error: unknown): never {
+    if (error && typeof error === 'object' && 'errors' in error) {
+        const gqlError = error as { errors?: Array<{ type?: string; message?: string }> };
+        const scopeError = gqlError.errors?.find(e => e.type === 'INSUFFICIENT_SCOPES');
+        if (scopeError) {
+            console.error(chalk.red('\nError:'), 'Your GitHub token is missing required scopes.');
+            console.error(chalk.dim('GitHub Projects requires the'), chalk.cyan('read:project'), chalk.dim('scope.'));
+            console.error();
+            console.error('Run this command to add the required scope:');
+            console.error(chalk.cyan('  gh auth refresh -s read:project -s project'));
+            console.error();
+            process.exit(1);
+        }
+    }
+    throw error;
+}
 
 export class GitHubAPI {
     private graphqlWithAuth: typeof graphql | null = null;
@@ -72,36 +93,40 @@ export class GitHubAPI {
     async getProjects(repo: RepoInfo): Promise<Project[]> {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
 
-        const response: {
-            repository: {
-                projectsV2: {
-                    nodes: Array<{
-                        id: string;
-                        title: string;
-                        number: number;
-                        url: string;
-                    }>;
+        try {
+            const response: {
+                repository: {
+                    projectsV2: {
+                        nodes: Array<{
+                            id: string;
+                            title: string;
+                            number: number;
+                            url: string;
+                        }>;
+                    };
                 };
-            };
-        } = await this.graphqlWithAuth(`
-            query($owner: String!, $name: String!) {
-                repository(owner: $owner, name: $name) {
-                    projectsV2(first: 20) {
-                        nodes {
-                            id
-                            title
-                            number
-                            url
+            } = await this.graphqlWithAuth(`
+                query($owner: String!, $name: String!) {
+                    repository(owner: $owner, name: $name) {
+                        projectsV2(first: 20) {
+                            nodes {
+                                id
+                                title
+                                number
+                                url
+                            }
                         }
                     }
                 }
-            }
-        `, {
-            owner: repo.owner,
-            name: repo.name,
-        });
+            `, {
+                owner: repo.owner,
+                name: repo.name,
+            });
 
-        return response.repository.projectsV2.nodes;
+            return response.repository.projectsV2.nodes;
+        } catch (error) {
+            handleScopeError(error);
+        }
     }
 
     /**

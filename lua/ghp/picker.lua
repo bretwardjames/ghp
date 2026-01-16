@@ -80,6 +80,9 @@ local function snacks_pick(args, title, opts, on_select)
       table.insert(items, {
         text = issue.display,
         issue = issue,
+        preview = {
+          text = "Loading...",
+        },
       })
     end
 
@@ -99,18 +102,19 @@ local function snacks_pick(args, title, opts, on_select)
       title = title .. " [s:start d:done c:comment a:assign p:pr m:move w:switch l:link ?:help]",
       items = items,
       format = "text",
-      preview = function(ctx, item)
-        -- snacks passes (ctx, item) or just item depending on version
-        item = item or ctx
+      preview = function(ctx)
+        local item = ctx.item
         if not item or not item.issue then
-          return "Select an issue to preview"
+          return true
         end
         local num = item.issue.number
-        -- Use cached preview if available
+        -- Fetch and cache preview
         if not preview_cache[num] then
-          preview_cache[num] = table.concat(fetch_issue_details_sync(num), "\n")
+          preview_cache[num] = fetch_issue_details_sync(num)
         end
-        return preview_cache[num]
+        -- Set buffer content
+        vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, preview_cache[num])
+        return true
       end,
       confirm = function(picker, item)
         picker:close()

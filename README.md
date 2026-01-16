@@ -96,22 +96,29 @@ require("ghp").setup({
 | `:GhpComment [issue]` | Add comment to an issue |
 | `:GhpPr [create\|open]` | View PR status, create PR, or open in browser |
 | `:GhpConfig` | Edit ghp-cli config file |
-| `:GhpTelescopePlan [shortcut]` | Telescope picker for project board |
-| `:GhpTelescopeWork` | Telescope picker for your work |
-| `:GhpTelescopeIssues` | Telescope picker for issues |
+| `:GhpPickPlan [shortcut]` | Fuzzy picker for project board |
+| `:GhpPickWork` | Fuzzy picker for your work |
+| `:GhpPickIssues` | Fuzzy picker for issues |
 
-## Telescope Integration
+## Picker Integration
 
-If you have [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) installed, you can use fuzzy-finding pickers for issues:
+The picker commands (`GhpPick*`) automatically use the best available picker:
+
+1. **Telescope** - if installed, uses full fuzzy-finding with preview
+2. **vim.ui.select** - fallback, enhanced by snacks.nvim or dressing.nvim if installed
+
+### Recommended Setup (LazyVim)
 
 ```lua
--- LazyVim with telescope
 return {
   "bretwardjames/ghp.nvim",
-  dependencies = { "nvim-telescope/telescope.nvim" },
+  cmd = {
+    "GhpPlan", "GhpWork", "GhpStart", "GhpAdd",
+    "GhpPickPlan", "GhpPickWork", "GhpPickIssues",
+  },
   keys = {
-    { "<leader>gp", "<cmd>GhpTelescopePlan<cr>", desc = "Project Board (Telescope)" },
-    { "<leader>gw", "<cmd>GhpTelescopeWork<cr>", desc = "My Work (Telescope)" },
+    { "<leader>gp", "<cmd>GhpPickPlan<cr>", desc = "Project Board" },
+    { "<leader>gw", "<cmd>GhpPickWork<cr>", desc = "My Work" },
     { "<leader>ga", "<cmd>GhpAdd<cr>", desc = "Add Issue" },
     { "<leader>gs", "<cmd>GhpStart<cr>", desc = "Start Issue" },
   },
@@ -119,20 +126,12 @@ return {
 }
 ```
 
-Or load the extension directly:
+### Telescope-specific Features
 
-```lua
-require("telescope").load_extension("ghp")
-
--- Then use:
-require("telescope").extensions.ghp.plan()
-require("telescope").extensions.ghp.work()
-require("telescope").extensions.ghp.issues()
-require("telescope").extensions.ghp.backlog()
-require("telescope").extensions.ghp.in_progress()
-```
-
-### Telescope Keymaps
+If telescope is installed, you get:
+- Fuzzy filtering
+- Live preview of issue details
+- Additional keymaps in the picker:
 
 | Key | Mode | Action |
 |-----|------|--------|
@@ -140,6 +139,17 @@ require("telescope").extensions.ghp.in_progress()
 | `<C-s>` / `s` | i/n | Start working on issue |
 | `<C-d>` / `d` | i/n | Mark issue as done |
 | `<C-c>` / `c` | i/n | Comment on issue |
+
+You can also load the telescope extension directly:
+
+```lua
+require("telescope").load_extension("ghp")
+require("telescope").extensions.ghp.plan()
+```
+
+### vim.ui.select Fallback
+
+Without telescope, the picker uses `vim.ui.select`. Install [snacks.nvim](https://github.com/folke/snacks.nvim) or [dressing.nvim](https://github.com/stevearc/dressing.nvim) to enhance the UI with fuzzy finding.
 
 ## Keymaps in Float Windows
 

@@ -161,38 +161,23 @@ function M.config_edit()
   ui.show_terminal("ghp config --edit")
 end
 
--- Telescope pickers
-local function load_telescope_extension()
-  local ok, telescope = pcall(require, "telescope")
-  if not ok then
-    vim.notify("Telescope not installed", vim.log.levels.ERROR)
-    return nil
-  end
-  -- Load the ghp extension
-  telescope.load_extension("ghp")
-  return telescope
+-- Picker functions (uses telescope if available, otherwise vim.ui.select)
+function M.pick_plan(opts)
+  require("ghp.picker").plan(opts)
 end
 
-function M.telescope_plan(opts)
-  local telescope = load_telescope_extension()
-  if telescope then
-    telescope.extensions.ghp.plan(opts)
-  end
+function M.pick_work(opts)
+  require("ghp.picker").work(opts)
 end
 
-function M.telescope_work(opts)
-  local telescope = load_telescope_extension()
-  if telescope then
-    telescope.extensions.ghp.work(opts)
-  end
+function M.pick_issues(opts)
+  require("ghp.picker").issues(opts)
 end
 
-function M.telescope_issues(opts)
-  local telescope = load_telescope_extension()
-  if telescope then
-    telescope.extensions.ghp.issues(opts)
-  end
-end
+-- Aliases for backwards compatibility
+M.telescope_plan = M.pick_plan
+M.telescope_work = M.pick_work
+M.telescope_issues = M.pick_issues
 
 function M.setup()
   -- Register user commands

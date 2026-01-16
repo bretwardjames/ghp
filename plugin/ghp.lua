@@ -72,18 +72,34 @@ vim.api.nvim_create_user_command("GhpConfig", function()
   require("ghp.commands").config_edit()
 end, {})
 
--- Telescope commands
+-- Picker commands (uses telescope if available, otherwise vim.ui.select)
+vim.api.nvim_create_user_command("GhpPickPlan", function(opts)
+  ensure_setup()
+  require("ghp.commands").pick_plan({ shortcut = opts.args ~= "" and opts.args or nil })
+end, { nargs = "?" })
+
+vim.api.nvim_create_user_command("GhpPickWork", function()
+  ensure_setup()
+  require("ghp.commands").pick_work()
+end, {})
+
+vim.api.nvim_create_user_command("GhpPickIssues", function()
+  ensure_setup()
+  require("ghp.commands").pick_issues()
+end, {})
+
+-- Telescope aliases (backwards compatibility)
 vim.api.nvim_create_user_command("GhpTelescopePlan", function(opts)
   ensure_setup()
-  require("ghp.commands").telescope_plan({ shortcut = opts.args ~= "" and opts.args or nil })
+  require("ghp.commands").pick_plan({ shortcut = opts.args ~= "" and opts.args or nil })
 end, { nargs = "?" })
 
 vim.api.nvim_create_user_command("GhpTelescopeWork", function()
   ensure_setup()
-  require("ghp.commands").telescope_work()
+  require("ghp.commands").pick_work()
 end, {})
 
 vim.api.nvim_create_user_command("GhpTelescopeIssues", function()
   ensure_setup()
-  require("ghp.commands").telescope_issues()
+  require("ghp.commands").pick_issues()
 end, {})

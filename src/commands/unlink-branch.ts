@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import { unlinkBranch, getBranchForIssue } from '../branch-linker.js';
 
@@ -16,16 +17,26 @@ export async function unlinkBranchCommand(issue: string): Promise<void> {
         process.exit(1);
     }
 
+    // Authenticate (needed for API calls)
+    const authenticated = await api.authenticate();
+    if (!authenticated) {
+        console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
+        process.exit(1);
+    }
+
     // Check if linked
-    const branchName = getBranchForIssue(repo.fullName, issueNumber);
+    const branchName = await getBranchForIssue(repo, issueNumber);
     if (!branchName) {
         console.log(chalk.yellow('No branch linked to issue'), `#${issueNumber}`);
         return;
     }
 
-    // Unlink
-    const removed = unlinkBranch(repo.fullName, issueNumber);
+    // Unlink (removes from issue body)
+    const removed = await unlinkBranch(repo, issueNumber);
     if (removed) {
         console.log(chalk.green('✓'), `Unlinked "${branchName}" from #${issueNumber}`);
+    } else {
+        console.error(chalk.red('Error:'), 'Failed to unlink branch');
+        process.exit(1);
     }
 }

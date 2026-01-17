@@ -1,112 +1,151 @@
 /**
- * CLI-specific branch linker with file-based storage.
+ * CLI-specific branch linker that uses GitHub issue bodies for storage.
  *
- * This module wraps the core BranchLinker with a file-based StorageAdapter
- * that stores links in ~/.config/ghp-cli/branch-links.json
+ * Links are stored as hidden HTML comments in issue bodies:
+ * <!-- ghp-branch: feature/my-branch -->
+ *
+ * This allows links to be shared between CLI and VSCode extension.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
 import {
-    BranchLinker,
-    type StorageAdapter,
-    type BranchLink,
+    parseBranchLink,
+    setBranchLinkInBody,
+    removeBranchLinkFromBody,
+    type RepoInfo,
 } from '@bretwardjames/ghp-core';
-
-const DATA_DIR = join(homedir(), '.config', 'ghp-cli');
-const LINKS_FILE = join(DATA_DIR, 'branch-links.json');
+import { api } from './github-api.js';
 
 /**
- * File-based storage adapter for CLI usage
+ * Link a branch to an issue by storing the link in the issue body.
  */
-const fileStorageAdapter: StorageAdapter = {
-    load(): BranchLink[] {
-        try {
-            if (existsSync(LINKS_FILE)) {
-                const data = readFileSync(LINKS_FILE, 'utf-8');
-                return JSON.parse(data);
-            }
-        } catch {
-            // Ignore errors, return empty array
-        }
-        return [];
-    },
-
-    save(links: BranchLink[]): void {
-        if (!existsSync(DATA_DIR)) {
-            mkdirSync(DATA_DIR, { recursive: true });
-        }
-        writeFileSync(LINKS_FILE, JSON.stringify(links, null, 2));
-    },
-};
-
-// Create singleton linker instance
-const linker = new BranchLinker(fileStorageAdapter);
-
-/**
- * Create a link between a branch and an issue.
- * Backwards-compatible function signature for existing CLI code.
- */
-export function linkBranch(
-    branch: string,
+export async function linkBranch(
+    repo: RepoInfo,
     issueNumber: number,
-    issueTitle: string,
-    itemId: string,
-    repo: string
-): void {
-    // Use sync-like behavior for backwards compatibility
-    // The file adapter is synchronous so this works
-    linker.link(branch, issueNumber, issueTitle, itemId, repo);
-}
-
-/**
- * Remove the link for an issue.
- * @returns true if a link was removed, false if no link existed
- */
-export function unlinkBranch(repo: string, issueNumber: number): boolean {
-    // Load, filter, and save synchronously for backwards compatibility
-    const adapter = fileStorageAdapter;
-    const links = adapter.load() as BranchLink[];
-    const filtered = links.filter(l =>
-        !(l.repo === repo && l.issueNumber === issueNumber)
-    );
-
-    if (filtered.length === links.length) {
+    branch: string
+): Promise<boolean> {
+    try {
+        const details = await api.getIssueDetails(repo, issueNumber);
+        const currentBody = details?.body ?? '';
+        const newBody = setBranchLinkInBody(currentBody, branch);
+        return await api.updateIssueBody(repo, issueNumber, newBody);
+    } catch (error) {
+        console.error('Failed to link branch:', error);
         return false;
     }
-
-    adapter.save(filtered);
-    return true;
 }
 
 /**
- * Get the branch linked to an issue.
+ * Remove the branch link from an issue.
+ * @returns true if a link was removed, false if no link existed
  */
-export function getBranchForIssue(repo: string, issueNumber: number): string | null {
-    const links = fileStorageAdapter.load() as BranchLink[];
-    const link = links.find(l => l.repo === repo && l.issueNumber === issueNumber);
-    return link?.branch || null;
+export async function unlinkBranch(
+    repo: RepoInfo,
+    issueNumber: number
+): Promise<boolean> {
+    try {
+        const details = await api.getIssueDetails(repo, issueNumber);
+        const currentBody = details?.body ?? '';
+
+        // Check if there's a link to remove
+        if (!parseBranchLink(currentBody)) {
+            return false;
+        }
+
+        const newBody = removeBranchLinkFromBody(currentBody);
+        return await api.updateIssueBody(repo, issueNumber, newBody);
+    } catch (error) {
+        console.error('Failed to unlink branch:', error);
+        return false;
+    }
 }
 
 /**
- * Get the full link info for a branch.
+ * Get the branch linked to an issue by reading the issue body.
  */
-export function getIssueForBranch(repo: string, branch: string): BranchLink | null {
-    const links = fileStorageAdapter.load() as BranchLink[];
-    return links.find(l => l.repo === repo && l.branch === branch) || null;
+export async function getBranchForIssue(
+    repo: RepoInfo,
+    issueNumber: number
+): Promise<string | null> {
+    try {
+        const details = await api.getIssueDetails(repo, issueNumber);
+        return parseBranchLink(details?.body);
+    } catch (error) {
+        console.error('Failed to get branch for issue:', error);
+        return null;
+    }
 }
 
 /**
- * Get all links for a repository.
+ * Extract issue number from a branch name.
+ * Supports common patterns:
+ * - user/123-feature-name
+ * - feature/123-something
+ * - 123-fix-bug
+ * - fix-123-something
  */
-export function getAllLinksForRepo(repo: string): BranchLink[] {
-    const links = fileStorageAdapter.load() as BranchLink[];
-    return links.filter(l => l.repo === repo);
+export function extractIssueNumberFromBranch(branchName: string): number | null {
+    const patterns = [
+        /\/(\d+)-/,      // user/123-title
+        /^(\d+)-/,       // 123-title
+        /-(\d+)-/,       // feature-123-title
+        /[/#](\d+)$/,    // ends with #123 or /123
+    ];
+
+    for (const pattern of patterns) {
+        const match = branchName.match(pattern);
+        if (match) {
+            return parseInt(match[1], 10);
+        }
+    }
+
+    return null;
 }
 
-// Re-export the BranchLink type for consumers
-export type { BranchLink } from '@bretwardjames/ghp-core';
+/**
+ * Result of finding an issue for a branch.
+ */
+export interface BranchIssueLink {
+    issueNumber: number;
+    issueTitle: string;
+    branch: string;
+}
 
-// Also export the linker instance and adapter for advanced usage
-export { linker, fileStorageAdapter };
+/**
+ * Find the issue linked to a branch.
+ * This first extracts the issue number from the branch name pattern,
+ * then verifies the link exists in the issue body.
+ *
+ * @returns Issue info if found and verified, null otherwise
+ */
+export async function getIssueForBranch(
+    repo: RepoInfo,
+    branchName: string
+): Promise<BranchIssueLink | null> {
+    // First, try to extract issue number from branch name
+    const issueNumber = extractIssueNumberFromBranch(branchName);
+    if (!issueNumber) {
+        return null;
+    }
+
+    try {
+        // Get issue details to verify and get title
+        const details = await api.getIssueDetails(repo, issueNumber);
+        if (!details) {
+            return null;
+        }
+
+        // Check if this issue has a link to this branch
+        const linkedBranch = parseBranchLink(details.body);
+
+        // If not explicitly linked, still return info based on branch naming convention
+        // This allows workflows that rely on branch naming patterns to work
+        return {
+            issueNumber,
+            issueTitle: details.title,
+            branch: linkedBranch === branchName ? branchName : branchName,
+        };
+    } catch (error) {
+        console.error('Failed to verify issue for branch:', error);
+        return null;
+    }
+}

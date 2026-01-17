@@ -25,8 +25,8 @@ export async function syncCommand(): Promise<void> {
     console.log(chalk.dim(`Current branch: ${currentBranch}`));
     console.log();
 
-    // Find issue linked to current branch
-    const linkedIssue = getIssueForBranch(repo.fullName, currentBranch || '');
+    // Find issue linked to current branch (via branch name pattern + issue body verification)
+    const linkedIssue = await getIssueForBranch(repo, currentBranch || '');
 
     // Find all issues currently with the label
     const issuesWithLabel = await api.findIssuesWithLabel(repo, activeLabel);

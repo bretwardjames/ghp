@@ -12,5 +12,4 @@ export type {
     IssueDetails,
     Collaborator,
     IssueReference,
-    BranchLink,
 } from '@bretwardjames/ghp-core';

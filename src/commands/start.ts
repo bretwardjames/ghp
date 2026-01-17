@@ -142,9 +142,13 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             }
         }
 
-        // Link branch to issue
-        linkBranch(branchName, item.number!, item.title, item.id, repo.fullName);
-        console.log(chalk.green('✓'), `Linked branch to #${item.number}`);
+        // Link branch to issue (stores in issue body)
+        const linkSuccess = await linkBranch(repo, item.number!, branchName);
+        if (linkSuccess) {
+            console.log(chalk.green('✓'), `Linked branch to #${item.number}`);
+        } else {
+            console.log(chalk.yellow('⚠'), `Could not link branch to issue`);
+        }
     }
 
     // Status update (unless --no-status)

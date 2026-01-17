@@ -1,6 +1,6 @@
 {
   "name": "@bretwardjames/ghp-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "GitHub Projects CLI - manage project boards from your terminal",
   "main": "./dist/index.js",
   "bin": {
@@ -37,7 +37,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@bretwardjames/ghp-core": "^0.1.0",
+    "@bretwardjames/ghp-core": "^0.1.3",
     "commander": "^12.0.0",
     "chalk": "^5.3.0"
   },

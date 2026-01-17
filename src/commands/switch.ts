@@ -17,8 +17,15 @@ export async function switchCommand(issue: string): Promise<void> {
         process.exit(1);
     }
 
+    // Authenticate (needed to read issue body)
+    const authenticated = await api.authenticate();
+    if (!authenticated) {
+        console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
+        process.exit(1);
+    }
+
     // Find linked branch
-    const branchName = getBranchForIssue(repo.fullName, issueNumber);
+    const branchName = await getBranchForIssue(repo, issueNumber);
     if (!branchName) {
         console.error(chalk.red('Error:'), `No branch linked to issue #${issueNumber}`);
         console.log(chalk.dim('Use'), chalk.cyan(`ghp link-branch ${issueNumber}`), chalk.dim('to link a branch'));
@@ -48,24 +55,21 @@ export async function switchCommand(issue: string): Promise<void> {
     }
 
     // Update active label
-    const authenticated = await api.authenticate();
-    if (authenticated) {
-        const activeLabel = api.getActiveLabelName();
+    const activeLabel = api.getActiveLabelName();
 
-        // Remove label from any other issues that have it
-        const issuesWithLabel = await api.findIssuesWithLabel(repo, activeLabel);
-        for (const otherIssue of issuesWithLabel) {
-            if (otherIssue !== issueNumber) {
-                await api.removeLabelFromIssue(repo, otherIssue, activeLabel);
-                console.log(chalk.dim(`Removed ${activeLabel} from #${otherIssue}`));
-            }
+    // Remove label from any other issues that have it
+    const issuesWithLabel = await api.findIssuesWithLabel(repo, activeLabel);
+    for (const otherIssue of issuesWithLabel) {
+        if (otherIssue !== issueNumber) {
+            await api.removeLabelFromIssue(repo, otherIssue, activeLabel);
+            console.log(chalk.dim(`Removed ${activeLabel} from #${otherIssue}`));
         }
+    }
 
-        // Add label to current issue (ensure it exists first)
-        await api.ensureLabel(repo, activeLabel);
-        const labelAdded = await api.addLabelToIssue(repo, issueNumber, activeLabel);
-        if (labelAdded) {
-            console.log(chalk.green('✓'), `Applied "${activeLabel}" label`);
-        }
+    // Add label to current issue (ensure it exists first)
+    await api.ensureLabel(repo, activeLabel);
+    const labelAdded = await api.addLabelToIssue(repo, issueNumber, activeLabel);
+    if (labelAdded) {
+        console.log(chalk.green('✓'), `Applied "${activeLabel}" label`);
     }
 }

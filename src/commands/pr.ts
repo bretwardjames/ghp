@@ -21,6 +21,13 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
         process.exit(1);
     }
 
+    // Authenticate
+    const authenticated = await api.authenticate();
+    if (!authenticated) {
+        console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
+        process.exit(1);
+    }
+
     const currentBranch = await getCurrentBranch();
     if (!currentBranch) {
         console.error(chalk.red('Error:'), 'Could not determine current branch');
@@ -29,8 +36,8 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
 
     // If issue not specified, try to find linked issue for current branch
     let issueNumber: number | null = null;
-    let linkedIssue = getIssueForBranch(repo.fullName, currentBranch);
-    
+    let linkedIssue = await getIssueForBranch(repo, currentBranch);
+
     if (issue) {
         issueNumber = parseInt(issue, 10);
         if (isNaN(issueNumber)) {
@@ -53,7 +60,7 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
 }
 
 async function createPr(
-    repoFullName: string, 
+    repoFullName: string,
     issueNumber: number | null,
     issueTitle: string | undefined
 ): Promise<void> {
@@ -61,7 +68,7 @@ async function createPr(
         // Build title from issue if available
         let title = '';
         let body = '';
-        
+
         if (issueNumber && issueTitle) {
             title = issueTitle;
             body = `Related to #${issueNumber}`;
@@ -70,19 +77,16 @@ async function createPr(
         // Use gh CLI to create PR
         const titleArg = title ? `--title "${title}"` : '';
         const bodyArg = body ? `--body "${body}"` : '';
-        
+
         console.log(chalk.dim('Creating PR...'));
-        
+
         const { stdout } = await execAsync(`gh pr create ${titleArg} ${bodyArg} --web`);
         console.log(stdout);
 
         // Update issue status if configured
         if (issueNumber) {
-            const authenticated = await api.authenticate();
-            if (authenticated) {
-                const prOpenedStatus = getConfig('startWorkingStatus'); // TODO: add prOpenedStatus to config
-                // Could update status here
-            }
+            const prOpenedStatus = getConfig('startWorkingStatus'); // TODO: add prOpenedStatus to config
+            // Could update status here
         }
     } catch (error: unknown) {
         const err = error as { stderr?: string };

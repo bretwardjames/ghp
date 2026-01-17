@@ -39,13 +39,17 @@ export async function linkBranchCommand(issue: string, branch?: string): Promise
     }
 
     // Check for existing link
-    const existingBranch = getBranchForIssue(repo.fullName, issueNumber);
+    const existingBranch = await getBranchForIssue(repo, issueNumber);
     if (existingBranch) {
         console.log(chalk.yellow('Note:'), `Issue #${issueNumber} was linked to "${existingBranch}"`);
     }
 
-    // Create link
-    linkBranch(branchName, issueNumber, item.title, item.id, repo.fullName);
+    // Create link (stores in issue body)
+    const success = await linkBranch(repo, issueNumber, branchName);
+    if (!success) {
+        console.error(chalk.red('Error:'), 'Failed to link branch');
+        process.exit(1);
+    }
     console.log(chalk.green('✓'), `Linked "${branchName}" to #${issueNumber}: ${item.title}`);
 
     // If this branch is currently checked out, apply active label

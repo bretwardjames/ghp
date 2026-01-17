@@ -2,6 +2,18 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.1.2] - 2026-01-16
+
+### Added
+- Inline description editing with ✏️ button in issue detail panel
+- Markdown rendering for descriptions (headings, lists, bold, italic, code, links)
+
+## [0.1.1] - 2026-01-15
+
+### Added
+- Issue detail panel improvements
+- Active label sync functionality
+
 ## [0.1.0] - 2025-01-15
 
 ### Added

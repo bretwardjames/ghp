@@ -11,7 +11,8 @@ export type ColumnName =
     | 'size'
     | 'labels'
     | 'project'
-    | 'repository';
+    | 'repository'
+    | 'branch';
 
 interface ColumnDef {
     header: string;
@@ -81,10 +82,17 @@ const COLUMN_DEFS: Record<ColumnName, ColumnDef> = {
         getValue: (item) => item.repository || '',
         color: (v) => chalk.dim(v),
     },
+    branch: {
+        header: '🌿',
+        getValue: (item) => item.fields['linkedBranch'] ? '🔗' : '',
+        color: (v) => chalk.cyan(v),
+        minWidth: 2,
+        maxWidth: 2,
+    },
 };
 
 // Default column order
-export const DEFAULT_COLUMNS: ColumnName[] = ['number', 'type', 'title', 'assignees', 'priority', 'size', 'labels'];
+export const DEFAULT_COLUMNS: ColumnName[] = ['number', 'branch', 'type', 'title', 'assignees', 'priority', 'size', 'labels'];
 
 function hexToChalk(hex: string): (text: string) => string {
     const r = parseInt(hex.slice(0, 2), 16);

@@ -3,7 +3,8 @@ import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import { getConfig } from '../config.js';
 import { displayTable, parseColumns, DEFAULT_COLUMNS, calculateColumnWidths, displayTableWithWidths, type ColumnName } from '../table.js';
-import type { ProjectItem } from '../types.js';
+import { getBranchForIssue } from '../branch-linker.js';
+import type { ProjectItem, RepoInfo } from '../types.js';
 
 interface WorkOptions {
     all?: boolean;
@@ -169,10 +170,13 @@ export async function workCommand(options: WorkOptions): Promise<void> {
         return;
     }
 
+    // Populate branch link info for display
+    await populateBranchLinks(repo, filteredItems);
+
     // Flat table output
     if (options.flat) {
         const columnsConfig = getConfig('columns');
-        const defaultWithStatus: ColumnName[] = ['number', 'type', 'title', 'status', 'assignees', 'priority', 'size', 'labels'];
+        const defaultWithStatus: ColumnName[] = ['number', 'branch', 'type', 'title', 'status', 'assignees', 'priority', 'size', 'labels'];
         const columns: ColumnName[] = columnsConfig ? parseColumns(columnsConfig) : defaultWithStatus;
         displayTable(filteredItems, columns);
         return;
@@ -354,5 +358,30 @@ function getStatusColor(status: string): typeof chalk.white {
             return chalk.green;
         default:
             return chalk.white;
+    }
+}
+
+/**
+ * Populate branch link info for items by fetching from issue bodies.
+ * Sets item.fields['linkedBranch'] if a branch is linked.
+ */
+async function populateBranchLinks(repo: RepoInfo, items: ProjectItem[]): Promise<void> {
+    // Only check items that have issue numbers (not drafts)
+    const itemsWithNumbers = items.filter(item => item.number !== null);
+
+    // Fetch in parallel with a concurrency limit to avoid rate limiting
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < itemsWithNumbers.length; i += BATCH_SIZE) {
+        const batch = itemsWithNumbers.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (item) => {
+            try {
+                const linkedBranch = await getBranchForIssue(repo, item.number!);
+                if (linkedBranch) {
+                    item.fields['linkedBranch'] = linkedBranch;
+                }
+            } catch {
+                // Silently ignore errors fetching branch links
+            }
+        }));
     }
 }

@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { api, type IssueDetails } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
+import { parseBranchLink } from '@bretwardjames/ghp-core';
 import type { ProjectItem } from '../types.js';
 
 interface OpenOptions {
@@ -118,14 +119,25 @@ function displayIssue(
     const url = item?.url || `https://github.com/${repoName.split('/')[0]}/${repoName.split('/')[1]}/issues/${issueNumber}`;
     console.log(`${chalk.dim('URL:')}         ${chalk.underline(url)}`);
 
+    // Linked branch
+    const linkedBranch = parseBranchLink(details.body);
+    if (linkedBranch) {
+        console.log(`${chalk.dim('Branch:')}      ${chalk.cyan('🔗')} ${chalk.green(linkedBranch)}`);
+    }
+
     // Description
     console.log();
     console.log(divider);
     console.log(chalk.bold('Description'));
     console.log();
 
-    if (details.body && details.body.trim()) {
-        console.log(formatMarkdown(details.body));
+    // Strip the branch link comment from displayed body
+    const displayBody = details.body
+        ? details.body.replace(/<!--\s*ghp-branch:\s*.+?\s*-->\s*/g, '').trim()
+        : '';
+
+    if (displayBody) {
+        console.log(formatMarkdown(displayBody));
     } else {
         console.log(chalk.dim('No description provided.'));
     }

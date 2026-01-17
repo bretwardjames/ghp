@@ -27,10 +27,10 @@ fi
 
 # Install CLI
 echo -e "${CYAN}📦 Installing ghp CLI...${NC}"
-if npm install -g @bretwardjames/ghp-cli 2>/dev/null; then
+if npm install -g @bretwardjames/ghp-cli >/dev/null 2>&1; then
     echo -e "${GREEN}✓${NC} CLI installed"
 else
-    echo -e "${DIM}Retrying with sudo...${NC}"
+    echo -e "${DIM}(requires sudo)${NC}"
     sudo npm install -g @bretwardjames/ghp-cli
     echo -e "${GREEN}✓${NC} CLI installed"
 fi

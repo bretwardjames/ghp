@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
 import { workCommand } from './commands/work.js';
 import { planCommand } from './commands/plan.js';
 import { startCommand } from './commands/start.js';
@@ -26,7 +29,7 @@ const program = new Command();
 program
     .name('ghp')
     .description('GitHub Projects CLI - manage project boards from your terminal')
-    .version('0.1.7');
+    .version(pkg.version);
 
 // Authentication
 program

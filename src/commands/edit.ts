@@ -37,9 +37,12 @@ export async function editCommand(issue: string): Promise<void> {
     // Open editor with current title and description
     const result = await openEditor(issueNumber, details.title, details.body || '');
 
+    // Normalize for comparison (same normalization as openEditor parsing)
+    const normalizedOriginalBody = normalizeBody(details.body || '');
+
     // Check if anything changed
-    const titleChanged = result.title !== details.title;
-    const bodyChanged = result.body !== (details.body || '');
+    const titleChanged = result.title.trim() !== details.title.trim();
+    const bodyChanged = result.body !== normalizedOriginalBody;
 
     if (!titleChanged && !bodyChanged) {
         console.log(chalk.yellow('No changes made'));
@@ -73,6 +76,23 @@ export async function editCommand(issue: string): Promise<void> {
 interface EditResult {
     title: string;
     body: string;
+}
+
+/**
+ * Normalize body text to match how openEditor parses it.
+ * This ensures we can accurately detect if changes were made.
+ */
+function normalizeBody(body: string): string {
+    // Match the parsing logic: trim leading empty lines and trailing whitespace
+    const lines = body.split('\n');
+
+    // Skip leading empty lines (matches openEditor behavior)
+    let startIndex = 0;
+    while (startIndex < lines.length && !lines[startIndex].trim()) {
+        startIndex++;
+    }
+
+    return lines.slice(startIndex).join('\n').trimEnd();
 }
 
 async function openEditor(issueNumber: number, currentTitle: string, currentBody: string): Promise<EditResult> {

@@ -79,7 +79,17 @@ function registerCommands(context: vscode.ExtensionContext) {
             await loadProjects();
         }),
 
-        vscode.commands.registerCommand('ghProjects.openItem', async (url: string) => {
+        vscode.commands.registerCommand('ghProjects.openItem', async (arg: unknown) => {
+            let url: string | null = null;
+
+            if (typeof arg === 'string') {
+                // Called with URL directly (e.g., from planning board)
+                url = arg;
+            } else if (arg instanceof ItemNode && arg.item.url) {
+                // Called from tree view context menu
+                url = arg.item.url;
+            }
+
             if (url) {
                 await vscode.env.openExternal(vscode.Uri.parse(url));
             }

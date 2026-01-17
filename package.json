@@ -328,7 +328,8 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
     "esbuild": "npm run esbuild-base -- --sourcemap",
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "release": "npx vsce package && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\")\""
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

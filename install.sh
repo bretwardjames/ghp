@@ -20,9 +20,35 @@ if ! command -v npm &> /dev/null; then
 fi
 
 if ! command -v cursor &> /dev/null; then
-    echo "⚠️  Cursor CLI not found. Skipping extension install."
-    echo "   Install Cursor and run: cursor --install-extension <path-to-vsix>"
-    SKIP_CURSOR=1
+    echo -e "${CYAN}🔍 Cursor CLI not found. Looking for Cursor app...${NC}"
+
+    CURSOR_BIN=""
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: Check common locations
+        if [ -f "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" ]; then
+            CURSOR_BIN="/Applications/Cursor.app/Contents/Resources/app/bin/cursor"
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux: Check common locations
+        for loc in "/opt/Cursor/resources/app/bin/cursor" "$HOME/.local/share/cursor/bin/cursor" "/usr/share/cursor/resources/app/bin/cursor"; do
+            if [ -f "$loc" ]; then
+                CURSOR_BIN="$loc"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$CURSOR_BIN" ]; then
+        echo -e "${DIM}Found Cursor at $CURSOR_BIN${NC}"
+        echo -e "${DIM}Creating symlink...${NC}"
+        sudo ln -sf "$CURSOR_BIN" /usr/local/bin/cursor
+        echo -e "${GREEN}✓${NC} Cursor CLI installed"
+    else
+        echo "⚠️  Cursor app not found. Skipping extension install."
+        echo "   Install Cursor from https://cursor.sh, then run:"
+        echo "   cursor --install-extension <path-to-vsix>"
+        SKIP_CURSOR=1
+    fi
 fi
 
 # Install CLI

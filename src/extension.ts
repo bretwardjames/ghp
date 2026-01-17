@@ -332,7 +332,7 @@ function registerCommands(context: vscode.ExtensionContext) {
                         vscode.window.showWarningMessage('No GitHub Projects found for this repository.');
                         return;
                     }
-                    await PlanningBoardPanel.show(api, projects);
+                    await PlanningBoardPanel.show(api, currentRepo!, projects);
                 }
             );
         }),
@@ -386,7 +386,7 @@ function registerCommands(context: vscode.ExtensionContext) {
                 return;
             }
 
-            await PlanningBoardPanel.show(api, projects);
+            await PlanningBoardPanel.show(api, currentRepo, projects);
             // Trigger the new issue form after the panel is shown
             setTimeout(() => {
                 PlanningBoardPanel.currentPanel?.triggerNewIssue();

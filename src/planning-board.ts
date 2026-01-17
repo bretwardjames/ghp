@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GitHubAPI } from './github-api';
 import type { NormalizedProjectItem, ProjectWithViews, ProjectV2View } from './types';
+import type { RepoInfo } from './repo-detector';
 
 interface BoardColumn {
     name: string;
@@ -29,6 +30,7 @@ export class PlanningBoardPanel {
     public static currentPanel: PlanningBoardPanel | undefined;
     private readonly _panel: vscode.WebviewPanel;
     private readonly _api: GitHubAPI;
+    private _repo: RepoInfo;
     private _projects: ProjectWithViews[] = [];
     private _viewsData: ViewData[] = [];
     private _activeTabIndex = 0;
@@ -39,10 +41,12 @@ export class PlanningBoardPanel {
     private constructor(
         panel: vscode.WebviewPanel,
         api: GitHubAPI,
+        repo: RepoInfo,
         projects: ProjectWithViews[]
     ) {
         this._panel = panel;
         this._api = api;
+        this._repo = repo;
         this._projects = projects;
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
@@ -57,11 +61,13 @@ export class PlanningBoardPanel {
 
     public static async show(
         api: GitHubAPI,
+        repo: RepoInfo,
         projects: ProjectWithViews[]
     ): Promise<void> {
         const column = vscode.ViewColumn.One;
 
         if (PlanningBoardPanel.currentPanel) {
+            PlanningBoardPanel.currentPanel._repo = repo;
             PlanningBoardPanel.currentPanel._projects = projects;
             PlanningBoardPanel.currentPanel._panel.reveal(column);
             await PlanningBoardPanel.currentPanel._loadAndRender();
@@ -78,7 +84,7 @@ export class PlanningBoardPanel {
             }
         );
 
-        PlanningBoardPanel.currentPanel = new PlanningBoardPanel(panel, api, projects);
+        PlanningBoardPanel.currentPanel = new PlanningBoardPanel(panel, api, repo, projects);
     }
 
     /**
@@ -291,6 +297,21 @@ export class PlanningBoardPanel {
                     case 'status':
                         matches = condition.values.some((v) => item.status?.toLowerCase() === v);
                         break;
+                    case 'type':
+                        // Issue type (Bug, Feature, Epic, etc.)
+                        matches = condition.values.some((v) => item.issueType?.toLowerCase() === v);
+                        break;
+                    case 'label':
+                        // Issue labels
+                        matches = condition.values.some((v) =>
+                            item.labels?.some((l) => l.name.toLowerCase() === v)
+                        );
+                        break;
+                    case 'is':
+                    case 'state':
+                        // Issue state (open, closed, merged) - support both 'is:' and 'state:' syntax
+                        matches = condition.values.some((v) => item.state === v);
+                        break;
                     default:
                         const fieldInfo = item.fields.get(condition.field);
                         matches = condition.values.some((v) => fieldInfo?.value?.toLowerCase() === v);
@@ -385,6 +406,12 @@ export class PlanningBoardPanel {
                 break;
 
             case 'refresh':
+                // Re-fetch projects to get updated view filters from GitHub
+                try {
+                    this._projects = await this._api.getProjectsWithViews(this._repo);
+                } catch (err) {
+                    console.error('[PlanningBoard] Failed to refresh projects:', err);
+                }
                 await this._loadAndRender();
                 break;
 

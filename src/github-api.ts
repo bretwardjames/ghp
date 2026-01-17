@@ -848,4 +848,36 @@ export class GitHubAPI {
             return false;
         }
     }
+
+    /**
+     * Update an issue's body/description
+     */
+    async updateIssueBody(repo: RepoInfo, issueNumber: number, body: string): Promise<boolean> {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        try {
+            const issueResponse: {
+                repository: {
+                    issue: { id: string } | null;
+                };
+            } = await this.graphqlWithAuth(queries.ISSUE_FOR_UPDATE_QUERY, {
+                owner: repo.owner,
+                name: repo.name,
+                number: issueNumber,
+            });
+
+            if (!issueResponse.repository.issue) {
+                return false;
+            }
+
+            await this.graphqlWithAuth(queries.UPDATE_ISSUE_BODY_MUTATION, {
+                issueId: issueResponse.repository.issue.id,
+                body,
+            });
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
 }

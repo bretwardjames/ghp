@@ -437,3 +437,16 @@ export const UPDATE_ISSUE_TYPE_MUTATION = `
         }
     }
 `;
+
+/**
+ * Mutation to update issue body/description
+ */
+export const UPDATE_ISSUE_BODY_MUTATION = `
+    mutation($issueId: ID!, $body: String!) {
+        updateIssue(input: { id: $issueId, body: $body }) {
+            issue {
+                id
+            }
+        }
+    }
+`;

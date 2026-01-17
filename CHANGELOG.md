@@ -2,6 +2,12 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.1.11] - 2025-01-17
+
+### Fixed
+- "Open in GitHub" button now works from sidebar (was broken)
+- Renamed from "Open in Browser" to "Open in GitHub"
+
 ## [0.1.10] - 2025-01-17
 
 ### Added

@@ -242,10 +242,13 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
         );
     }
 
-    // --status: filter by status
+    // --status: filter by status (can be string or array)
     if (options.status) {
+        const statusList = Array.isArray(options.status)
+            ? options.status.map(s => s.toLowerCase())
+            : [options.status.toLowerCase()];
         filteredItems = filteredItems.filter(item =>
-            item.status?.toLowerCase() === options.status!.toLowerCase()
+            item.status && statusList.includes(item.status.toLowerCase())
         );
     }
 
@@ -358,8 +361,9 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
         displayTable(filteredItems, columns);
         console.log();
     } else if (options.status) {
-        // Table view for single status
-        const label = options.mine ? `My ${options.status}` : options.unassigned ? `Unassigned ${options.status}` : options.status;
+        // Table view for status filter
+        const statusDisplay = Array.isArray(options.status) ? options.status.join(', ') : options.status;
+        const label = options.mine ? `My ${statusDisplay}` : options.unassigned ? `Unassigned ${statusDisplay}` : statusDisplay;
         console.log(chalk.bold(label), chalk.dim(`(${filteredItems.length} items)`));
         console.log();
         const columnsConfig = getConfig('columns');

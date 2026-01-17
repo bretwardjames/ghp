@@ -2,10 +2,18 @@
 
 GitHub Projects CLI - manage project boards from your terminal.
 
+Part of the [GHP Tools](https://github.com/bretwardjames/ghp-core) suite. Works alongside the [VS Code/Cursor extension](https://github.com/bretwardjames/vscode-gh-projects) for a complete GitHub Projects workflow.
+
 ## Installation
 
+**Quick install (CLI + VS Code extension):**
 ```bash
-npm install -g ghp-cli
+curl -fsSL https://raw.githubusercontent.com/bretwardjames/ghp-core/main/install.sh | bash
+```
+
+**CLI only:**
+```bash
+npm install -g @bretwardjames/ghp-cli
 ```
 
 ## Quick Start
@@ -33,6 +41,7 @@ ghp add "Fix login bug"
 ghp work
 ghp work --status "In Progress"
 ghp work --hide-done
+ghp work --group priority          # Group by field
 
 # Project board
 ghp plan
@@ -53,6 +62,9 @@ ghp add --list-templates           # List available templates
 # View issue details
 ghp open 123
 ghp open 123 --browser             # Open in browser
+
+# Edit issue description
+ghp edit 123                       # Opens in $EDITOR
 
 # Add comment
 ghp comment 123 -m "Fixed in latest commit"
@@ -87,24 +99,45 @@ ghp link-branch 123
 
 # Unlink branch
 ghp unlink-branch 123
-```
 
-### Configuration
-
-```bash
-# View config
-ghp config --list
-
-# Edit config file
-ghp config --edit
-
-# Set individual values
-ghp config mainBranch main
+# Sync active label with current branch
+ghp sync
 ```
 
 ## Configuration
 
-Config file: `~/.config/ghp-cli/config.json`
+ghp-cli uses a layered config system (like VS Code):
+
+| Layer | Path | Purpose |
+|-------|------|---------|
+| **Workspace** | `.ghp/config.json` | Team settings (commit this) |
+| **User** | `~/.config/ghp-cli/config.json` | Personal overrides |
+
+Settings merge: defaults → workspace → user
+
+### Config Commands
+
+```bash
+# View merged config with sources
+ghp config --show
+
+# Edit user config (opens $EDITOR)
+ghp config
+
+# Edit workspace config (shared with team)
+ghp config -w
+
+# Get/set individual values
+ghp config mainBranch
+ghp config mainBranch develop
+ghp config mainBranch develop -w   # Set in workspace config
+
+# Sync from VS Code/Cursor settings
+ghp config sync
+ghp config sync -w                 # Sync to workspace config
+```
+
+### Config File Format
 
 ```json
 {
@@ -157,6 +190,20 @@ Filter by any field:
 --slice Size=Small         # Custom project fields
 ```
 
+### Syncing with VS Code
+
+If you use the VS Code extension, you can sync shared settings:
+
+```bash
+ghp config sync
+```
+
+This imports `ghProjects.*` settings from your Cursor or VS Code configuration:
+- `ghProjects.mainBranch` → `mainBranch`
+- `ghProjects.branchNamePattern` → `branchPattern`
+- `ghProjects.startWorkingStatus` → `startWorkingStatus`
+- `ghProjects.prMergedStatus` → `doneStatus`
+
 ## Issue Templates
 
 Place templates in `.github/ISSUE_TEMPLATE/` in your repo. When creating issues, you can:
@@ -170,6 +217,11 @@ Place templates in `.github/ISSUE_TEMPLATE/` in your repo. When creating issues,
 - Node.js >= 18
 - GitHub account with Projects access
 - `gh` CLI recommended (for auth token)
+
+## Related
+
+- [ghp-core](https://github.com/bretwardjames/ghp-core) - Shared library and install script
+- [vscode-gh-projects](https://github.com/bretwardjames/vscode-gh-projects) - VS Code/Cursor extension
 
 ## License
 

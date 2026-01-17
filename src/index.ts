@@ -26,7 +26,7 @@ const program = new Command();
 program
     .name('ghp')
     .description('GitHub Projects CLI - manage project boards from your terminal')
-    .version('0.1.6');
+    .version('0.1.7');
 
 // Authentication
 program
@@ -41,8 +41,10 @@ program
     .description('View or set configuration')
     .argument('[key]', 'Config key to get/set')
     .argument('[value]', 'Value to set')
-    .option('-l, --list', 'List all config values')
-    .option('-e, --edit', 'Open config file in editor (creates template if missing)')
+    .option('-s, --show', 'Show merged config from all sources')
+    .option('-e, --edit', 'Open config file in editor (explicit)')
+    .option('-w, --workspace', 'Target workspace config (.ghp/config.json)')
+    .option('-u, --user', 'Target user config (~/.config/ghp-cli/config.json)')
     .action(configCommand);
 
 // Main views

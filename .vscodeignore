@@ -12,3 +12,4 @@ firebase-debug.log
 *.vsix
 node_modules/**
 !node_modules/@octokit/**
+!node_modules/@bretwardjames/**

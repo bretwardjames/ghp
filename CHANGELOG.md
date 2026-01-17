@@ -2,6 +2,20 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.1.10] - 2025-01-17
+
+### Added
+- **Active item indicator** - Items you're working on (with `@user:active` label) now show:
+  - Green icon color in sidebar
+  - Circle indicator prefix in description
+  - Green left border on cards/list items in Planning Board
+  - "🔥 Currently Working On" tooltip header
+- **Unified Start Working flow** - Intelligently handles branch linking:
+  - If issue has linked branch → switches to it
+  - If no linked branch → offers to create new or link existing
+  - Branches sorted by relevance (matches issue number/title)
+- New setting `ghProjects.showSwitchButton` to optionally hide the separate Switch button
+
 ## [0.1.9] - 2025-01-17
 
 ### Changed

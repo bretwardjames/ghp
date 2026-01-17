@@ -19,6 +19,7 @@ import { sliceCommand } from './commands/slice.js';
 import { openCommand } from './commands/open.js';
 import { commentCommand } from './commands/comment.js';
 import { syncCommand } from './commands/sync.js';
+import { editCommand } from './commands/edit.js';
 
 const program = new Command();
 
@@ -174,6 +175,12 @@ program
     .description('Add a comment to an issue')
     .option('-m, --message <text>', 'Comment text (opens editor if not provided)')
     .action(commentCommand);
+
+program
+    .command('edit <issue>')
+    .alias('e')
+    .description('Edit an issue description in $EDITOR')
+    .action(editCommand);
 
 // Active label sync
 program

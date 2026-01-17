@@ -1,46 +1,25 @@
 /**
  * Branch-issue linking for VSCode extension.
  *
- * Wraps @bretwardjames/ghp-core BranchLinker with VSCode workspaceState storage
- * and adds VSCode-specific git operations with UI integration.
+ * Uses @bretwardjames/ghp-core helper functions to store branch links
+ * as hidden HTML comments in GitHub issue bodies:
+ * <!-- ghp-branch: feature/my-branch -->
+ *
+ * This allows branch links to be shared between CLI and VSCode extension.
  */
 
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import {
-    BranchLinker as CoreBranchLinker,
-    StorageAdapter,
-    BranchLink,
+    parseBranchLink,
+    setBranchLinkInBody,
+    removeBranchLinkFromBody,
 } from '@bretwardjames/ghp-core';
+import type { GitHubAPI } from './github-api';
 import { getCurrentBranch, hasUncommittedChanges } from './git-utils';
 
 const execAsync = promisify(exec);
-
-const STORAGE_KEY = 'ghProjects.branchLinks';
-
-/**
- * Create a VSCode workspaceState storage adapter for the core BranchLinker.
- */
-function createWorkspaceStateAdapter(context: vscode.ExtensionContext): StorageAdapter {
-    return {
-        load(): BranchLink[] {
-            return context.workspaceState.get<BranchLink[]>(STORAGE_KEY, []);
-        },
-        async save(links: BranchLink[]): Promise<void> {
-            await context.workspaceState.update(STORAGE_KEY, links);
-        },
-    };
-}
-
-/**
- * Get the repository name from the workspace folder.
- * Falls back to 'unknown' if no workspace is open.
- */
-function getRepoName(): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder?.name || 'unknown';
-}
 
 /**
  * Get the workspace path for git operations.
@@ -51,94 +30,112 @@ function getWorkspacePath(): string | null {
 }
 
 /**
- * VSCode BranchLinker that wraps the core BranchLinker with
- * workspaceState storage and adds VSCode-specific operations.
+ * VSCode BranchLinker that stores branch-issue links in GitHub issue bodies.
  */
 export class BranchLinker {
-    private _core: CoreBranchLinker;
-    private _context: vscode.ExtensionContext;
+    private _api: GitHubAPI;
+    private _getRepo: () => { owner: string; name: string } | null;
 
-    constructor(context: vscode.ExtensionContext) {
-        this._context = context;
-        this._core = new CoreBranchLinker(createWorkspaceStateAdapter(context));
+    constructor(
+        api: GitHubAPI,
+        getRepo: () => { owner: string; name: string } | null
+    ) {
+        this._api = api;
+        this._getRepo = getRepo;
     }
 
     /**
-     * Get the core linker for advanced operations.
-     */
-    get core(): CoreBranchLinker {
-        return this._core;
-    }
-
-    /**
-     * Get all branch-issue links for this workspace.
-     */
-    async getLinks(): Promise<BranchLink[]> {
-        const repo = getRepoName();
-        return this._core.getLinksForRepo(repo);
-    }
-
-    /**
-     * Link a branch to an issue.
+     * Link a branch to an issue by storing the link in the issue body.
      */
     async linkBranch(
         branchName: string,
-        issueNumber: number,
-        issueTitle: string,
-        projectItemId: string
-    ): Promise<void> {
-        const repo = getRepoName();
-        await this._core.link(branchName, issueNumber, issueTitle, projectItemId, repo);
-    }
+        issueNumber: number
+    ): Promise<boolean> {
+        const repo = this._getRepo();
+        if (!repo) {
+            vscode.window.showErrorMessage('No repository detected');
+            return false;
+        }
 
-    /**
-     * Get the branch linked to an issue.
-     */
-    async getBranchForIssue(projectItemId: string): Promise<string | null> {
-        // Note: Core uses issueNumber, but we have itemId. Let's find by itemId.
-        const links = await this.getLinks();
-        const link = links.find(l => l.itemId === projectItemId);
-        return link?.branch || null;
-    }
+        try {
+            // Get current issue body
+            const currentBody = await this._api.getIssueBody(repo.owner, repo.name, issueNumber);
 
-    /**
-     * Get the branch linked to an issue by issue number.
-     */
-    async getBranchForIssueNumber(issueNumber: number): Promise<string | null> {
-        const repo = getRepoName();
-        return this._core.getBranchForIssue(repo, issueNumber);
-    }
+            // Update body with branch link
+            const newBody = setBranchLinkInBody(currentBody, branchName);
 
-    /**
-     * Get the issue linked to a branch.
-     */
-    async getIssueForBranch(branchName: string): Promise<BranchLink | null> {
-        const repo = getRepoName();
-        return this._core.getLinkForBranch(repo, branchName);
-    }
-
-    /**
-     * Remove a link by issue item ID.
-     */
-    async unlinkByIssue(projectItemId: string): Promise<void> {
-        const links = await this._core.getAllLinks();
-        const link = links.find(l => l.itemId === projectItemId);
-        if (link) {
-            await this._core.unlink(link.repo, link.issueNumber);
+            // Save the updated body
+            await this._api.updateIssueBody(repo.owner, repo.name, issueNumber, newBody);
+            return true;
+        } catch (error) {
+            console.error('Failed to link branch:', error);
+            return false;
         }
     }
 
     /**
-     * Remove a link by branch.
+     * Get the branch linked to an issue by reading the issue body.
      */
-    async unlinkByBranch(branchName: string): Promise<void> {
-        const repo = getRepoName();
-        await this._core.unlinkBranch(repo, branchName);
+    async getBranchForIssue(issueNumber: number): Promise<string | null> {
+        const repo = this._getRepo();
+        if (!repo) {
+            return null;
+        }
+
+        try {
+            const body = await this._api.getIssueBody(repo.owner, repo.name, issueNumber);
+            return parseBranchLink(body);
+        } catch (error) {
+            console.error('Failed to get branch for issue:', error);
+            return null;
+        }
     }
 
     /**
+     * Remove the branch link from an issue.
+     */
+    async unlinkBranch(issueNumber: number): Promise<boolean> {
+        const repo = this._getRepo();
+        if (!repo) {
+            vscode.window.showErrorMessage('No repository detected');
+            return false;
+        }
+
+        try {
+            // Get current issue body
+            const currentBody = await this._api.getIssueBody(repo.owner, repo.name, issueNumber);
+
+            // Check if there's a link to remove
+            if (!parseBranchLink(currentBody)) {
+                return false; // No link to remove
+            }
+
+            // Remove the branch link
+            const newBody = removeBranchLinkFromBody(currentBody);
+
+            // Save the updated body
+            await this._api.updateIssueBody(repo.owner, repo.name, issueNumber, newBody);
+            return true;
+        } catch (error) {
+            console.error('Failed to unlink branch:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if an issue has a branch link.
+     */
+    async hasLink(issueNumber: number): Promise<boolean> {
+        const branch = await this.getBranchForIssue(issueNumber);
+        return branch !== null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Git Operations (local operations, not related to GitHub API)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
      * Get current git branch name.
-     * Uses the shared git-utils from core.
      */
     async getCurrentBranch(): Promise<string | null> {
         try {

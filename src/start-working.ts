@@ -244,7 +244,7 @@ async function linkBranchToIssue(branchName: string, item: NormalizedProjectItem
 
     try {
         const branchLinker = getBranchLinker();
-        await branchLinker.linkBranch(branchName, item.number, item.title, item.id);
+        await branchLinker.linkBranch(branchName, item.number);
     } catch (error) {
         // Non-fatal - just log it
         console.warn('Failed to auto-link branch to issue:', error);

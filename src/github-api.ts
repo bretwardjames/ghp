@@ -1600,6 +1600,41 @@ export class GitHubAPI {
         }
     }
 
+    /**
+     * Get an issue's body/description
+     */
+    async getIssueBody(
+        owner: string,
+        repo: string,
+        issueNumber: number
+    ): Promise<string | null> {
+        if (!this.graphqlClient) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            const response = await this.graphqlClient<{
+                repository: {
+                    issue: { body: string } | null;
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $number: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                        issue(number: $number) {
+                            body
+                        }
+                    }
+                }
+            `, { owner, repo, number: issueNumber });
+
+            return response.repository.issue?.body ?? null;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('Failed to get issue body:', errorMessage);
+            return null;
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Active Label Methods
     // ─────────────────────────────────────────────────────────────────────────

@@ -558,8 +558,10 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         const { item } = node;
         const treeItem = new vscode.TreeItem(item.title, vscode.TreeItemCollapsibleState.None);
 
-        // Check for linked branch
-        const linkedBranch = (await this.branchLinker?.getBranchForIssue(item.id)) || null;
+        // Check for linked branch (only for issues with a number)
+        const linkedBranch = item.number
+            ? (await this.branchLinker?.getBranchForIssue(item.number)) || null
+            : null;
 
         // Description: repo#number + branch indicator
         let description = '';

@@ -2,6 +2,12 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.1.7] - 2026-01-17
+
+### Changed
+- Branch links now stored in GitHub issue bodies (shared with CLI)
+- Branch link indicator shows linked branch name in sidebar
+
 ## [0.1.3] - 2026-01-16
 
 ### Added

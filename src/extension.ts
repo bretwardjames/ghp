@@ -22,7 +22,9 @@ export async function activate(context: vscode.ExtensionContext) {
     api = new GitHubAPI();
     boardProvider = new ProjectBoardProvider(api);
     statusBar = new StatusBarManager();
-    branchLinker = new BranchLinker(context);
+
+    // BranchLinker now needs API and a way to get repo info
+    branchLinker = new BranchLinker(api, () => currentRepo);
 
     // Connect branch linker to board provider for linked branch indicators
     boardProvider.setBranchLinker(branchLinker);
@@ -409,7 +411,7 @@ function registerCommands(context: vscode.ExtensionContext) {
             }
 
             // Get current linked branch if any
-            const currentLinked = await branchLinker.getBranchForIssue(item.id);
+            const currentLinked = await branchLinker.getBranchForIssue(item.number);
 
             // Check current branch status
             const { pushed, branchName: currentBranch } = await branchLinker.isCurrentBranchPushed();
@@ -439,7 +441,7 @@ function registerCommands(context: vscode.ExtensionContext) {
                     }
 
                     // Link the just-pushed branch
-                    await branchLinker.linkBranch(currentBranch, item.number, item.title, item.id);
+                    await branchLinker.linkBranch(currentBranch, item.number);
                     vscode.window.showInformationMessage(
                         `Pushed and linked branch "${currentBranch}" to #${item.number}`
                     );
@@ -474,12 +476,7 @@ function registerCommands(context: vscode.ExtensionContext) {
             });
 
             if (selected) {
-                await branchLinker.linkBranch(
-                    selected.label,
-                    item.number,
-                    item.title,
-                    item.id
-                );
+                await branchLinker.linkBranch(selected.label, item.number);
                 vscode.window.showInformationMessage(
                     `Linked branch "${selected.label}" to #${item.number}`
                 );
@@ -494,7 +491,11 @@ function registerCommands(context: vscode.ExtensionContext) {
             }
 
             const item = node.item;
-            const linkedBranch = await branchLinker.getBranchForIssue(item.id);
+            if (!item.number) {
+                vscode.window.showWarningMessage('Issue number not available');
+                return;
+            }
+            const linkedBranch = await branchLinker.getBranchForIssue(item.number);
 
             if (!linkedBranch) {
                 // No branch linked - offer to link one or start working
@@ -551,7 +552,11 @@ function registerCommands(context: vscode.ExtensionContext) {
             }
 
             const item = node.item;
-            const linkedBranch = await branchLinker.getBranchForIssue(item.id);
+            if (!item.number) {
+                vscode.window.showWarningMessage('Issue number not available');
+                return;
+            }
+            const linkedBranch = await branchLinker.getBranchForIssue(item.number);
 
             if (!linkedBranch) {
                 vscode.window.showInformationMessage('No branch is linked to this issue');
@@ -565,7 +570,7 @@ function registerCommands(context: vscode.ExtensionContext) {
             );
 
             if (confirm === 'Unlink') {
-                await branchLinker.unlinkByIssue(item.id);
+                await branchLinker.unlinkBranch(item.number);
                 vscode.window.showInformationMessage(`Unlinked branch from #${item.number}`);
                 boardProvider.refresh();
             }

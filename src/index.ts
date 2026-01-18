@@ -75,6 +75,43 @@ export {
 } from './url-parser.js';
 
 // =============================================================================
+// Settings Sync (bidirectional CLI ↔ VSCode)
+// =============================================================================
+
+export {
+    // Functions
+    normalizeVSCodeSettings,
+    toVSCodeSettings,
+    computeSettingsDiff,
+    hasDifferences,
+    resolveConflicts,
+    formatConflict,
+    getDiffSummary,
+    // Resolution helpers
+    useCli,
+    useVSCode,
+    useCustom,
+    skip,
+    // Constants
+    SYNCABLE_KEYS,
+    SETTING_DISPLAY_NAMES,
+    VSCODE_TO_CLI_MAP,
+    CLI_TO_VSCODE_MAP,
+    DEFAULT_VALUES,
+} from './sync.js';
+
+export type {
+    SyncableSettingKey,
+    SyncableSettings,
+    SettingsSource,
+    SettingConflict,
+    SettingsDiff,
+    ConflictResolution,
+    ConflictChoices,
+    ResolvedSettings,
+} from './sync.js';
+
+// =============================================================================
 // GraphQL Queries (for advanced usage)
 // =============================================================================
 

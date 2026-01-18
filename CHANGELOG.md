@@ -2,6 +2,15 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.1.13] - 2025-01-18
+
+### Added
+- **Sync Settings with CLI** command - bidirectional settings sync between VS Code and ghp-cli
+  - Compare settings and see differences at a glance
+  - Choose per-setting which value to keep (VS Code, CLI, or enter custom)
+  - Sync settings that only exist in one place to the other
+  - Accessible via Command Palette: "GitHub Projects: Sync Settings with CLI"
+
 ## [0.1.12] - 2025-01-17
 
 ### Added

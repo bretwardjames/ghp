@@ -62,6 +62,15 @@ Drag issues between status groups in the sidebar to quickly change their status.
 - Switch to linked branches directly from the sidebar
 - Track which issues have active branches
 
+### Settings Sync
+
+Sync settings bidirectionally with the [ghp CLI](https://github.com/bretwardjames/ghp-cli):
+
+- Command Palette: "GitHub Projects: Sync Settings with CLI"
+- Compare settings and resolve conflicts interactively
+- Choose per-setting: use VS Code value, CLI value, or enter custom
+- Keeps both tools in sync without manual copying
+
 ## Requirements
 
 - VS Code 1.85.0 or higher

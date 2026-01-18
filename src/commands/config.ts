@@ -2,7 +2,19 @@ import { existsSync, writeFileSync, mkdirSync } from 'fs';
 import { spawn } from 'child_process';
 import { dirname } from 'path';
 import chalk from 'chalk';
-import { getConfig, setConfig, listConfigWithSources, getFullConfigWithSources, CONFIG_KEYS, getConfigPath, getWorkspaceConfigPath, getUserConfigPath, syncFromVSCode, getVSCodeSettingsPaths, type Config, type ConfigScope, type ConfigSource, type PlanShortcut } from '../config.js';
+import {
+    getConfig, setConfig, listConfigWithSources, getFullConfigWithSources, CONFIG_KEYS,
+    getConfigPath, getWorkspaceConfigPath, getUserConfigPath, getVSCodeSettingsPaths,
+    getCliSyncableSettings, getVSCodeSyncableSettings, writeToVSCode, saveConfig,
+    type Config, type ConfigScope, type ConfigSource, type PlanShortcut,
+} from '../config.js';
+import {
+    computeSettingsDiff, hasDifferences, resolveConflicts, getDiffSummary,
+    SETTING_DISPLAY_NAMES, CLI_TO_VSCODE_MAP,
+    useCli, useVSCode, useCustom, skip,
+    type ConflictChoices, type SyncableSettingKey,
+} from '@bretwardjames/ghp-core';
+import { promptSyncConflict, promptSyncUnique, promptConfirm } from '../prompts.js';
 
 const SOURCE_LABELS: Record<ConfigSource, string> = {
     'default': chalk.dim('(default)'),
@@ -95,52 +107,177 @@ export async function configSyncCommand(
 ): Promise<void> {
     const scope = resolveScope(options);
 
-    console.log(chalk.bold('Syncing from VS Code/Cursor settings...'));
+    console.log(chalk.bold('Bidirectional Settings Sync'));
+    console.log(chalk.dim('Comparing CLI and VS Code/Cursor settings...'));
     console.log();
+
+    // Get settings from both sources
+    const cliSettings = getCliSyncableSettings();
+    const { settings: vscodeSettings, editor, errors } = getVSCodeSyncableSettings();
 
     const paths = getVSCodeSettingsPaths();
-    console.log(chalk.dim('Looking for settings in:'));
-    console.log(chalk.dim(`  Workspace: ${paths.workspace || '(not in git repo)'}`));
-    console.log(chalk.dim(`  Cursor:    ${paths.cursorUser}`));
-    console.log(chalk.dim(`  VS Code:   ${paths.codeUser}`));
+    console.log(chalk.dim('Settings sources:'));
+    console.log(chalk.dim(`  CLI:     ${getConfigPath(scope)}`));
+    console.log(chalk.dim(`  ${editor === 'cursor' ? 'Cursor' : 'VS Code'}:  ${editor === 'cursor' ? paths.cursorUser : paths.codeUser}`));
     console.log();
 
-    const result = syncFromVSCode(scope);
-
     // Report any parse errors
-    if (result.errors.length > 0) {
-        for (const error of result.errors) {
+    if (errors.length > 0) {
+        for (const error of errors) {
             console.log(chalk.yellow(`Warning: ${error}`));
         }
         console.log();
     }
 
-    if (result.synced.length === 0) {
-        if (result.skipped.length > 0) {
-            console.log(chalk.yellow('No syncable settings found.'));
-            console.log(chalk.dim(`Found ${result.skipped.length} extension-only setting(s): ${result.skipped.join(', ')}`));
-            console.log();
-            console.log(chalk.dim('Syncable settings: mainBranch, branchNamePattern, startWorkingStatus, prMergedStatus'));
-        } else {
-            console.log(chalk.yellow('No ghProjects.* settings found to sync.'));
-            console.log(chalk.dim('Make sure you have settings like ghProjects.mainBranch in your editor.'));
+    // Compute the diff
+    const diff = computeSettingsDiff(cliSettings, vscodeSettings);
+
+    if (!hasDifferences(diff)) {
+        console.log(chalk.green('Settings are already in sync.'));
+        if (diff.matching.length > 0) {
+            console.log(chalk.dim(`\n${diff.matching.length} setting(s) match:`));
+            for (const { key, value } of diff.matching) {
+                console.log(chalk.dim(`  ${SETTING_DISPLAY_NAMES[key]}: ${value}`));
+            }
         }
         return;
     }
 
-    console.log(chalk.green(`Synced ${result.synced.length} setting(s) from ${result.editor}:`));
-    for (const { key, value, source } of result.synced) {
-        const sourceLabel = source === 'workspace' ? chalk.cyan('(workspace)') : chalk.green('(user)');
-        console.log(`  ${key}: ${value} ${sourceLabel}`);
+    console.log(chalk.yellow('Differences found:'), getDiffSummary(diff));
+
+    // Collect user choices
+    const choices: ConflictChoices = {};
+
+    // Handle conflicts (settings that differ)
+    for (const conflict of diff.conflicts) {
+        const result = await promptSyncConflict({
+            key: conflict.key,
+            displayName: conflict.displayName,
+            cliValue: conflict.cliValue,
+            vscodeValue: conflict.vscodeValue,
+        });
+
+        if (result === 'cli') {
+            choices[conflict.key] = useCli();
+        } else if (result === 'vscode') {
+            choices[conflict.key] = useVSCode();
+        } else if (result === 'skip') {
+            choices[conflict.key] = skip();
+        } else {
+            // Custom value
+            choices[conflict.key] = useCustom(result.custom);
+        }
     }
 
-    if (result.skipped.length > 0) {
+    // Handle settings only in CLI
+    const syncCliOnly: SyncableSettingKey[] = [];
+    for (const { key, value } of diff.cliOnly) {
+        const shouldSync = await promptSyncUnique({
+            key,
+            displayName: SETTING_DISPLAY_NAMES[key],
+            value,
+            source: 'cli',
+        });
+        if (shouldSync) {
+            syncCliOnly.push(key);
+        }
+    }
+
+    // Handle settings only in VSCode
+    const syncVscodeOnly: SyncableSettingKey[] = [];
+    for (const { key, value } of diff.vscodeOnly) {
+        const shouldSync = await promptSyncUnique({
+            key,
+            displayName: SETTING_DISPLAY_NAMES[key],
+            value,
+            source: 'vscode',
+        });
+        if (shouldSync) {
+            syncVscodeOnly.push(key);
+        }
+    }
+
+    // Resolve and compute final settings
+    const resolved = resolveConflicts(diff, choices, false); // Don't auto-sync unique
+
+    // Add the user-approved unique syncs
+    for (const key of syncCliOnly) {
+        const value = cliSettings[key];
+        if (value) {
+            resolved.vscode[CLI_TO_VSCODE_MAP[key]] = value;
+        }
+    }
+    for (const key of syncVscodeOnly) {
+        const value = vscodeSettings[key];
+        if (value) {
+            resolved.cli[key] = value;
+        }
+    }
+
+    // Check if there's anything to do
+    const hasCliUpdates = Object.keys(resolved.cli).length > 0;
+    const hasVscodeUpdates = Object.keys(resolved.vscode).length > 0;
+
+    if (!hasCliUpdates && !hasVscodeUpdates) {
         console.log();
-        console.log(chalk.dim(`Skipped ${result.skipped.length} extension-only setting(s): ${result.skipped.join(', ')}`));
+        console.log(chalk.yellow('No changes to apply.'));
+        return;
+    }
+
+    // Show summary of changes
+    console.log();
+    console.log(chalk.bold('Changes to apply:'));
+
+    if (hasCliUpdates) {
+        console.log(chalk.cyan('\n  CLI config:'));
+        for (const [key, value] of Object.entries(resolved.cli)) {
+            console.log(`    ${SETTING_DISPLAY_NAMES[key as SyncableSettingKey]}: ${value}`);
+        }
+    }
+
+    if (hasVscodeUpdates) {
+        console.log(chalk.magenta(`\n  ${editor === 'cursor' ? 'Cursor' : 'VS Code'} settings:`));
+        for (const [key, value] of Object.entries(resolved.vscode)) {
+            console.log(`    ghProjects.${key}: ${value}`);
+        }
     }
 
     console.log();
-    console.log(chalk.dim(`Saved to ${scope} config: ${getConfigPath(scope)}`));
+    const confirmed = await promptConfirm('Apply these changes?');
+
+    if (!confirmed) {
+        console.log(chalk.yellow('Sync cancelled.'));
+        return;
+    }
+
+    // Apply changes
+    let cliSuccess = true;
+    let vscodeSuccess = true;
+
+    if (hasCliUpdates) {
+        try {
+            saveConfig(resolved.cli, scope);
+            console.log(chalk.green('CLI config updated.'));
+        } catch (err) {
+            cliSuccess = false;
+            console.log(chalk.red(`Failed to update CLI config: ${err instanceof Error ? err.message : err}`));
+        }
+    }
+
+    if (hasVscodeUpdates) {
+        const result = writeToVSCode(resolved.vscode, editor, 'user');
+        if (result.success) {
+            console.log(chalk.green(`${editor === 'cursor' ? 'Cursor' : 'VS Code'} settings updated.`));
+        } else {
+            vscodeSuccess = false;
+            console.log(chalk.red(`Failed to update ${editor} settings: ${result.error}`));
+        }
+    }
+
+    if (cliSuccess && vscodeSuccess) {
+        console.log();
+        console.log(chalk.green('Sync complete.'));
+    }
 }
 
 export async function configCommand(

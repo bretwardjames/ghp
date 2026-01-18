@@ -2,6 +2,12 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
 import { join } from 'path';
 import { execSync } from 'child_process';
+import {
+    type SyncableSettings,
+    type SyncableSettingKey,
+    VSCODE_TO_CLI_MAP,
+    CLI_TO_VSCODE_MAP,
+} from '@bretwardjames/ghp-core';
 
 // User config (personal overrides)
 const USER_CONFIG_DIR = join(homedir(), '.config', 'ghp-cli');
@@ -487,13 +493,7 @@ function readVSCodeSettings(editor: 'code' | 'cursor' = 'code'): VSCodeSettingsR
     return result;
 }
 
-// Mapping from VS Code setting names to CLI config keys
-const VSCODE_TO_CLI_MAP: Record<string, keyof Config> = {
-    'mainBranch': 'mainBranch',
-    'branchNamePattern': 'branchPattern',
-    'startWorkingStatus': 'startWorkingStatus',
-    'prMergedStatus': 'doneStatus',
-};
+// VSCODE_TO_CLI_MAP is now imported from @bretwardjames/ghp-core
 
 export interface SyncResult {
     synced: Array<{ key: string; value: string; source: 'workspace' | 'user' }>;
@@ -576,3 +576,107 @@ export function getVSCodeSettingsPaths(): { workspace: string | null; cursorUser
         codeUser: getVSCodeUserSettingsPath('code'),
     };
 }
+
+// =============================================================================
+// Bidirectional Sync Support
+// =============================================================================
+
+/**
+ * Get CLI config as SyncableSettings (only the 4 syncable keys)
+ */
+export function getCliSyncableSettings(): SyncableSettings {
+    const config = loadConfig();
+    return {
+        mainBranch: config.mainBranch,
+        branchPattern: config.branchPattern,
+        startWorkingStatus: config.startWorkingStatus,
+        doneStatus: config.doneStatus,
+    };
+}
+
+/**
+ * Read and merge VSCode/Cursor settings, returning as SyncableSettings.
+ * Tries Cursor first, then VS Code.
+ * Returns the settings and which editor was used.
+ */
+export function getVSCodeSyncableSettings(): {
+    settings: SyncableSettings;
+    editor: 'cursor' | 'code';
+    errors: string[];
+} {
+    // Try Cursor first
+    let editor: 'cursor' | 'code' = 'cursor';
+    let vscodeResult = readVSCodeSettings('cursor');
+    const errors: string[] = [...vscodeResult.errors];
+
+    // If no Cursor settings found, try VS Code
+    if (Object.keys(vscodeResult.workspace).length === 0 && Object.keys(vscodeResult.user).length === 0) {
+        editor = 'code';
+        vscodeResult = readVSCodeSettings('code');
+        errors.push(...vscodeResult.errors);
+    }
+
+    // Merge workspace and user (user overrides workspace)
+    const merged = { ...vscodeResult.workspace, ...vscodeResult.user };
+
+    // Convert to SyncableSettings using CLI key names
+    const settings: SyncableSettings = {};
+    for (const [vscodeKey, cliKey] of Object.entries(VSCODE_TO_CLI_MAP)) {
+        const value = merged[vscodeKey];
+        if (typeof value === 'string' && value.trim() !== '') {
+            settings[cliKey] = value;
+        }
+    }
+
+    return { settings, editor, errors };
+}
+
+/**
+ * Write settings to VSCode/Cursor settings file.
+ * Preserves existing settings and only updates ghProjects.* keys.
+ */
+export function writeToVSCode(
+    settings: Record<string, string>,
+    editor: 'cursor' | 'code' = 'cursor',
+    scope: 'user' | 'workspace' = 'user'
+): { success: boolean; error?: string; path: string } {
+    const settingsPath = scope === 'workspace'
+        ? getVSCodeWorkspaceSettingsPath()
+        : getVSCodeUserSettingsPath(editor);
+
+    if (!settingsPath) {
+        return { success: false, error: 'Not in a git repository', path: '' };
+    }
+
+    try {
+        // Read existing settings
+        let existing: Record<string, unknown> = {};
+        if (existsSync(settingsPath)) {
+            const content = readFileSync(settingsPath, 'utf-8');
+            existing = JSON.parse(stripJsonComments(content));
+        }
+
+        // Update ghProjects.* settings
+        for (const [vscodeKey, value] of Object.entries(settings)) {
+            existing[`ghProjects.${vscodeKey}`] = value;
+        }
+
+        // Write back
+        const dir = join(settingsPath, '..');
+        if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(settingsPath, JSON.stringify(existing, null, 2));
+
+        return { success: true, path: settingsPath };
+    } catch (err) {
+        return {
+            success: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+            path: settingsPath,
+        };
+    }
+}
+
+// Re-export types from core for convenience
+export type { SyncableSettings, SyncableSettingKey };

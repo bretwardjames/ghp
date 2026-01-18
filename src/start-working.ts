@@ -38,6 +38,53 @@ export async function executeStartWorking(
     const branchLinker = getBranchLinker();
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // Step 0: Check if current user is assigned
+    // ═══════════════════════════════════════════════════════════════════════════
+    const isAssigned = item.assignees.some(
+        (a) => a.login.toLowerCase() === api.username?.toLowerCase()
+    );
+
+    if (!isAssigned && item.number && item.repository) {
+        const assignmentAction = await vscode.window.showQuickPick(
+            ['Reassign to me', 'Add me', 'Leave as is'],
+            {
+                title: 'You are not assigned to this issue',
+                placeHolder: 'What would you like to do?',
+            }
+        );
+
+        if (!assignmentAction) {
+            return false; // Cancelled
+        }
+
+        if (assignmentAction !== 'Leave as is') {
+            const [owner, repo] = item.repository.split('/');
+            if (owner && repo) {
+                const newAssignees =
+                    assignmentAction === 'Reassign to me'
+                        ? [api.username!]
+                        : [...item.assignees.map((a) => a.login), api.username!];
+
+                const success = await api.updateAssignees(
+                    owner,
+                    repo,
+                    item.number,
+                    newAssignees,
+                    item.type === 'pr' ? 'pr' : 'issue'
+                );
+
+                if (success) {
+                    vscode.window.showInformationMessage(
+                        assignmentAction === 'Reassign to me'
+                            ? `Reassigned to ${api.username}`
+                            : `Added ${api.username} as assignee`
+                    );
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // Step 1: Check if issue has a linked branch
     // ═══════════════════════════════════════════════════════════════════════════
     const linkedBranch = item.number ? await branchLinker.getBranchForIssue(item.number) : null;

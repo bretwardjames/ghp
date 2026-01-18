@@ -192,17 +192,26 @@ Filter by any field:
 
 ### Syncing with VS Code
 
-If you use the VS Code extension, you can sync shared settings:
+If you use the VS Code extension, you can sync shared settings bidirectionally:
 
 ```bash
 ghp config sync
 ```
 
-This imports `ghProjects.*` settings from your Cursor or VS Code configuration:
-- `ghProjects.mainBranch` → `mainBranch`
-- `ghProjects.branchNamePattern` → `branchPattern`
-- `ghProjects.startWorkingStatus` → `startWorkingStatus`
-- `ghProjects.prMergedStatus` → `doneStatus`
+This compares settings between CLI and VS Code/Cursor and lets you choose which to keep:
+- For conflicting settings: choose CLI value, VS Code value, enter custom, or skip
+- For settings only in one place: optionally sync to the other
+- Changes are applied to both CLI config and VS Code settings
+
+**Syncable settings:**
+| CLI | VS Code |
+|-----|---------|
+| `mainBranch` | `ghProjects.mainBranch` |
+| `branchPattern` | `ghProjects.branchNamePattern` |
+| `startWorkingStatus` | `ghProjects.startWorkingStatus` |
+| `doneStatus` | `ghProjects.prMergedStatus` |
+
+You can also sync from VS Code using the Command Palette: "GitHub Projects: Sync Settings with CLI"
 
 ## Issue Templates
 

@@ -196,6 +196,34 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     console.log(chalk.dim(`Project: ${item.projectTitle} | Status: ${item.status || 'None'}`));
     console.log();
 
+    // Check if current user is assigned
+    const isAssigned = item.assignees.some(
+        (a) => a.toLowerCase() === api.username?.toLowerCase()
+    );
+
+    if (!isAssigned) {
+        console.log(chalk.yellow('You are not assigned to this issue.'));
+        const choices = ['Reassign to me', 'Add me', 'Leave as is'];
+        const choiceIdx = await promptSelect('What would you like to do?', choices);
+
+        if (choiceIdx === 0) {
+            // Reassign to me
+            const success = await api.updateAssignees(repo, issueNumber, [api.username!]);
+            if (success) {
+                console.log(chalk.green('✓'), `Reassigned to ${api.username}`);
+            }
+        } else if (choiceIdx === 1) {
+            // Add me
+            const newAssignees = [...item.assignees, api.username!];
+            const success = await api.updateAssignees(repo, issueNumber, newAssignees);
+            if (success) {
+                console.log(chalk.green('✓'), `Added ${api.username} as assignee`);
+            }
+        }
+        // Leave as is - do nothing
+        console.log();
+    }
+
     // Check if issue has linked branch
     const linkedBranch = await getBranchForIssue(repo, issueNumber);
 

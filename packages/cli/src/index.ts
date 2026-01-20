@@ -93,7 +93,7 @@ program
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
     .option('--from-main', 'Always switch to main before creating branch')
-    .option('-y, --yes', 'Accept defaults for all confirmations')
+    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .option('--force', 'Proceed despite uncommitted changes')
     .action(startCommand);
 
@@ -156,7 +156,7 @@ program
     .option('--list-templates', 'List available issue templates')
     // Non-interactive flags
     .option('--no-template', 'Skip template selection (blank issue)')
-    .option('-y, --yes', 'Accept defaults for interactive prompts')
+    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .action(addIssueCommand);
 
 // Field management

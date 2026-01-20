@@ -22,7 +22,8 @@ interface StartOptions {
     assign?: AssignAction;
     branchAction?: BranchAction;
     fromMain?: boolean;
-    yes?: boolean;
+    /** Use default values for all prompts (non-interactive mode) */
+    forceDefaults?: boolean;
     force?: boolean;
 }
 
@@ -30,9 +31,9 @@ interface StartOptions {
  * Handle uncommitted changes - prompt user to continue or abort.
  * Returns true if we should proceed.
  * @param force - If true, proceed without prompting
- * @param yes - If true, accept the default (continue) without prompting
+ * @param forceDefaults - If true, accept the default (continue) without prompting
  */
-async function handleUncommittedChanges(force?: boolean, yes?: boolean): Promise<boolean> {
+async function handleUncommittedChanges(force?: boolean, forceDefaults?: boolean): Promise<boolean> {
     if (await hasUncommittedChanges()) {
         console.log(chalk.yellow('Warning:'), 'You have uncommitted changes.');
 
@@ -45,7 +46,7 @@ async function handleUncommittedChanges(force?: boolean, yes?: boolean): Promise
         const shouldContinue = await confirmWithDefault(
             'Continue anyway?',
             false, // default is to abort
-            yes // --yes flag overrides to true
+            forceDefaults // --force-defaults flag overrides to true
         );
 
         if (!shouldContinue) {
@@ -83,13 +84,13 @@ async function applyActiveLabel(repo: RepoInfo, issueNumber: number): Promise<vo
 
 /**
  * Create a new branch, push it, and link it to the issue.
- * @param yes - If true, accept defaults without prompting
+ * @param forceDefaults - If true, accept defaults without prompting
  */
 async function createAndLinkBranch(
     repo: RepoInfo,
     item: { number?: number | null; title: string },
     branchPattern: string,
-    yes?: boolean
+    forceDefaults?: boolean
 ): Promise<string> {
     const branchName = generateBranchName(branchPattern, {
         user: api.username || 'user',
@@ -103,8 +104,8 @@ async function createAndLinkBranch(
         console.log(chalk.yellow('Branch already exists:'), branchName);
         const shouldCheckout = await confirmWithDefault(
             'Checkout existing branch?',
-            true, // default yes
-            yes   // --yes flag
+            true, // default is to proceed
+            forceDefaults   // --force-defaults flag
         );
         if (shouldCheckout) {
             await checkoutBranch(branchName);
@@ -236,7 +237,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             console.log(chalk.dim(`Already on branch: ${linkedBranch}`));
         } else {
             // Check for uncommitted changes before switching
-            if (!(await handleUncommittedChanges(options.force, options.yes))) {
+            if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
                 process.exit(0);
             }
 
@@ -269,7 +270,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         console.log(chalk.yellow('No branch linked to this issue.'));
 
         // Check for uncommitted changes
-        if (!(await handleUncommittedChanges(options.force, options.yes))) {
+        if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
             process.exit(0);
         }
 
@@ -325,8 +326,8 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
                 } else {
                     // Create new branch from main
-                    await handlePullIfBehind(mainBranch, options.yes);
-                    await createAndLinkBranch(repo, item, branchPattern, options.yes);
+                    await handlePullIfBehind(mainBranch, options.forceDefaults);
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
                 }
             }
         } else {
@@ -395,13 +396,13 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     }
                 } else if (choice === 1) {
                     // Create from current branch
-                    await createAndLinkBranch(repo, item, branchPattern, options.yes);
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
                 } else {
                     // Switch to main & create
                     await checkoutBranch(mainBranch);
                     console.log(chalk.green('✓'), `Switched to ${mainBranch}`);
-                    await handlePullIfBehind(mainBranch, options.yes);
-                    await createAndLinkBranch(repo, item, branchPattern, options.yes);
+                    await handlePullIfBehind(mainBranch, options.forceDefaults);
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
                 }
             }
         }
@@ -487,16 +488,16 @@ function getBranchRelevanceScore(branch: string, issueNumber: string, titleWords
 
 /**
  * Check if current branch is behind origin and offer to pull.
- * @param yes - If true, accept default (pull) without prompting
+ * @param forceDefaults - If true, accept default (pull) without prompting
  */
-async function handlePullIfBehind(branch: string, yes?: boolean): Promise<void> {
+async function handlePullIfBehind(branch: string, forceDefaults?: boolean): Promise<void> {
     const behind = await getCommitsBehind(branch);
     if (behind > 0) {
         console.log(chalk.yellow('Warning:'), `${branch} is ${behind} commit(s) behind origin.`);
         const shouldPull = await confirmWithDefault(
             'Pull latest?',
-            true, // default yes
-            yes   // --yes flag
+            true, // default is to proceed
+            forceDefaults   // --force-defaults flag
         );
         if (shouldPull) {
             try {

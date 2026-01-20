@@ -17,7 +17,8 @@ interface AddIssueOptions {
     listTemplates?: boolean;
     // Non-interactive flags
     noTemplate?: boolean;
-    yes?: boolean;
+    /** Use default values for all prompts (non-interactive mode) */
+    forceDefaults?: boolean;
 }
 
 async function openEditor(initialContent: string): Promise<string> {
@@ -146,14 +147,14 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         // Build options list: templates + blank issue
         const templateOptions = [...templates.map(t => t.name), chalk.dim('Blank issue')];
 
-        // In non-interactive or with --yes, default to blank issue
+        // In non-interactive or with --force-defaults, default to blank issue
         const defaultIdx = templates.length; // "Blank issue" is last
 
         const idx = await promptSelectWithDefault(
             'Select a template:',
             templateOptions,
             defaultIdx, // default: blank issue for non-interactive
-            options.yes ? defaultIdx : undefined // --yes forces blank
+            options.forceDefaults ? defaultIdx : undefined // --force-defaults forces blank
         );
 
         if (idx >= 0 && idx < templates.length) {
@@ -233,14 +234,14 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     const statusField = await api.getStatusField(project.id);
 
     if (!statusName && statusField && statusField.options.length > 0) {
-        // In non-interactive or with --yes, use first status option as default
+        // In non-interactive or with --force-defaults, use first status option as default
         const statusOptions = statusField.options.map(opt => opt.name);
 
         const idx = await promptSelectWithDefault(
             'Select initial status:',
             statusOptions,
             0, // default: first status for non-interactive
-            options.yes ? 0 : undefined // --yes forces first
+            options.forceDefaults ? 0 : undefined // --force-defaults forces first
         );
 
         if (idx >= 0 && idx < statusField.options.length) {

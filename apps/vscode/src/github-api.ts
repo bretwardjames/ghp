@@ -1858,7 +1858,7 @@ export class GitHubAPI {
             }>(`
                 query($owner: String!, $repo: String!, $labels: [String!]!) {
                     repository(owner: $owner, name: $repo) {
-                        issues(first: 50, states: [OPEN], labels: $labels) {
+                        issues(first: 50, states: [OPEN, CLOSED], labels: $labels) {
                             nodes {
                                 number
                                 title

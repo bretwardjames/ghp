@@ -1,0 +1,11 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "gh-projects": "0.1.13",
+    "@bretwardjames/ghp-cli": "0.1.14",
+    "@bretwardjames/ghp-core": "0.1.8",
+    "@bretwardjames/ghp-mcp": "0.0.0"
+  },
+  "changesets": []
+}

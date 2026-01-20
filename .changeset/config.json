@@ -7,5 +7,9 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["gh-projects", "ghp.nvim"]
+  "ignore": ["gh-projects"],
+  "snapshot": {
+    "prereleaseTemplate": "{tag}.{datetime}",
+    "useCalculatedVersion": true
+  }
 }

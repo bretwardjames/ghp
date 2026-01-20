@@ -60,19 +60,51 @@ export function registerAddIssueTool(server: McpServer, context: ServerContext):
 
                 let message = `Created issue #${result.number}: "${title}"\n${issueUrl}`;
 
-                // If project specified, add to project
-                if (project) {
-                    const projects = await context.api.getProjects(repo);
-                    const targetProject = projects.find(
-                        (p) => p.title.toLowerCase() === project.toLowerCase()
-                    );
+                // Add to project (always - find project by name or use first)
+                const projects = await context.api.getProjects(repo);
+                if (projects.length === 0) {
+                    message += '\n\nWarning: No GitHub Projects found. Issue was created but not added to a project.';
+                } else {
+                    let targetProject = projects[0];
+                    if (project) {
+                        const found = projects.find(
+                            (p) => p.title.toLowerCase() === project.toLowerCase()
+                        );
+                        if (!found) {
+                            message += `\n\nWarning: Project "${project}" not found. Added to "${targetProject.title}" instead.`;
+                        } else {
+                            targetProject = found;
+                        }
+                    }
 
-                    if (!targetProject) {
-                        message += `\n\nWarning: Project "${project}" not found. Issue was created but not added to a project.`;
+                    // Add issue to project
+                    const itemId = await context.api.addToProject(targetProject.id, result.id);
+                    if (!itemId) {
+                        message += `\n\nWarning: Failed to add issue to project "${targetProject.title}".`;
                     } else {
-                        // Note: Adding to project would require additional API methods
-                        // For now, just note that manual addition is needed
-                        message += `\n\nNote: Please manually add the issue to project "${targetProject.title}" if needed.`;
+                        message += `\nAdded to project: ${targetProject.title}`;
+
+                        // Set initial status if specified
+                        if (status) {
+                            const statusField = await context.api.getStatusField(targetProject.id);
+                            if (statusField) {
+                                const option = statusField.options.find(
+                                    (o) => o.name.toLowerCase() === status.toLowerCase()
+                                );
+                                if (option) {
+                                    await context.api.updateItemStatus(
+                                        targetProject.id,
+                                        itemId,
+                                        statusField.fieldId,
+                                        option.id
+                                    );
+                                    message += `\nStatus: ${option.name}`;
+                                } else {
+                                    const validStatuses = statusField.options.map((o) => o.name).join(', ');
+                                    message += `\n\nWarning: Status "${status}" not found. Valid options: ${validStatuses}`;
+                                }
+                            }
+                        }
                     }
                 }
 

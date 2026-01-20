@@ -1,6 +1,10 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { GitHubAPI, type TokenProvider, type RepoInfo } from '@bretwardjames/ghp-core';
+import { createRequire } from 'module';
 import { RepoContext } from './context/repo-context.js';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
 
 export interface ServerContext {
     api: GitHubAPI;
@@ -18,7 +22,7 @@ export function createServer(tokenProvider: TokenProvider): {
 } {
     const server = new McpServer({
         name: 'ghp',
-        version: '0.1.0',
+        version: pkg.version,
     });
 
     const api = new GitHubAPI({ tokenProvider });

@@ -79,6 +79,15 @@ ghp config -w                  # Edit workspace config (shared)
 ghp config sync                # Sync with VS Code/Cursor
 ```
 
+## MCP Server (Claude Desktop)
+
+Configure the ghp MCP server for use with Claude Desktop:
+
+```bash
+ghp mcp --install              # Auto-configure Claude Desktop
+ghp mcp --config               # Show config JSON to copy manually
+```
+
 **Config files:**
 - User: `~/.config/ghp-cli/config.json`
 - Workspace: `.ghp/config.json` (commit this)

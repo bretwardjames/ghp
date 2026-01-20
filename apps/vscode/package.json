@@ -167,6 +167,11 @@
         "command": "ghProjects.unlinkBranch",
         "title": "Unlink Branch",
         "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.installMcpServer",
+        "title": "Install MCP Server for Claude Desktop",
+        "category": "GitHub Projects"
       }
     ],
     "menus": {

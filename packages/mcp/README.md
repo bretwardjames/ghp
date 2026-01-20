@@ -12,12 +12,25 @@ npm install -g @bretwardjames/ghp-mcp
 
 ## Configuration
 
-### Claude Desktop
+### Quick Setup (Recommended)
 
-Add to your Claude Desktop config file:
+**From CLI:**
+```bash
+ghp mcp --install
+```
+
+**From VS Code/Cursor:**
+Open Command Palette → "GitHub Projects: Install MCP Server for Claude Desktop"
+
+Both methods automatically configure Claude Desktop for you.
+
+### Manual Configuration
+
+If you prefer to configure manually, add this to your Claude Desktop config file:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Linux**: `~/.config/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -29,7 +42,7 @@ Add to your Claude Desktop config file:
 }
 ```
 
-Or with npx (no global install):
+Or with npx (no global install required):
 
 ```json
 {
@@ -41,6 +54,8 @@ Or with npx (no global install):
   }
 }
 ```
+
+After configuring, restart Claude Desktop to load the MCP server.
 
 ### Authentication
 

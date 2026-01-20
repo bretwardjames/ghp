@@ -23,6 +23,7 @@ import { openCommand } from './commands/open.js';
 import { commentCommand } from './commands/comment.js';
 import { syncCommand } from './commands/sync.js';
 import { editCommand } from './commands/edit.js';
+import { mcpCommand } from './commands/mcp.js';
 
 const program = new Command();
 
@@ -201,5 +202,13 @@ program
     .command('sync')
     .description('Sync active label to match current branch')
     .action(syncCommand);
+
+// MCP server configuration
+program
+    .command('mcp')
+    .description('Configure ghp MCP server for Claude Desktop')
+    .option('-c, --config', 'Show the MCP configuration JSON')
+    .option('-i, --install', 'Auto-configure Claude Desktop')
+    .action(mcpCommand);
 
 program.parse();

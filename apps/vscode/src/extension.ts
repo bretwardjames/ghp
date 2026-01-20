@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { homedir, platform } from 'os';
+import { join, dirname } from 'path';
 import { GitHubAPI } from './github-api';
 import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropController } from './tree-provider';
 import { detectRepository, type RepoInfo } from './repo-detector';
@@ -588,6 +591,92 @@ function registerCommands(context: vscode.ExtensionContext) {
                 await branchLinker.unlinkBranch(item.number);
                 vscode.window.showInformationMessage(`Unlinked branch from #${item.number}`);
                 boardProvider.refresh();
+            }
+        }),
+
+        vscode.commands.registerCommand('ghProjects.installMcpServer', async () => {
+            // Get Claude Desktop config path for current OS
+            const home = homedir();
+            const os = platform();
+
+            let configPath: string | null = null;
+            switch (os) {
+                case 'darwin':
+                    configPath = join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+                    break;
+                case 'win32':
+                    configPath = join(process.env.APPDATA || join(home, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+                    break;
+                case 'linux':
+                    configPath = join(home, '.config', 'Claude', 'claude_desktop_config.json');
+                    break;
+            }
+
+            if (!configPath) {
+                vscode.window.showErrorMessage('Unsupported operating system. Please configure Claude Desktop manually.');
+                return;
+            }
+
+            // Read existing config or create empty one
+            let config: Record<string, unknown> = {};
+
+            if (existsSync(configPath)) {
+                try {
+                    const content = readFileSync(configPath, 'utf-8');
+                    config = JSON.parse(content);
+                } catch {
+                    vscode.window.showErrorMessage('Failed to parse existing Claude Desktop config file.');
+                    return;
+                }
+            }
+
+            // Ensure mcpServers exists
+            if (!config.mcpServers || typeof config.mcpServers !== 'object') {
+                config.mcpServers = {};
+            }
+
+            // Check if ghp is already configured
+            const mcpServers = config.mcpServers as Record<string, unknown>;
+            if (mcpServers.ghp) {
+                const overwrite = await vscode.window.showWarningMessage(
+                    'ghp MCP server is already configured in Claude Desktop. Overwrite?',
+                    'Overwrite',
+                    'Cancel'
+                );
+                if (overwrite !== 'Overwrite') {
+                    return;
+                }
+            }
+
+            // Add ghp config
+            mcpServers.ghp = {
+                command: 'ghp-mcp',
+            };
+
+            // Write config
+            try {
+                // Ensure directory exists
+                const dir = dirname(configPath);
+                if (!existsSync(dir)) {
+                    mkdirSync(dir, { recursive: true });
+                }
+
+                writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+
+                const action = await vscode.window.showInformationMessage(
+                    'Configured ghp MCP server for Claude Desktop. Make sure ghp-mcp is installed globally and restart Claude Desktop.',
+                    'Install ghp-mcp',
+                    'OK'
+                );
+
+                if (action === 'Install ghp-mcp') {
+                    // Open terminal with install command
+                    const terminal = vscode.window.createTerminal('Install ghp-mcp');
+                    terminal.show();
+                    terminal.sendText('npm install -g @bretwardjames/ghp-mcp');
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to write config: ${error instanceof Error ? error.message : String(error)}`);
             }
         })
     );

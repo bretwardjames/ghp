@@ -37,7 +37,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@bretwardjames/ghp-core": "^0.1.7",
+    "@bretwardjames/ghp-core": "workspace:*",
     "chalk": "^5.3.0",
     "commander": "^12.0.0"
   },

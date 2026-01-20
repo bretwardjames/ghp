@@ -1,5 +1,6 @@
 {
   "name": "gh-projects",
+  "private": true,
   "displayName": "GitHub Projects",
   "description": "View GitHub Project boards directly in VS Code - mirrors your project views exactly as configured on GitHub",
   "version": "0.1.13",
@@ -352,7 +353,7 @@
     "typescript": "^5.3.2"
   },
   "dependencies": {
-    "@bretwardjames/ghp-core": "file:../ghp-core",
+    "@bretwardjames/ghp-core": "workspace:*",
     "@octokit/graphql": "^9.0.3"
   },
   "extensionDependencies": [

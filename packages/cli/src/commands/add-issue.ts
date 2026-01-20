@@ -6,6 +6,7 @@ import { spawn } from 'child_process';
 import { writeFileSync, readFileSync, unlinkSync, existsSync, readdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { promptSelectWithDefault, isInteractive } from '../prompts.js';
 
 interface AddIssueOptions {
     body?: string;
@@ -14,6 +15,9 @@ interface AddIssueOptions {
     edit?: boolean;
     template?: string;
     listTemplates?: boolean;
+    // Non-interactive flags
+    noTemplate?: boolean;
+    yes?: boolean;
 }
 
 async function openEditor(initialContent: string): Promise<string> {
@@ -137,22 +141,21 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     let templateName = options.template || defaults.template;
 
     // If no template specified and templates exist, prompt user to pick one
-    if (!templateName && templates.length > 0 && !options.body) {
-        console.log(chalk.bold('Select a template:'));
-        templates.forEach((t, i) => console.log(`  ${i + 1}. ${t.name}`));
-        console.log(`  ${templates.length + 1}. ${chalk.dim('Blank issue')}`);
-        console.log();
+    // --no-template flag skips this entirely
+    if (!templateName && templates.length > 0 && !options.body && !options.noTemplate) {
+        // Build options list: templates + blank issue
+        const templateOptions = [...templates.map(t => t.name), chalk.dim('Blank issue')];
 
-        const readline = await import('readline');
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        const choice = await new Promise<string>(resolve => {
-            rl.question('Template number: ', (answer: string) => {
-                rl.close();
-                resolve(answer.trim());
-            });
-        });
+        // In non-interactive or with --yes, default to blank issue
+        const defaultIdx = templates.length; // "Blank issue" is last
 
-        const idx = parseInt(choice, 10) - 1;
+        const idx = await promptSelectWithDefault(
+            'Select a template:',
+            templateOptions,
+            defaultIdx, // default: blank issue for non-interactive
+            options.yes ? defaultIdx : undefined // --yes forces blank
+        );
+
         if (idx >= 0 && idx < templates.length) {
             templateName = templates[idx].name;
         }
@@ -180,7 +183,9 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     }
 
     // Open editor if: using template (always), -e flag, or no body provided
-    if (usingTemplate || options.edit || !options.body) {
+    // But only if we're in interactive mode
+    const shouldOpenEditor = usingTemplate || options.edit || !options.body;
+    if (shouldOpenEditor && isInteractive()) {
         const instructions = [
             `# ${title || '<Replace with issue title>'}`,
             '',
@@ -208,6 +213,13 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             console.error(chalk.red('Error:'), 'Editor failed:', err);
             process.exit(1);
         }
+    } else if (shouldOpenEditor && !isInteractive()) {
+        // Non-interactive mode: skip editor, use template body as-is
+        if (options.edit) {
+            console.log(chalk.yellow('Warning:'), 'Cannot open editor in non-interactive mode, using body as-is');
+        }
+        // Clean up template body (remove HTML comments)
+        body = body.replace(/<!--[\s\S]*?-->/g, '').trim();
     }
 
     // Validate title
@@ -221,20 +233,16 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     const statusField = await api.getStatusField(project.id);
 
     if (!statusName && statusField && statusField.options.length > 0) {
-        console.log(chalk.bold('Select initial status:'));
-        statusField.options.forEach((opt, i) => console.log(`  ${i + 1}. ${opt.name}`));
-        console.log();
+        // In non-interactive or with --yes, use first status option as default
+        const statusOptions = statusField.options.map(opt => opt.name);
 
-        const readline = await import('readline');
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        const choice = await new Promise<string>(resolve => {
-            rl.question('Status number: ', (answer: string) => {
-                rl.close();
-                resolve(answer.trim());
-            });
-        });
+        const idx = await promptSelectWithDefault(
+            'Select initial status:',
+            statusOptions,
+            0, // default: first status for non-interactive
+            options.yes ? 0 : undefined // --yes forces first
+        );
 
-        const idx = parseInt(choice, 10) - 1;
         if (idx >= 0 && idx < statusField.options.length) {
             statusName = statusField.options[idx].name;
         }

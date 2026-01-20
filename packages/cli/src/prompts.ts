@@ -1,8 +1,17 @@
 /**
  * Interactive CLI prompts using built-in readline
+ * Supports non-interactive mode for CI/CD and automation
  */
 import * as readline from 'readline';
 import chalk from 'chalk';
+
+/**
+ * Check if we're running in an interactive terminal.
+ * Returns false when piped, in CI, or without a TTY.
+ */
+export function isInteractive(): boolean {
+    return process.stdin.isTTY === true && process.stdout.isTTY === true;
+}
 
 /**
  * Ask a simple yes/no question
@@ -127,4 +136,84 @@ export async function promptConfirm(message: string, defaultYes = true): Promise
 
     if (answer === '') return defaultYes;
     return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+}
+
+/**
+ * Confirm with fallback for non-interactive mode.
+ * When not interactive, returns the default value without prompting.
+ * @param message - The question to ask
+ * @param defaultYes - Default value (true = yes, false = no)
+ * @param forceValue - Override value from CLI flag (bypasses prompt entirely)
+ */
+export async function confirmWithDefault(
+    message: string,
+    defaultYes = true,
+    forceValue?: boolean
+): Promise<boolean> {
+    // CLI flag takes precedence
+    if (forceValue !== undefined) {
+        return forceValue;
+    }
+
+    // Non-interactive mode: use default
+    if (!isInteractive()) {
+        console.log(chalk.dim(`[non-interactive] ${message} → ${defaultYes ? 'yes' : 'no'}`));
+        return defaultYes;
+    }
+
+    return promptConfirm(message, defaultYes);
+}
+
+/**
+ * Selection prompt with fallback for non-interactive mode.
+ * @param question - The question to ask
+ * @param options - Array of option strings to display
+ * @param defaultIndex - Index to use when non-interactive (defaults to 0)
+ * @param forceIndex - Override index from CLI flag (bypasses prompt entirely)
+ */
+export async function promptSelectWithDefault(
+    question: string,
+    options: string[],
+    defaultIndex = 0,
+    forceIndex?: number
+): Promise<number> {
+    // CLI flag takes precedence
+    if (forceIndex !== undefined && forceIndex >= 0 && forceIndex < options.length) {
+        console.log(chalk.dim(`[flag] ${question} → ${options[forceIndex]}`));
+        return forceIndex;
+    }
+
+    // Non-interactive mode: use default
+    if (!isInteractive()) {
+        const safeIndex = Math.min(Math.max(0, defaultIndex), options.length - 1);
+        console.log(chalk.dim(`[non-interactive] ${question} → ${options[safeIndex]}`));
+        return safeIndex;
+    }
+
+    return promptSelect(question, options);
+}
+
+/**
+ * Simple input prompt with fallback for non-interactive mode.
+ * @param question - The question to ask
+ * @param defaultValue - Value to use when non-interactive
+ * @param forceValue - Override value from CLI flag
+ */
+export async function promptWithDefault(
+    question: string,
+    defaultValue: string,
+    forceValue?: string
+): Promise<string> {
+    // CLI flag takes precedence
+    if (forceValue !== undefined) {
+        return forceValue;
+    }
+
+    // Non-interactive mode: use default
+    if (!isInteractive()) {
+        console.log(chalk.dim(`[non-interactive] ${question} → ${defaultValue}`));
+        return defaultValue;
+    }
+
+    return prompt(question);
 }

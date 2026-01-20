@@ -1,17 +1,15 @@
 # ghp.nvim
 
-Neovim integration for [ghp-cli](https://github.com/bretwardjames/ghp-cli) - GitHub Projects from your editor.
+Neovim integration for [ghp-cli](https://github.com/bretwardjames/ghp) - GitHub Projects from your editor.
+
+> **Source**: This plugin is developed in the [GHP monorepo](https://github.com/bretwardjames/ghp/tree/main/apps/nvim) and mirrored here for plugin managers.
 
 ## Requirements
 
 - Neovim >= 0.8
 - ghp-cli:
   ```bash
-  # Install from GitHub
-  npm install -g github:bretwardjames/ghp-cli
-
-  # Or from npm
-  npm install -g ghp-cli
+  npm install -g @bretwardjames/ghp-cli
   ```
 - Authenticated: `ghp auth`
 

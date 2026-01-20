@@ -1,0 +1,44 @@
+{
+  "name": "@bretwardjames/ghp-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for ghp (GitHub Projects)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "ghp-mcp": "dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "mcp",
+    "github",
+    "projects",
+    "claude",
+    "ai"
+  ],
+  "author": "Bret Ward James",
+  "license": "MIT",
+  "dependencies": {
+    "@bretwardjames/ghp-core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

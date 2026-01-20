@@ -387,7 +387,7 @@ export const REMOVE_LABELS_MUTATION = `
 export const ISSUES_WITH_LABEL_QUERY = `
     query($owner: String!, $name: String!, $labels: [String!]) {
         repository(owner: $owner, name: $name) {
-            issues(first: 10, labels: $labels, states: [OPEN]) {
+            issues(first: 10, labels: $labels, states: [OPEN, CLOSED]) {
                 nodes {
                     number
                 }

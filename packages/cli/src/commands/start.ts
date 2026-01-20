@@ -5,69 +5,51 @@ import { api } from '../github-api.js';
 import { detectRepository, getCurrentBranch, hasUncommittedChanges, branchExists, createBranch, checkoutBranch, getCommitsBehind, pullLatest, generateBranchName, getAllBranches, type RepoInfo } from '../git-utils.js';
 import { getConfig } from '../config.js';
 import { linkBranch, getBranchForIssue } from '../branch-linker.js';
-import * as readline from 'readline';
+import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 
 const execAsync = promisify(exec);
+
+/** Assignment action for non-interactive mode */
+export type AssignAction = 'reassign' | 'add' | 'skip';
+
+/** Branch action for non-interactive mode */
+export type BranchAction = 'create' | 'link' | 'skip';
 
 interface StartOptions {
     branch?: boolean;
     status?: boolean;
-}
-
-function prompt(question: string): Promise<string> {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-    });
-    return new Promise(resolve => {
-        rl.question(question, answer => {
-            rl.close();
-            resolve(answer.trim().toLowerCase());
-        });
-    });
-}
-
-/**
- * Prompt user to select from a numbered list of options.
- * Returns the index of the selected option.
- */
-async function promptSelect(question: string, options: string[]): Promise<number> {
-    console.log(question);
-    options.forEach((opt, i) => {
-        console.log(chalk.cyan(`  [${i + 1}]`), opt);
-    });
-
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-    });
-
-    return new Promise(resolve => {
-        const askQuestion = () => {
-            rl.question(chalk.dim(`Enter choice (1-${options.length}): `), answer => {
-                const num = parseInt(answer.trim(), 10);
-                if (num >= 1 && num <= options.length) {
-                    rl.close();
-                    resolve(num - 1);
-                } else {
-                    console.log(chalk.yellow('Invalid choice. Please try again.'));
-                    askQuestion();
-                }
-            });
-        };
-        askQuestion();
-    });
+    // Non-interactive flags
+    assign?: AssignAction;
+    branchAction?: BranchAction;
+    fromMain?: boolean;
+    /** Use default values for all prompts (non-interactive mode) */
+    forceDefaults?: boolean;
+    force?: boolean;
 }
 
 /**
  * Handle uncommitted changes - prompt user to continue or abort.
  * Returns true if we should proceed.
+ * @param force - If true, proceed without prompting
+ * @param forceDefaults - If true, accept the default (continue) without prompting
  */
-async function handleUncommittedChanges(): Promise<boolean> {
+async function handleUncommittedChanges(force?: boolean, forceDefaults?: boolean): Promise<boolean> {
     if (await hasUncommittedChanges()) {
         console.log(chalk.yellow('Warning:'), 'You have uncommitted changes.');
-        const answer = await prompt('Continue anyway? (y/N) ');
-        if (answer !== 'y' && answer !== 'yes') {
+
+        // --force flag bypasses the check entirely
+        if (force) {
+            console.log(chalk.dim('[--force] Proceeding with uncommitted changes'));
+            return true;
+        }
+
+        const shouldContinue = await confirmWithDefault(
+            'Continue anyway?',
+            false, // default is to abort
+            forceDefaults // --force-defaults flag overrides to true
+        );
+
+        if (!shouldContinue) {
             console.log('Aborted.');
             return false;
         }
@@ -102,11 +84,13 @@ async function applyActiveLabel(repo: RepoInfo, issueNumber: number): Promise<vo
 
 /**
  * Create a new branch, push it, and link it to the issue.
+ * @param forceDefaults - If true, accept defaults without prompting
  */
 async function createAndLinkBranch(
     repo: RepoInfo,
     item: { number?: number | null; title: string },
-    branchPattern: string
+    branchPattern: string,
+    forceDefaults?: boolean
 ): Promise<string> {
     const branchName = generateBranchName(branchPattern, {
         user: api.username || 'user',
@@ -118,8 +102,12 @@ async function createAndLinkBranch(
     // Check if branch exists
     if (await branchExists(branchName)) {
         console.log(chalk.yellow('Branch already exists:'), branchName);
-        const answer = await prompt('Checkout existing branch? (Y/n) ');
-        if (answer !== 'n' && answer !== 'no') {
+        const shouldCheckout = await confirmWithDefault(
+            'Checkout existing branch?',
+            true, // default is to proceed
+            forceDefaults   // --force-defaults flag
+        );
+        if (shouldCheckout) {
             await checkoutBranch(branchName);
             console.log(chalk.green('✓'), `Switched to ${branchName}`);
         }
@@ -203,8 +191,20 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
     if (!isAssigned) {
         console.log(chalk.yellow('You are not assigned to this issue.'));
+
+        // Map --assign flag to choice index
+        let forceIndex: number | undefined;
+        if (options.assign === 'reassign') forceIndex = 0;
+        else if (options.assign === 'add') forceIndex = 1;
+        else if (options.assign === 'skip') forceIndex = 2;
+
         const choices = ['Reassign to me', 'Add me', 'Leave as is'];
-        const choiceIdx = await promptSelect('What would you like to do?', choices);
+        const choiceIdx = await promptSelectWithDefault(
+            'What would you like to do?',
+            choices,
+            2, // default: skip (leave as is) for non-interactive
+            forceIndex
+        );
 
         if (choiceIdx === 0) {
             // Reassign to me
@@ -237,7 +237,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             console.log(chalk.dim(`Already on branch: ${linkedBranch}`));
         } else {
             // Check for uncommitted changes before switching
-            if (!(await handleUncommittedChanges())) {
+            if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
                 process.exit(0);
             }
 
@@ -270,86 +270,140 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         console.log(chalk.yellow('No branch linked to this issue.'));
 
         // Check for uncommitted changes
-        if (!(await handleUncommittedChanges())) {
+        if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
             process.exit(0);
         }
 
         if (isOnMain) {
             // On main - offer: create new or link existing
-            const choices = ['Create new branch (default)', 'Link existing branch'];
-            const choice = await promptSelect('What would you like to do?', choices);
 
-            if (choice === 1) {
-                // Link existing branch
-                const branches = await getAllBranches();
-                const nonMainBranches = branches.filter(b => b !== mainBranch);
+            // Map --branch-action flag to choice index
+            let forceIndex: number | undefined;
+            if (options.branchAction === 'create') forceIndex = 0;
+            else if (options.branchAction === 'link') forceIndex = 1;
+            else if (options.branchAction === 'skip') {
+                // Skip branch creation entirely
+                console.log(chalk.dim('[--branch-action=skip] Skipping branch creation'));
+            }
 
-                if (nonMainBranches.length === 0) {
-                    console.log(chalk.yellow('No other branches to link.'));
-                    process.exit(1);
+            if (options.branchAction !== 'skip') {
+                const choices = ['Create new branch (default)', 'Link existing branch'];
+                const choice = await promptSelectWithDefault(
+                    'What would you like to do?',
+                    choices,
+                    0, // default: create new branch for non-interactive
+                    forceIndex
+                );
+
+                if (choice === 1) {
+                    // Link existing branch
+                    const branches = await getAllBranches();
+                    const nonMainBranches = branches.filter(b => b !== mainBranch);
+
+                    if (nonMainBranches.length === 0) {
+                        console.log(chalk.yellow('No other branches to link.'));
+                        process.exit(1);
+                    }
+
+                    // Sort by relevance to the issue
+                    const sortedBranches = sortBranchesByRelevance(nonMainBranches, item.number, item.title);
+
+                    // In non-interactive, pick the most relevant branch (index 0 after sorting)
+                    const branchIdx = await promptSelectWithDefault(
+                        'Select branch to link (sorted by relevance):',
+                        sortedBranches,
+                        0 // most relevant
+                    );
+                    const selectedBranch = sortedBranches[branchIdx];
+
+                    const linkSuccess = await linkBranch(repo, issueNumber, selectedBranch);
+                    if (linkSuccess) {
+                        console.log(chalk.green('✓'), `Linked "${selectedBranch}" to #${issueNumber}`);
+                    }
+
+                    // Switch to that branch
+                    await checkoutBranch(selectedBranch);
+                    console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
+                } else {
+                    // Create new branch from main
+                    await handlePullIfBehind(mainBranch, options.forceDefaults);
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
                 }
-
-                // Sort by relevance to the issue
-                const sortedBranches = sortBranchesByRelevance(nonMainBranches, item.number, item.title);
-                const branchIdx = await promptSelect('Select branch to link (sorted by relevance):', sortedBranches);
-                const selectedBranch = sortedBranches[branchIdx];
-
-                const linkSuccess = await linkBranch(repo, issueNumber, selectedBranch);
-                if (linkSuccess) {
-                    console.log(chalk.green('✓'), `Linked "${selectedBranch}" to #${issueNumber}`);
-                }
-
-                // Switch to that branch
-                await checkoutBranch(selectedBranch);
-                console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
-            } else {
-                // Create new branch from main
-                await handlePullIfBehind(mainBranch);
-                await createAndLinkBranch(repo, item, branchPattern);
             }
         } else {
             // Not on main - offer: switch to main & create, create from current, or link existing
-            const choices = [
-                `Switch to ${mainBranch} & create branch (default)`,
-                `Create branch from current (${currentBranch})`,
-                'Link existing branch',
-            ];
-            const choice = await promptSelect('What would you like to do?', choices);
 
-            if (choice === 2) {
-                // Link existing branch
-                const branches = await getAllBranches();
-                const nonMainBranches = branches.filter(b => b !== mainBranch);
+            // Map flags to choice index
+            // --branch-action=create + --from-main → 0 (switch to main & create)
+            // --branch-action=create + no --from-main → 1 (create from current)
+            // --branch-action=link → 2
+            // --branch-action=skip → skip entirely
+            let forceIndex: number | undefined;
+            if (options.branchAction === 'skip') {
+                console.log(chalk.dim('[--branch-action=skip] Skipping branch creation'));
+            } else if (options.branchAction === 'link') {
+                forceIndex = 2;
+            } else if (options.branchAction === 'create') {
+                forceIndex = options.fromMain ? 0 : 1;
+            } else if (!isInteractive()) {
+                // Non-interactive default: switch to main & create (safest)
+                forceIndex = 0;
+            }
 
-                if (nonMainBranches.length === 0) {
-                    console.log(chalk.yellow('No other branches to link.'));
-                    process.exit(1);
+            if (options.branchAction !== 'skip') {
+                const choices = [
+                    `Switch to ${mainBranch} & create branch (default)`,
+                    `Create branch from current (${currentBranch})`,
+                    'Link existing branch',
+                ];
+                const choice = await promptSelectWithDefault(
+                    'What would you like to do?',
+                    choices,
+                    0, // default: switch to main & create
+                    forceIndex
+                );
+
+                if (choice === 2) {
+                    // Link existing branch
+                    const branches = await getAllBranches();
+                    const nonMainBranches = branches.filter(b => b !== mainBranch);
+
+                    if (nonMainBranches.length === 0) {
+                        console.log(chalk.yellow('No other branches to link.'));
+                        process.exit(1);
+                    }
+
+                    // Sort by relevance to the issue
+                    const sortedBranches = sortBranchesByRelevance(nonMainBranches, item.number, item.title);
+
+                    // In non-interactive, pick the most relevant branch (index 0 after sorting)
+                    const branchIdx = await promptSelectWithDefault(
+                        'Select branch to link (sorted by relevance):',
+                        sortedBranches,
+                        0 // most relevant
+                    );
+                    const selectedBranch = sortedBranches[branchIdx];
+
+                    const linkSuccess = await linkBranch(repo, issueNumber, selectedBranch);
+                    if (linkSuccess) {
+                        console.log(chalk.green('✓'), `Linked "${selectedBranch}" to #${issueNumber}`);
+                    }
+
+                    // Switch to that branch if not already on it
+                    if (currentBranch !== selectedBranch) {
+                        await checkoutBranch(selectedBranch);
+                        console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
+                    }
+                } else if (choice === 1) {
+                    // Create from current branch
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
+                } else {
+                    // Switch to main & create
+                    await checkoutBranch(mainBranch);
+                    console.log(chalk.green('✓'), `Switched to ${mainBranch}`);
+                    await handlePullIfBehind(mainBranch, options.forceDefaults);
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
                 }
-
-                // Sort by relevance to the issue
-                const sortedBranches = sortBranchesByRelevance(nonMainBranches, item.number, item.title);
-                const branchIdx = await promptSelect('Select branch to link (sorted by relevance):', sortedBranches);
-                const selectedBranch = sortedBranches[branchIdx];
-
-                const linkSuccess = await linkBranch(repo, issueNumber, selectedBranch);
-                if (linkSuccess) {
-                    console.log(chalk.green('✓'), `Linked "${selectedBranch}" to #${issueNumber}`);
-                }
-
-                // Switch to that branch if not already on it
-                if (currentBranch !== selectedBranch) {
-                    await checkoutBranch(selectedBranch);
-                    console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
-                }
-            } else if (choice === 1) {
-                // Create from current branch
-                await createAndLinkBranch(repo, item, branchPattern);
-            } else {
-                // Switch to main & create
-                await checkoutBranch(mainBranch);
-                console.log(chalk.green('✓'), `Switched to ${mainBranch}`);
-                await handlePullIfBehind(mainBranch);
-                await createAndLinkBranch(repo, item, branchPattern);
             }
         }
     }
@@ -434,13 +488,18 @@ function getBranchRelevanceScore(branch: string, issueNumber: string, titleWords
 
 /**
  * Check if current branch is behind origin and offer to pull.
+ * @param forceDefaults - If true, accept default (pull) without prompting
  */
-async function handlePullIfBehind(branch: string): Promise<void> {
+async function handlePullIfBehind(branch: string, forceDefaults?: boolean): Promise<void> {
     const behind = await getCommitsBehind(branch);
     if (behind > 0) {
         console.log(chalk.yellow('Warning:'), `${branch} is ${behind} commit(s) behind origin.`);
-        const answer = await prompt('Pull latest? (Y/n) ');
-        if (answer !== 'n' && answer !== 'no') {
+        const shouldPull = await confirmWithDefault(
+            'Pull latest?',
+            true, // default is to proceed
+            forceDefaults   // --force-defaults flag
+        );
+        if (shouldPull) {
             try {
                 await pullLatest();
                 console.log(chalk.green('✓'), 'Pulled latest changes');

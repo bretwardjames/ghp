@@ -89,6 +89,12 @@ program
     .description('Start working on an issue - creates branch and updates status')
     .option('--no-branch', 'Skip branch creation')
     .option('--no-status', 'Skip status update')
+    // Non-interactive flags
+    .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
+    .option('--branch-action <action>', 'Branch action: create, link, or skip')
+    .option('--from-main', 'Always switch to main before creating branch')
+    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
+    .option('--force', 'Proceed despite uncommitted changes')
     .action(startCommand);
 
 program
@@ -148,6 +154,9 @@ program
     .option('-e, --edit', 'Open $EDITOR to write issue body')
     .option('-t, --template <name>', 'Use an issue template from .github/ISSUE_TEMPLATE/')
     .option('--list-templates', 'List available issue templates')
+    // Non-interactive flags
+    .option('--no-template', 'Skip template selection (blank issue)')
+    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .action(addIssueCommand);
 
 // Field management

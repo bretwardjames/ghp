@@ -158,10 +158,10 @@ npm install @bretwardjames/ghp-core@beta
 # 2. Find "GitHub Projects"
 # 3. Click "Switch to Pre-Release Version"
 
-# Neovim (using lazy.nvim)
+# Neovim (using lazy.nvim) - pin to a beta tag
 {
   "bretwardjames/ghp.nvim",
-  branch = "beta",  -- or pin to a beta tag
+  tag = "v0.2.0-beta.0",  -- or latest beta tag
 }
 ```
 
@@ -283,6 +283,72 @@ git push
 | `.changeset/*.md` | Pending changesets |
 | `.changeset/config.json` | Changesets configuration |
 | `.github/workflows/beta-release.yml` | Auto-beta CI workflow |
+
+---
+
+## Adding a New Package
+
+When adding a new npm package to the monorepo:
+
+### 1. Create the Package
+
+```bash
+mkdir -p packages/my-new-package
+cd packages/my-new-package
+pnpm init
+```
+
+Ensure `package.json` has:
+```json
+{
+  "name": "@bretwardjames/ghp-newpkg",
+  "version": "0.0.0",
+  "publishConfig": {
+    "access": "public"
+  }
+}
+```
+
+### 2. Update Release Scripts (if needed)
+
+The current `release:beta:npm` and `release:stable:npm` scripts use:
+```bash
+pnpm -r --filter='./packages/**' publish
+```
+
+This automatically includes all packages under `packages/`. If your new package is elsewhere (e.g., `apps/`), update the filter in `package.json`.
+
+### 3. Non-npm Packages (VS Code, Neovim)
+
+For non-npm packages like VS Code extensions or Neovim plugins:
+
+1. Add a dedicated release script in the package's `package.json`
+2. Add corresponding `release:beta:<name>` and `release:stable:<name>` scripts to root `package.json`
+3. Update the `release:beta` and `release:stable` scripts to call your new scripts
+
+Example for a hypothetical new VS Code extension:
+```json
+// root package.json
+{
+  "scripts": {
+    "release:beta": "... && pnpm release:beta:newext",
+    "release:beta:newext": "pnpm --filter new-extension run release:beta"
+  }
+}
+```
+
+### 4. Changesets Configuration
+
+If the new package should be **excluded** from changesets versioning (e.g., it's versioned separately like the VS Code extension):
+
+Add it to `.changeset/config.json`:
+```json
+{
+  "ignore": ["gh-projects", "your-new-package"]
+}
+```
+
+> **Note**: Only npm packages in the workspace can be added to the ignore list. Non-npm packages (like the Neovim plugin) don't need to be listed.
 
 ---
 

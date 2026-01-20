@@ -4,7 +4,10 @@
 # Usage: ./scripts/sync-nvim-mirror.sh [--beta]
 #
 # Options:
-#   --beta    Mark this as a beta release (adds [BETA] to commit, creates prerelease tag)
+#   --beta    Mark this as a beta release. Use when releasing beta versions
+#             (i.e., when the monorepo is in prerelease mode). This:
+#             - Adds [BETA] prefix to the commit message
+#             - Creates a prerelease tag (e.g., v0.2.0-beta.0)
 #
 # Prerequisites:
 # - Clone the mirror repo: git clone git@github.com:bretwardjames/ghp.nvim.git ../ghp.nvim-mirror

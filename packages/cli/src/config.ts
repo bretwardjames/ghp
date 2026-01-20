@@ -53,6 +53,12 @@ export interface Config {
     // Display settings
     columns?: string;  // comma-separated column names: number,type,title,assignees,status,priority,size,labels,project,repository
 
+    // Worktree settings for parallel work mode
+    worktreePath?: string;           // Base path for worktrees (default: ~/.ghp/worktrees)
+    worktreeCopyFiles?: string[];    // Files to copy to new worktrees (default: ['.env', '.env.local'])
+    worktreeSetupCommand?: string;   // Command to run in new worktrees (default: 'pnpm install')
+    worktreeAutoSetup?: boolean;     // Whether to run setup automatically (default: true)
+
     // Command defaults
     defaults?: {
         plan?: PlanShortcut;
@@ -75,6 +81,11 @@ const DEFAULT_CONFIG: Config = {
     branchPattern: '{user}/{number}-{title}',
     startWorkingStatus: 'In Progress',
     doneStatus: 'Done',
+    // Worktree defaults
+    worktreePath: '~/.ghp/worktrees',
+    worktreeCopyFiles: ['.env', '.env.local'],
+    worktreeSetupCommand: 'pnpm install',
+    worktreeAutoSetup: true,
     defaults: {},
     shortcuts: {},
 };
@@ -275,7 +286,7 @@ export function getAddIssueDefaults(): { template?: string; project?: string; st
     return config.defaults?.addIssue || {};
 }
 
-export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns'] as const;
+export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSetupCommand', 'worktreeAutoSetup'] as const;
 
 export type ConfigSource = 'default' | 'workspace' | 'user';
 
@@ -284,13 +295,37 @@ export interface ConfigValueWithSource {
     source: ConfigSource;
 }
 
-export function listConfig(): Record<string, string | undefined> {
+export function listConfig(): Record<string, string | string[] | boolean | undefined> {
     const config = loadConfig();
     return {
         mainBranch: config.mainBranch,
         branchPattern: config.branchPattern,
         startWorkingStatus: config.startWorkingStatus,
         doneStatus: config.doneStatus,
+        worktreePath: config.worktreePath,
+        worktreeCopyFiles: config.worktreeCopyFiles,
+        worktreeSetupCommand: config.worktreeSetupCommand,
+        worktreeAutoSetup: config.worktreeAutoSetup,
+    };
+}
+
+export interface WorktreeConfig {
+    path: string;
+    copyFiles: string[];
+    setupCommand: string;
+    autoSetup: boolean;
+}
+
+/**
+ * Get the worktree configuration with defaults applied
+ */
+export function getWorktreeConfig(): WorktreeConfig {
+    const config = loadConfig();
+    return {
+        path: config.worktreePath ?? DEFAULT_CONFIG.worktreePath!,
+        copyFiles: config.worktreeCopyFiles ?? DEFAULT_CONFIG.worktreeCopyFiles!,
+        setupCommand: config.worktreeSetupCommand ?? DEFAULT_CONFIG.worktreeSetupCommand!,
+        autoSetup: config.worktreeAutoSetup ?? DEFAULT_CONFIG.worktreeAutoSetup!,
     };
 }
 

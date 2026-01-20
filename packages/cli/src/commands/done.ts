@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import { getConfig } from '../config.js';
+import { removeActiveLabelSafely } from '../active-label.js';
 
 export async function doneCommand(issue: string): Promise<void> {
     const issueNumber = parseInt(issue, 10);
@@ -60,6 +61,9 @@ export async function doneCommand(issue: string): Promise<void> {
 
     if (success) {
         console.log(chalk.green('✓'), `Marked as done: ${item.title}`);
+
+        // Remove active label from this issue (but protect other worktree issues)
+        await removeActiveLabelSafely(repo, issueNumber, true);
     } else {
         console.error(chalk.red('Error:'), 'Failed to update status');
         process.exit(1);

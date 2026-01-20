@@ -27,7 +27,14 @@ export {
     getRemoteBranches,
     getAllBranches,
     parseGitHubUrl,
+    // Worktree operations
+    createWorktree,
+    removeWorktree,
+    listWorktrees,
+    getWorktreeForBranch,
+    worktreeExists,
+    generateWorktreePath,
 } from '@bretwardjames/ghp-core';
 
-// Re-export the RepoInfo type
-export type { RepoInfo, GitOptions } from '@bretwardjames/ghp-core';
+// Re-export the RepoInfo and WorktreeInfo types
+export type { RepoInfo, GitOptions, WorktreeInfo } from '@bretwardjames/ghp-core';

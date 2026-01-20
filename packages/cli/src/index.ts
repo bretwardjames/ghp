@@ -90,6 +90,9 @@ program
     .description('Start working on an issue - creates branch and updates status')
     .option('--no-branch', 'Skip branch creation')
     .option('--no-status', 'Skip status update')
+    // Parallel work mode
+    .option('--parallel', 'Create worktree instead of switching (work in parallel)')
+    .option('--worktree-path <path>', 'Custom path for parallel worktree')
     // Non-interactive flags
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
@@ -115,6 +118,8 @@ program
     .command('switch <issue>')
     .alias('sw')
     .description('Switch to the branch linked to an issue')
+    .option('--parallel', 'Create worktree instead of switching (work in parallel)')
+    .option('--worktree-path <path>', 'Custom path for parallel worktree')
     .action(switchCommand);
 
 program

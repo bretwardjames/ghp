@@ -7,6 +7,7 @@ import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropControl
 import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
 import { executeStartWorking } from './start-working';
+import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow } from './worktree';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';
 import { executePROpened } from './pr-workflow';
@@ -318,6 +319,72 @@ function registerCommands(context: vscode.ExtensionContext) {
                 );
             } else {
                 vscode.window.showErrorMessage('Please select an issue or PR to start working on');
+            }
+        }),
+
+        // Start work in a parallel worktree
+        vscode.commands.registerCommand('ghProjects.startInWorktree', async (node: unknown) => {
+            if (node instanceof ItemNode) {
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: 'Creating parallel worktree...',
+                        cancellable: false,
+                    },
+                    async () => {
+                        try {
+                            const result = await executeStartInWorktree(api, {
+                                item: node.item,
+                                project: node.project,
+                            });
+
+                            if (result.success && result.worktreePath) {
+                                const action = await vscode.window.showInformationMessage(
+                                    `Worktree created at: ${result.worktreePath}`,
+                                    'Open in New Window',
+                                    'Copy Path'
+                                );
+
+                                if (action === 'Open in New Window') {
+                                    await openWorktreeInNewWindow(result.worktreePath);
+                                } else if (action === 'Copy Path') {
+                                    await vscode.env.clipboard.writeText(result.worktreePath);
+                                    vscode.window.showInformationMessage('Path copied to clipboard');
+                                }
+
+                                // Refresh to show updated status
+                                boardProvider.refresh();
+                            }
+                        } catch (error) {
+                            vscode.window.showErrorMessage(`Failed to create worktree: ${error}`);
+                        }
+                    }
+                );
+            } else {
+                vscode.window.showErrorMessage('Please select an issue or PR');
+            }
+        }),
+
+        // Open existing worktree in new window
+        vscode.commands.registerCommand('ghProjects.openWorktree', async (node: unknown) => {
+            if (node instanceof ItemNode && node.item.number) {
+                const worktree = await getWorktreeForIssue(node.item.number);
+
+                if (worktree) {
+                    await openWorktreeInNewWindow(worktree.path);
+                } else {
+                    const createNew = await vscode.window.showInformationMessage(
+                        `No worktree exists for #${node.item.number}. Would you like to create one?`,
+                        'Create Worktree',
+                        'Cancel'
+                    );
+
+                    if (createNew === 'Create Worktree') {
+                        await vscode.commands.executeCommand('ghProjects.startInWorktree', node);
+                    }
+                }
+            } else {
+                vscode.window.showErrorMessage('Please select an issue or PR');
             }
         }),
 

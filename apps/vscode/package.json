@@ -1,0 +1,361 @@
+{
+  "name": "gh-projects",
+  "displayName": "GitHub Projects",
+  "description": "View GitHub Project boards directly in VS Code - mirrors your project views exactly as configured on GitHub",
+  "version": "0.1.13",
+  "publisher": "bretwardjames",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bretwardjames/vscode-gh-projects"
+  },
+  "bugs": {
+    "url": "https://github.com/bretwardjames/vscode-gh-projects/issues"
+  },
+  "homepage": "https://github.com/bretwardjames/vscode-gh-projects#readme",
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#24292e",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "github",
+    "projects",
+    "project board",
+    "issues",
+    "kanban"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "github-projects",
+          "title": "GitHub Projects",
+          "icon": "resources/project.svg"
+        }
+      ]
+    },
+    "views": {
+      "github-projects": [
+        {
+          "id": "ghProjects.board",
+          "name": "Project Board",
+          "contextualTitle": "GitHub Projects"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ghProjects.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.signIn",
+        "title": "Sign In to GitHub",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.openItem",
+        "title": "Open in GitHub",
+        "icon": "$(link-external)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.configureProject",
+        "title": "Settings",
+        "icon": "$(gear)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.syncSettings",
+        "title": "Sync Settings with CLI",
+        "icon": "$(sync)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.showAccessHelp",
+        "title": "Troubleshoot Access",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.openProjectInBrowser",
+        "title": "Open Project in Browser",
+        "icon": "$(link-external)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.startWorking",
+        "title": "Start Working",
+        "icon": "$(play)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.prOpened",
+        "title": "PR Opened: Update Issue Status",
+        "icon": "$(git-pull-request)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.debugAuth",
+        "title": "Debug Authentication",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.showItemDetail",
+        "title": "Show Details",
+        "icon": "$(info)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.changeItemStatus",
+        "title": "Move to...",
+        "icon": "$(arrow-right)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.hideView",
+        "title": "Hide View",
+        "icon": "$(eye-closed)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.showHiddenViews",
+        "title": "Show Hidden Views",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.openPlanningMode",
+        "title": "Open Planning Board",
+        "icon": "$(layout)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.newIssue",
+        "title": "New Issue",
+        "icon": "$(add)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.configurePlanningViews",
+        "title": "Configure Planning Views",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.linkBranch",
+        "title": "Link Branch",
+        "icon": "$(git-branch)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.switchToBranch",
+        "title": "Switch to Branch",
+        "icon": "$(arrow-swap)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.unlinkBranch",
+        "title": "Unlink Branch",
+        "category": "GitHub Projects"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ghProjects.newIssue",
+          "when": "view == ghProjects.board",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ghProjects.openPlanningMode",
+          "when": "view == ghProjects.board",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ghProjects.refresh",
+          "when": "view == ghProjects.board",
+          "group": "navigation@3"
+        },
+        {
+          "command": "ghProjects.configureProject",
+          "when": "view == ghProjects.board",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ghProjects.switchToBranch",
+          "when": "viewItem == projectItem && config.ghProjects.showSwitchButton",
+          "group": "inline@1"
+        },
+        {
+          "command": "ghProjects.startWorking",
+          "when": "viewItem == projectItem",
+          "group": "inline@2"
+        },
+        {
+          "command": "ghProjects.changeItemStatus",
+          "when": "viewItem == projectItem",
+          "group": "inline@3"
+        },
+        {
+          "command": "ghProjects.openItem",
+          "when": "viewItem == projectItem",
+          "group": "inline@4"
+        },
+        {
+          "command": "ghProjects.linkBranch",
+          "when": "viewItem == projectItem",
+          "group": "branch@1"
+        },
+        {
+          "command": "ghProjects.unlinkBranch",
+          "when": "viewItem == projectItem",
+          "group": "branch@2"
+        },
+        {
+          "command": "ghProjects.openProjectInBrowser",
+          "when": "viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "ghProjects.hideView",
+          "when": "viewItem == view",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "GitHub Projects",
+      "properties": {
+        "ghProjects.showOnlyAssignedToMe": {
+          "type": "boolean",
+          "default": false,
+          "description": "Only show items assigned to the authenticated user"
+        },
+        "ghProjects.hiddenViews": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "List of view names to hide from the sidebar (e.g., [\"Roadmap\", \"Archive\"])"
+        },
+        "ghProjects.showEmptyColumns": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show columns even when they have no items"
+        },
+        "ghProjects.mainBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "The name of your main/master branch to create feature branches from"
+        },
+        "ghProjects.branchNamePattern": {
+          "type": "string",
+          "default": "{user}/{number}-{title}",
+          "description": "Pattern for branch names. Available variables: {user}, {number}, {title}, {repo}"
+        },
+        "ghProjects.startWorkingStatus": {
+          "type": "string",
+          "default": "In Progress",
+          "description": "Status to move the item to when you click 'Start Working'. Leave empty to not change status."
+        },
+        "ghProjects.prOpenedStatus": {
+          "type": "string",
+          "default": "In Review",
+          "description": "Status to move the issue to when a PR is opened from its branch. Leave empty to not change status."
+        },
+        "ghProjects.prMergedStatus": {
+          "type": "string",
+          "default": "Done",
+          "description": "Status to move the issue to when its PR is merged. Leave empty to not change status."
+        },
+        "ghProjects.maxBranchNameLength": {
+          "type": "number",
+          "default": 60,
+          "description": "Maximum length for generated branch names (title will be truncated if needed)"
+        },
+        "ghProjects.planningModeViews": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "List of view names to show in Planning Mode as tabs (e.g., [\"Sprint Board\", \"Backlog\"]). Empty = show all board views."
+        },
+        "ghProjects.myStuffHiddenStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Done",
+            "Closed"
+          ],
+          "description": "Statuses to hide in 'My Stuff' sidebar view"
+        },
+        "ghProjects.allowBlankIssues": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ],
+          "default": "auto",
+          "description": "Allow creating blank issues without a template. 'auto' respects the repo's .github/ISSUE_TEMPLATE/config.yml setting."
+        },
+        "ghProjects.defaultIssueTemplate": {
+          "type": "string",
+          "default": "",
+          "description": "Default issue template name to use when creating new issues (e.g., 'bug_report', 'feature_request'). Leave empty to show template picker.",
+          "examples": [
+            "bug_report",
+            "feature_request",
+            "custom_template"
+          ]
+        },
+        "ghProjects.showSwitchButton": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the 'Switch to Branch' button in the sidebar. When false, use 'Start Working' to switch to linked branches."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+    "lint": "eslint src --ext ts",
+    "release": "npx vsce package && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\")\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "esbuild": "^0.27.2",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2"
+  },
+  "dependencies": {
+    "@bretwardjames/ghp-core": "file:../ghp-core",
+    "@octokit/graphql": "^9.0.3"
+  },
+  "extensionDependencies": [
+    "vscode.github-authentication"
+  ]
+}

@@ -342,7 +342,10 @@
     "esbuild": "npm run esbuild-base -- --sourcemap",
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
     "lint": "eslint src --ext ts",
-    "release": "npx vsce package && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\")\""
+    "package": "npx vsce package --no-dependencies",
+    "package:beta": "npx vsce package --no-dependencies --pre-release",
+    "release": "npm run package && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\")\"",
+    "release:beta": "npm run package:beta && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\") (Beta)\" --prerelease"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

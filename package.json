@@ -8,7 +8,18 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "beta:enter": "pnpm changeset pre enter beta",
+    "beta:exit": "pnpm changeset pre exit",
+    "version": "pnpm changeset version",
+    "release:beta": "pnpm build && pnpm release:beta:npm && pnpm release:beta:vscode && pnpm release:beta:nvim",
+    "release:beta:npm": "pnpm -r --filter='./packages/**' publish --tag beta --no-git-checks",
+    "release:beta:vscode": "pnpm --filter gh-projects run release:beta",
+    "release:beta:nvim": "./scripts/sync-nvim-mirror.sh --beta",
+    "release:stable": "pnpm build && pnpm release:stable:npm && pnpm release:stable:vscode && pnpm release:stable:nvim",
+    "release:stable:npm": "pnpm -r --filter='./packages/**' publish --no-git-checks",
+    "release:stable:vscode": "pnpm --filter gh-projects run release",
+    "release:stable:nvim": "./scripts/sync-nvim-mirror.sh"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

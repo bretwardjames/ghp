@@ -27,3 +27,9 @@ firebase-debug.log
 .env
 .env.local
 .env.*.local
+
+# Source repos (being migrated)
+ghp-cli/
+ghp-core/
+vscode-gh-projects/
+package-lock.json

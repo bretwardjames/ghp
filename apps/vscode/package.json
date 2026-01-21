@@ -367,7 +367,10 @@
           "items": {
             "type": "string"
           },
-          "default": [".env", ".env.local"],
+          "default": [
+            ".env",
+            ".env.local"
+          ],
           "description": "Files to copy to new worktrees"
         },
         "ghProjects.worktreeSetupCommand": {

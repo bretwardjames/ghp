@@ -8,6 +8,7 @@
     "@bretwardjames/ghp-mcp": "0.0.0"
   },
   "changesets": [
-    "giant-bobcats-press"
+    "giant-bobcats-press",
+    "parallel-worktrees"
   ]
 }

@@ -3,7 +3,7 @@
   "private": true,
   "displayName": "GitHub Projects",
   "description": "View GitHub Project boards directly in VS Code - mirrors your project views exactly as configured on GitHub",
-  "version": "0.2.0-beta.1",
+  "version": "0.3.0",
   "publisher": "bretwardjames",
   "license": "MIT",
   "repository": {
@@ -397,6 +397,12 @@
     "lint": "eslint src --ext ts",
     "package": "npx vsce package --no-dependencies",
     "package:beta": "npx vsce package --no-dependencies --pre-release",
+    "publish:vsce": "npx vsce publish --no-dependencies",
+    "publish:vsce:beta": "npx vsce publish --no-dependencies --pre-release",
+    "publish:ovsx": "npx ovsx publish --no-dependencies",
+    "publish:ovsx:beta": "npx ovsx publish --no-dependencies --pre-release",
+    "publish:all": "npm run publish:vsce && npm run publish:ovsx",
+    "publish:all:beta": "npm run publish:vsce:beta && npm run publish:ovsx:beta",
     "release": "npm run package && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\")\"",
     "release:beta": "npm run package:beta && gh release create v$(node -p \"require('./package.json').version\") gh-projects-$(node -p \"require('./package.json').version\").vsix --title \"v$(node -p \"require('./package.json').version\") (Beta)\" --prerelease"
   },

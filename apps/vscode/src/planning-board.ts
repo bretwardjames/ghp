@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { GitHubAPI } from './github-api';
 import type { NormalizedProjectItem, ProjectWithViews, ProjectV2View } from './types';
 import type { RepoInfo } from './repo-detector';
+import { getWorktreeForIssue, listWorktrees } from './worktree';
+import { removeWorktree } from './git-utils';
 
 interface BoardColumn {
     name: string;
@@ -449,6 +451,29 @@ export class PlanningBoardPanel {
                 itemData.item.status = newStatus;
                 await this._loadAndRender();
                 vscode.commands.executeCommand('ghProjects.refresh');
+
+                // Check if moved to "done" status and has a worktree
+                const isDoneStatus = newStatus.toLowerCase().includes('done') ||
+                                     newStatus.toLowerCase().includes('complete');
+                if (isDoneStatus && itemData.item.number) {
+                    const worktree = await getWorktreeForIssue(itemData.item.number);
+                    if (worktree && !worktree.isMain) {
+                        const choice = await vscode.window.showInformationMessage(
+                            `Issue #${itemData.item.number} has a worktree at ${worktree.path}. Remove it?`,
+                            'Yes', 'No'
+                        );
+                        if (choice === 'Yes') {
+                            try {
+                                await removeWorktree(worktree.path);
+                                vscode.window.showInformationMessage('Worktree removed');
+                            } catch {
+                                vscode.window.showWarningMessage(
+                                    'Could not remove worktree (may have uncommitted changes)'
+                                );
+                            }
+                        }
+                    }
+                }
             }
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to move item: ${error}`);

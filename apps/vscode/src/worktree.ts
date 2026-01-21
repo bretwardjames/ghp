@@ -5,7 +5,7 @@ import { existsSync, copyFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { GitHubAPI } from './github-api';
-import { generateBranchName, branchExists, createBranch } from './git-utils';
+import { generateBranchName, branchExists, createBranch, checkoutBranch } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 import { getBranchLinker } from './extension';
 
@@ -229,11 +229,26 @@ export async function executeStartInWorktree(
     // Generate worktree path
     const worktreePath = generateWorktreePath(wtConfig.path, repoName, item.number || branchName);
 
-    // Check if worktree already exists for this branch (but not the main worktree)
+    // Check if worktree already exists for this branch
     const existingWorktree = await getWorktreeForBranch(branchName);
-    if (existingWorktree && !existingWorktree.isMain) {
-        vscode.window.showInformationMessage(`Worktree already exists at: ${existingWorktree.path}`);
-        return { success: true, worktreePath: existingWorktree.path };
+    if (existingWorktree) {
+        if (existingWorktree.isMain) {
+            // Branch is checked out in main worktree - switch main to default branch first
+            const mainBranch = config.get<string>('mainBranch', 'main');
+            try {
+                await checkoutBranch(mainBranch);
+            } catch {
+                vscode.window.showErrorMessage(
+                    `Branch "${branchName}" is checked out in main workspace. ` +
+                    `Failed to switch to ${mainBranch}. You may have uncommitted changes.`
+                );
+                return { success: false };
+            }
+        } else {
+            // Non-main worktree already exists
+            vscode.window.showInformationMessage(`Worktree already exists at: ${existingWorktree.path}`);
+            return { success: true, worktreePath: existingWorktree.path };
+        }
     }
 
     // Ensure parent directory exists

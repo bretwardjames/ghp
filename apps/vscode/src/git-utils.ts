@@ -16,6 +16,7 @@ import {
     branchExists as coreBranchExists,
     sanitizeForBranchName,
     generateBranchName as coreGenerateBranchName,
+    removeWorktree as coreRemoveWorktree,
 } from '@bretwardjames/ghp-core';
 
 // Re-export pure functions that don't need cwd
@@ -157,4 +158,11 @@ export function generateBranchName(
         },
         maxLength
     );
+}
+
+/**
+ * Remove a worktree
+ */
+export async function removeWorktree(worktreePath: string, force: boolean = false): Promise<void> {
+    return coreRemoveWorktree(worktreePath, getGitOptions(), force);
 }

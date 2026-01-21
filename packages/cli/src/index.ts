@@ -24,6 +24,7 @@ import { commentCommand } from './commands/comment.js';
 import { syncCommand } from './commands/sync.js';
 import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
+import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
 
 const program = new Command();
 
@@ -215,5 +216,24 @@ program
     .option('-c, --config', 'Show the MCP configuration JSON')
     .option('-i, --install', 'Auto-configure Claude Desktop')
     .action(mcpCommand);
+
+// Worktree management
+const worktreeCmd = program
+    .command('worktree')
+    .alias('wt')
+    .description('Manage parallel worktrees');
+
+worktreeCmd
+    .command('remove <issue>')
+    .alias('rm')
+    .description('Remove worktree for an issue')
+    .option('-f, --force', 'Force removal even with uncommitted changes')
+    .action(worktreeRemoveCommand);
+
+worktreeCmd
+    .command('list')
+    .alias('ls')
+    .description('List all worktrees')
+    .action(worktreeListCommand);
 
 program.parse();

@@ -1,64 +1,21 @@
 import chalk from 'chalk';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { existsSync, copyFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
 import { api } from '../github-api.js';
 import {
     detectRepository,
     checkoutBranch,
     branchExists,
     getCurrentBranch,
-    createWorktree,
-    generateWorktreePath,
-    getWorktreeForBranch,
-    getRepositoryRoot,
 } from '../git-utils.js';
 import { getBranchForIssue } from '../branch-linker.js';
-import { getWorktreeConfig, getConfig } from '../config.js';
 import { applyActiveLabel } from '../active-label.js';
 import { promptSelectWithDefault, isInteractive } from '../prompts.js';
-
-const execAsync = promisify(exec);
+import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
 
 interface SwitchOptions {
     /** Create worktree instead of switching branches (parallel work mode) */
     parallel?: boolean;
     /** Custom path for parallel worktree */
     worktreePath?: string;
-}
-
-/**
- * Setup a worktree for parallel work: copy configured files and run setup command.
- */
-async function setupWorktree(worktreePath: string, sourcePath: string): Promise<void> {
-    const config = getWorktreeConfig();
-
-    // Copy configured files
-    for (const file of config.copyFiles) {
-        const srcFile = join(sourcePath, file);
-        const destFile = join(worktreePath, file);
-
-        if (existsSync(srcFile)) {
-            const destDir = dirname(destFile);
-            if (!existsSync(destDir)) {
-                mkdirSync(destDir, { recursive: true });
-            }
-            copyFileSync(srcFile, destFile);
-            console.log(chalk.dim(`  Copied ${file}`));
-        }
-    }
-
-    // Run setup command if enabled
-    if (config.autoSetup && config.setupCommand) {
-        console.log(chalk.dim(`  Running: ${config.setupCommand}`));
-        try {
-            await execAsync(config.setupCommand, { cwd: worktreePath });
-            console.log(chalk.green('✓'), 'Setup complete');
-        } catch (error) {
-            console.log(chalk.yellow('⚠'), 'Setup command failed (you may need to run it manually)');
-        }
-    }
 }
 
 export async function switchCommand(issue: string, options: SwitchOptions = {}): Promise<void> {
@@ -137,58 +94,37 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
         // ─────────────────────────────────────────────────────────────────────
         // Parallel mode: create worktree
         // ─────────────────────────────────────────────────────────────────────
-        const config = getWorktreeConfig();
-        const repoRoot = await getRepositoryRoot();
-
-        if (!repoRoot) {
-            console.error(chalk.red('Error:'), 'Could not determine repository root');
+        const result = await createParallelWorktree(
+            repo,
+            issueNumber,
+            branchName,
+            options.worktreePath
+        );
+        if (!result.success) {
+            console.error(chalk.red('Error:'), result.error);
             process.exit(1);
         }
-
-        // Generate worktree path
-        const wtPath = options.worktreePath || generateWorktreePath(config.path, repo.name, issueNumber);
-
-        // Check if worktree already exists for this branch
-        const existingWorktree = await getWorktreeForBranch(branchName);
-        if (existingWorktree && !existingWorktree.isMain) {
-            // Non-main worktree already exists
-            console.log(chalk.yellow('Worktree already exists:'), existingWorktree.path);
-            worktreePath = existingWorktree.path;
-        } else {
-            // If branch is checked out in main, switch main to default branch first
-            if (existingWorktree?.isMain) {
-                const mainBranch = getConfig('mainBranch') || 'main';
-                console.log(chalk.yellow('Note:'), `Branch "${branchName}" is currently checked out in main repo.`);
-                console.log(chalk.dim('Switching main repo to default branch before creating worktree...'));
-                await checkoutBranch(mainBranch);
-                console.log(chalk.green('✓'), `Switched main repo to ${mainBranch}`);
-            }
-            // Ensure parent directory exists
-            const parentDir = dirname(wtPath);
-            if (!existsSync(parentDir)) {
-                mkdirSync(parentDir, { recursive: true });
-            }
-
-            console.log(chalk.dim('Creating worktree for'), `#${issueNumber}...`);
-
-            // Create the worktree
-            await createWorktree(wtPath, branchName);
-            console.log(chalk.green('✓'), `Created worktree: ${wtPath}`);
-
-            // Setup the worktree
-            await setupWorktree(wtPath, repoRoot);
-            worktreePath = wtPath;
-        }
+        worktreePath = result.path;
     } else {
         // ─────────────────────────────────────────────────────────────────────
         // Switch mode: checkout the branch
         // ─────────────────────────────────────────────────────────────────────
-        try {
-            await checkoutBranch(branchName);
-            console.log(chalk.green('✓'), `Switched to branch: ${branchName}`);
-        } catch (error) {
-            console.error(chalk.red('Error:'), 'Failed to switch branch:', error);
-            process.exit(1);
+
+        // Check if branch is already in a worktree
+        const existingWorktree = await getBranchWorktree(branchName);
+        if (existingWorktree) {
+            console.log(chalk.yellow('Branch is in a worktree:'), existingWorktree.path);
+            console.log(chalk.dim('Run:'), `cd ${existingWorktree.path}`);
+            worktreePath = existingWorktree.path;
+            isParallelMode = true; // Treat as parallel for label handling
+        } else {
+            try {
+                await checkoutBranch(branchName);
+                console.log(chalk.green('✓'), `Switched to branch: ${branchName}`);
+            } catch (error) {
+                console.error(chalk.red('Error:'), 'Failed to switch branch:', error);
+                process.exit(1);
+            }
         }
     }
 

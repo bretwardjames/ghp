@@ -1,8 +1,6 @@
 import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, copyFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
 import { api } from '../github-api.js';
 import {
     detectRepository,
@@ -15,16 +13,14 @@ import {
     pullLatest,
     generateBranchName,
     getAllBranches,
-    createWorktree,
-    generateWorktreePath,
     getWorktreeForBranch,
-    getRepositoryRoot,
     type RepoInfo,
 } from '../git-utils.js';
-import { getConfig, getWorktreeConfig } from '../config.js';
+import { getConfig } from '../config.js';
 import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
+import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
 
 const execAsync = promisify(exec);
 
@@ -81,105 +77,6 @@ async function handleUncommittedChanges(force?: boolean, forceDefaults?: boolean
         }
     }
     return true;
-}
-
-/**
- * Setup a worktree for parallel work: copy configured files and run setup command.
- *
- * @param worktreePath - Path to the newly created worktree
- * @param sourcePath - Path to the source repository (to copy files from)
- */
-async function setupWorktree(worktreePath: string, sourcePath: string): Promise<void> {
-    const config = getWorktreeConfig();
-
-    // Copy configured files
-    for (const file of config.copyFiles) {
-        const srcFile = join(sourcePath, file);
-        const destFile = join(worktreePath, file);
-
-        if (existsSync(srcFile)) {
-            // Ensure destination directory exists
-            const destDir = dirname(destFile);
-            if (!existsSync(destDir)) {
-                mkdirSync(destDir, { recursive: true });
-            }
-
-            copyFileSync(srcFile, destFile);
-            console.log(chalk.dim(`  Copied ${file}`));
-        }
-    }
-
-    // Run setup command if enabled
-    if (config.autoSetup && config.setupCommand) {
-        console.log(chalk.dim(`  Running: ${config.setupCommand}`));
-        try {
-            await execAsync(config.setupCommand, { cwd: worktreePath });
-            console.log(chalk.green('✓'), 'Setup complete');
-        } catch (error) {
-            console.log(chalk.yellow('⚠'), 'Setup command failed (you may need to run it manually)');
-            if (error instanceof Error) {
-                console.log(chalk.dim(`  Error: ${error.message}`));
-            }
-        }
-    }
-}
-
-/**
- * Create a parallel worktree for an issue and set it up.
- * Returns the path to the created worktree.
- */
-async function createParallelWorktree(
-    repo: RepoInfo,
-    issueNumber: number,
-    branchName: string,
-    customPath?: string
-): Promise<string> {
-    const config = getWorktreeConfig();
-    const repoRoot = await getRepositoryRoot();
-
-    if (!repoRoot) {
-        throw new Error('Could not determine repository root');
-    }
-
-    // Generate worktree path
-    const wtPath = customPath || generateWorktreePath(config.path, repo.name, issueNumber);
-
-    // Check if worktree already exists for this branch
-    const existingWorktree = await getWorktreeForBranch(branchName);
-    if (existingWorktree) {
-        if (existingWorktree.isMain) {
-            // Branch is checked out in main repo - can't create parallel worktree
-            // Git doesn't allow a branch to be checked out in multiple worktrees
-            console.log(chalk.yellow('Note:'), `Branch "${branchName}" is currently checked out in main repo.`);
-            console.log(chalk.dim('Switching main repo to default branch before creating worktree...'));
-
-            // Switch main repo to default branch first
-            const mainBranch = getConfig('mainBranch') || 'main';
-            await checkoutBranch(mainBranch);
-            console.log(chalk.green('✓'), `Switched main repo to ${mainBranch}`);
-        } else {
-            // Non-main worktree already exists
-            console.log(chalk.yellow('Worktree already exists:'), existingWorktree.path);
-            return existingWorktree.path;
-        }
-    }
-
-    // Ensure parent directory exists
-    const parentDir = dirname(wtPath);
-    if (!existsSync(parentDir)) {
-        mkdirSync(parentDir, { recursive: true });
-    }
-
-    console.log(chalk.dim('Creating worktree for'), `#${issueNumber}...`);
-
-    // Create the worktree
-    await createWorktree(wtPath, branchName);
-    console.log(chalk.green('✓'), `Created worktree: ${wtPath}`);
-
-    // Setup the worktree (copy files, run setup command)
-    await setupWorktree(wtPath, repoRoot);
-
-    return wtPath;
 }
 
 /**
@@ -367,36 +264,52 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 // ─────────────────────────────────────────────────────────────────
                 // Parallel mode: create worktree
                 // ─────────────────────────────────────────────────────────────────
-                worktreePath = await createParallelWorktree(
+                const result = await createParallelWorktree(
                     repo,
                     issueNumber,
                     linkedBranch,
                     options.worktreePath
                 );
+                if (!result.success) {
+                    console.error(chalk.red('Error:'), result.error);
+                    process.exit(1);
+                }
+                worktreePath = result.path;
             } else {
                 // ─────────────────────────────────────────────────────────────────
                 // Switch mode: checkout the branch
                 // ─────────────────────────────────────────────────────────────────
 
-                // Check for uncommitted changes before switching
-                if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
-                    process.exit(0);
-                }
-
-                // Check if branch exists locally
-                if (await branchExists(linkedBranch)) {
-                    await checkoutBranch(linkedBranch);
-                    console.log(chalk.green('✓'), `Switched to branch: ${linkedBranch}`);
+                // Check if branch is already in a worktree
+                const existingWorktree = await getBranchWorktree(linkedBranch);
+                if (existingWorktree) {
+                    console.log(chalk.yellow('Branch is in a worktree:'), existingWorktree.path);
+                    console.log(chalk.dim('Run:'), `cd ${existingWorktree.path}`);
+                    console.log();
+                    // Still apply label and show ready message
+                    worktreePath = existingWorktree.path;
+                    isParallelMode = true; // Treat as parallel for label handling
                 } else {
-                    // Try to checkout from remote
-                    try {
-                        await execAsync(`git fetch origin ${linkedBranch}`);
-                        await execAsync(`git checkout -b ${linkedBranch} origin/${linkedBranch}`);
-                        console.log(chalk.green('✓'), `Checked out branch from remote: ${linkedBranch}`);
-                    } catch {
-                        console.error(chalk.red('Error:'), `Branch "${linkedBranch}" no longer exists locally or remotely`);
-                        console.log(chalk.dim('You may want to unlink and create a new branch.'));
-                        process.exit(1);
+                    // Check for uncommitted changes before switching
+                    if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
+                        process.exit(0);
+                    }
+
+                    // Check if branch exists locally
+                    if (await branchExists(linkedBranch)) {
+                        await checkoutBranch(linkedBranch);
+                        console.log(chalk.green('✓'), `Switched to branch: ${linkedBranch}`);
+                    } else {
+                        // Try to checkout from remote
+                        try {
+                            await execAsync(`git fetch origin ${linkedBranch}`);
+                            await execAsync(`git checkout -b ${linkedBranch} origin/${linkedBranch}`);
+                            console.log(chalk.green('✓'), `Checked out branch from remote: ${linkedBranch}`);
+                        } catch {
+                            console.error(chalk.red('Error:'), `Branch "${linkedBranch}" no longer exists locally or remotely`);
+                            console.log(chalk.dim('You may want to unlink and create a new branch.'));
+                            process.exit(1);
+                        }
                     }
                 }
             }

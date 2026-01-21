@@ -8,8 +8,56 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { homedir } from 'os';
 import type { RepoInfo, GitOptions } from './types.js';
 import { parseGitHubUrl } from './url-parser.js';
+
+/**
+ * Sanitize a string for safe use in file paths and git commands.
+ * Removes or replaces potentially dangerous characters.
+ */
+function sanitizeForPath(input: string): string {
+    return String(input)
+        .replace(/\.\./g, '_')           // Prevent path traversal
+        .replace(/[;&|`$(){}[\]<>!]/g, '') // Remove shell metacharacters
+        .replace(/\s+/g, '-')            // Replace whitespace with dashes
+        .replace(/[^a-zA-Z0-9_\-./]/g, '_'); // Replace other special chars
+}
+
+/**
+ * Validate that a string is safe for use as a branch name in shell commands.
+ * Git branch names have their own restrictions, and we add additional safety checks.
+ * Throws an error if the branch name is invalid or potentially dangerous.
+ */
+function validateBranchName(branch: string): void {
+    // Check for empty
+    if (!branch || branch.trim().length === 0) {
+        throw new Error('Branch name cannot be empty');
+    }
+
+    // Check for shell metacharacters that could cause command injection
+    // Even in double quotes, $() and `` can execute commands
+    const dangerousChars = /[`$\\!;|&<>(){}[\]'"]/;
+    if (dangerousChars.test(branch)) {
+        throw new Error(`Branch name contains invalid characters: ${branch}`);
+    }
+
+    // Git branch restrictions: no spaces, no control chars, no ~^:?*[
+    const gitInvalidChars = /[\s~^:?*\[\\]/;
+    if (gitInvalidChars.test(branch)) {
+        throw new Error(`Branch name contains invalid git characters: ${branch}`);
+    }
+
+    // No .. sequences
+    if (branch.includes('..')) {
+        throw new Error(`Branch name cannot contain '..': ${branch}`);
+    }
+
+    // Cannot start or end with / or .
+    if (/^[./]|[./]$/.test(branch)) {
+        throw new Error(`Branch name cannot start or end with '/' or '.': ${branch}`);
+    }
+}
 
 const execAsync = promisify(exec);
 
@@ -305,6 +353,22 @@ export interface WorktreeInfo {
 }
 
 /**
+ * Validate that a path is safe for use in shell commands.
+ * Throws an error if the path contains dangerous characters.
+ */
+function validatePath(path: string): void {
+    if (!path || path.trim().length === 0) {
+        throw new Error('Path cannot be empty');
+    }
+
+    // Check for shell metacharacters that could cause command injection
+    const dangerousChars = /[`$;|&<>(){}[\]'"\n\r]/;
+    if (dangerousChars.test(path)) {
+        throw new Error(`Path contains invalid characters: ${path}`);
+    }
+}
+
+/**
  * Create a new worktree for a branch
  * @param worktreePath - Path where the worktree will be created
  * @param branch - Branch to checkout in the worktree
@@ -315,6 +379,10 @@ export async function createWorktree(
     branch: string,
     options: GitOptions = {}
 ): Promise<void> {
+    // Validate inputs to prevent command injection
+    validateBranchName(branch);
+    validatePath(worktreePath);
+
     // Check if branch exists locally first
     const localExists = await branchExists(branch, options);
 
@@ -343,6 +411,7 @@ export async function removeWorktree(
     options: GitOptions = {},
     force: boolean = false
 ): Promise<void> {
+    validatePath(worktreePath);
     const forceFlag = force ? '--force' : '';
     await execGit(`git worktree remove ${forceFlag} "${worktreePath}"`, options);
 }
@@ -437,12 +506,16 @@ export function generateWorktreePath(
     repoName: string,
     identifier: string | number
 ): string {
-    // Expand ~ to home directory
+    // Sanitize inputs to prevent path traversal and command injection
+    const safeRepoName = sanitizeForPath(repoName);
+    const safeIdentifier = sanitizeForPath(String(identifier));
+
+    // Expand ~ to home directory using os.homedir() for cross-platform support
     const expandedBase = basePath.startsWith('~')
-        ? basePath.replace('~', process.env.HOME || '')
+        ? basePath.replace('~', homedir())
         : basePath;
 
     // Join path segments, handling trailing slashes
     const cleanBase = expandedBase.replace(/\/+$/, '');
-    return `${cleanBase}/${repoName}/${String(identifier)}`;
+    return `${cleanBase}/${safeRepoName}/${safeIdentifier}`;
 }

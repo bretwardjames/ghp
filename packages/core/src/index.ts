@@ -58,7 +58,16 @@ export {
     getLocalBranches,
     getRemoteBranches,
     getAllBranches,
+    // Worktree operations
+    createWorktree,
+    removeWorktree,
+    listWorktrees,
+    getWorktreeForBranch,
+    worktreeExists,
+    generateWorktreePath,
 } from './git-utils.js';
+
+export type { WorktreeInfo } from './git-utils.js';
 
 // =============================================================================
 // URL Utilities

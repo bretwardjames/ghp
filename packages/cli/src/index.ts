@@ -24,6 +24,7 @@ import { commentCommand } from './commands/comment.js';
 import { syncCommand } from './commands/sync.js';
 import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
+import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
 
 const program = new Command();
 
@@ -90,6 +91,9 @@ program
     .description('Start working on an issue - creates branch and updates status')
     .option('--no-branch', 'Skip branch creation')
     .option('--no-status', 'Skip status update')
+    // Parallel work mode
+    .option('--parallel', 'Create worktree instead of switching (work in parallel)')
+    .option('--worktree-path <path>', 'Custom path for parallel worktree')
     // Non-interactive flags
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
@@ -115,6 +119,8 @@ program
     .command('switch <issue>')
     .alias('sw')
     .description('Switch to the branch linked to an issue')
+    .option('--parallel', 'Create worktree instead of switching (work in parallel)')
+    .option('--worktree-path <path>', 'Custom path for parallel worktree')
     .action(switchCommand);
 
 program
@@ -210,5 +216,24 @@ program
     .option('-c, --config', 'Show the MCP configuration JSON')
     .option('-i, --install', 'Auto-configure Claude Desktop')
     .action(mcpCommand);
+
+// Worktree management
+const worktreeCmd = program
+    .command('worktree')
+    .alias('wt')
+    .description('Manage parallel worktrees');
+
+worktreeCmd
+    .command('remove <issue>')
+    .alias('rm')
+    .description('Remove worktree for an issue')
+    .option('-f, --force', 'Force removal even with uncommitted changes')
+    .action(worktreeRemoveCommand);
+
+worktreeCmd
+    .command('list')
+    .alias('ls')
+    .description('List all worktrees')
+    .action(worktreeListCommand);
 
 program.parse();

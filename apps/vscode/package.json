@@ -101,6 +101,18 @@
         "category": "GitHub Projects"
       },
       {
+        "command": "ghProjects.startInWorktree",
+        "title": "Start in Parallel Worktree",
+        "icon": "$(split-horizontal)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.openWorktree",
+        "title": "Open Worktree in New Window",
+        "icon": "$(multiple-windows)",
+        "category": "GitHub Projects"
+      },
+      {
         "command": "ghProjects.prOpened",
         "title": "PR Opened: Update Issue Status",
         "icon": "$(git-pull-request)",
@@ -229,6 +241,16 @@
           "group": "branch@2"
         },
         {
+          "command": "ghProjects.startInWorktree",
+          "when": "viewItem == projectItem",
+          "group": "worktree@1"
+        },
+        {
+          "command": "ghProjects.openWorktree",
+          "when": "viewItem == projectItem",
+          "group": "worktree@2"
+        },
+        {
           "command": "ghProjects.openProjectInBrowser",
           "when": "viewItem == project",
           "group": "inline"
@@ -334,6 +356,29 @@
           "type": "boolean",
           "default": true,
           "description": "Show the 'Switch to Branch' button in the sidebar. When false, use 'Start Working' to switch to linked branches."
+        },
+        "ghProjects.worktreePath": {
+          "type": "string",
+          "default": "~/.ghp/worktrees",
+          "description": "Base directory for parallel worktrees"
+        },
+        "ghProjects.worktreeCopyFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [".env", ".env.local"],
+          "description": "Files to copy to new worktrees"
+        },
+        "ghProjects.worktreeSetupCommand": {
+          "type": "string",
+          "default": "pnpm install",
+          "description": "Command to run in new worktrees for setup"
+        },
+        "ghProjects.worktreeAutoSetup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically run setup command in new worktrees"
         }
       }
     }

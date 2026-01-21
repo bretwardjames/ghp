@@ -2,10 +2,25 @@ import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { api } from '../github-api.js';
-import { detectRepository, getCurrentBranch, hasUncommittedChanges, branchExists, createBranch, checkoutBranch, getCommitsBehind, pullLatest, generateBranchName, getAllBranches, type RepoInfo } from '../git-utils.js';
+import {
+    detectRepository,
+    getCurrentBranch,
+    hasUncommittedChanges,
+    branchExists,
+    createBranch,
+    checkoutBranch,
+    getCommitsBehind,
+    pullLatest,
+    generateBranchName,
+    getAllBranches,
+    getWorktreeForBranch,
+    type RepoInfo,
+} from '../git-utils.js';
 import { getConfig } from '../config.js';
 import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
+import { applyActiveLabel } from '../active-label.js';
+import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
 
 const execAsync = promisify(exec);
 
@@ -14,6 +29,9 @@ export type AssignAction = 'reassign' | 'add' | 'skip';
 
 /** Branch action for non-interactive mode */
 export type BranchAction = 'create' | 'link' | 'skip';
+
+/** Work mode for the start command */
+export type WorkMode = 'switch' | 'parallel';
 
 interface StartOptions {
     branch?: boolean;
@@ -25,6 +43,10 @@ interface StartOptions {
     /** Use default values for all prompts (non-interactive mode) */
     forceDefaults?: boolean;
     force?: boolean;
+    /** Create worktree instead of switching branches (parallel work mode) */
+    parallel?: boolean;
+    /** Custom path for parallel worktree */
+    worktreePath?: string;
 }
 
 /**
@@ -55,31 +77,6 @@ async function handleUncommittedChanges(force?: boolean, forceDefaults?: boolean
         }
     }
     return true;
-}
-
-/**
- * Apply the "actively working" label to an issue and remove from others.
- */
-async function applyActiveLabel(repo: RepoInfo, issueNumber: number): Promise<void> {
-    const activeLabel = api.getActiveLabelName();
-
-    // Ensure the label exists
-    await api.ensureLabel(repo, activeLabel);
-
-    // Remove label from any other issues that have it
-    const issuesWithLabel = await api.findIssuesWithLabel(repo, activeLabel);
-    for (const otherIssue of issuesWithLabel) {
-        if (otherIssue !== issueNumber) {
-            await api.removeLabelFromIssue(repo, otherIssue, activeLabel);
-            console.log(chalk.dim(`Removed ${activeLabel} from #${otherIssue}`));
-        }
-    }
-
-    // Add label to current issue
-    const labelAdded = await api.addLabelToIssue(repo, issueNumber, activeLabel);
-    if (labelAdded) {
-        console.log(chalk.green('✓'), `Applied "${activeLabel}" label`);
-    }
 }
 
 /**
@@ -227,34 +224,93 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     // Check if issue has linked branch
     const linkedBranch = await getBranchForIssue(repo, issueNumber);
 
+    // Track if we're in parallel mode (for active label handling)
+    let isParallelMode = options.parallel === true;
+    let worktreePath: string | undefined;
+
     if (linkedBranch) {
         // ═══════════════════════════════════════════════════════════════════════
-        // Issue already has a linked branch - switch to it
+        // Issue already has a linked branch - offer switch or parallel worktree
         // ═══════════════════════════════════════════════════════════════════════
         const currentBranch = await getCurrentBranch();
 
-        if (currentBranch === linkedBranch) {
+        // Check if already on the branch
+        if (currentBranch === linkedBranch && !options.parallel) {
             console.log(chalk.dim(`Already on branch: ${linkedBranch}`));
         } else {
-            // Check for uncommitted changes before switching
-            if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
-                process.exit(0);
+            // Determine work mode: switch or parallel
+            let workMode: WorkMode = 'switch';
+
+            if (options.parallel) {
+                workMode = 'parallel';
+            } else if (isInteractive() && !options.forceDefaults) {
+                // Interactive: ask user how they want to work
+                const choices = [
+                    'Switch to branch (default)',
+                    'Create parallel worktree (stay here, work in new directory)',
+                ];
+                const choice = await promptSelectWithDefault(
+                    'How would you like to work on this issue?',
+                    choices,
+                    0 // default: switch
+                );
+                if (choice === 1) {
+                    workMode = 'parallel';
+                    isParallelMode = true;
+                }
             }
 
-            // Check if branch exists locally
-            if (await branchExists(linkedBranch)) {
-                await checkoutBranch(linkedBranch);
-                console.log(chalk.green('✓'), `Switched to branch: ${linkedBranch}`);
-            } else {
-                // Try to checkout from remote
-                try {
-                    await execAsync(`git fetch origin ${linkedBranch}`);
-                    await execAsync(`git checkout -b ${linkedBranch} origin/${linkedBranch}`);
-                    console.log(chalk.green('✓'), `Checked out branch from remote: ${linkedBranch}`);
-                } catch {
-                    console.error(chalk.red('Error:'), `Branch "${linkedBranch}" no longer exists locally or remotely`);
-                    console.log(chalk.dim('You may want to unlink and create a new branch.'));
+            if (workMode === 'parallel') {
+                // ─────────────────────────────────────────────────────────────────
+                // Parallel mode: create worktree
+                // ─────────────────────────────────────────────────────────────────
+                const result = await createParallelWorktree(
+                    repo,
+                    issueNumber,
+                    linkedBranch,
+                    options.worktreePath
+                );
+                if (!result.success) {
+                    console.error(chalk.red('Error:'), result.error);
                     process.exit(1);
+                }
+                worktreePath = result.path;
+            } else {
+                // ─────────────────────────────────────────────────────────────────
+                // Switch mode: checkout the branch
+                // ─────────────────────────────────────────────────────────────────
+
+                // Check if branch is already in a worktree
+                const existingWorktree = await getBranchWorktree(linkedBranch);
+                if (existingWorktree) {
+                    console.log(chalk.yellow('Branch is in a worktree:'), existingWorktree.path);
+                    console.log(chalk.dim('Run:'), `cd ${existingWorktree.path}`);
+                    console.log();
+                    // Still apply label and show ready message
+                    worktreePath = existingWorktree.path;
+                    isParallelMode = true; // Treat as parallel for label handling
+                } else {
+                    // Check for uncommitted changes before switching
+                    if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
+                        process.exit(0);
+                    }
+
+                    // Check if branch exists locally
+                    if (await branchExists(linkedBranch)) {
+                        await checkoutBranch(linkedBranch);
+                        console.log(chalk.green('✓'), `Switched to branch: ${linkedBranch}`);
+                    } else {
+                        // Try to checkout from remote
+                        try {
+                            await execAsync(`git fetch origin ${linkedBranch}`);
+                            await execAsync(`git checkout -b ${linkedBranch} origin/${linkedBranch}`);
+                            console.log(chalk.green('✓'), `Checked out branch from remote: ${linkedBranch}`);
+                        } catch {
+                            console.error(chalk.red('Error:'), `Branch "${linkedBranch}" no longer exists locally or remotely`);
+                            console.log(chalk.dim('You may want to unlink and create a new branch.'));
+                            process.exit(1);
+                        }
+                    }
                 }
             }
         }
@@ -439,10 +495,18 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     // ═══════════════════════════════════════════════════════════════════════════
     // Apply active label
     // ═══════════════════════════════════════════════════════════════════════════
-    await applyActiveLabel(repo, issueNumber);
+    // In parallel mode, don't remove label from other issues (non-exclusive)
+    await applyActiveLabel(repo, issueNumber, !isParallelMode);
 
     console.log();
     console.log(chalk.green.bold('Ready to work on:'), item.title);
+
+    // Show path info for parallel worktree
+    if (isParallelMode && worktreePath) {
+        console.log();
+        console.log(chalk.cyan('Worktree created at:'), worktreePath);
+        console.log(chalk.dim('Run:'), `cd ${worktreePath}`);
+    }
 }
 
 /**

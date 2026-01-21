@@ -1,7 +1,10 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
-import { detectRepository } from '../git-utils.js';
+import { detectRepository, listWorktrees, removeWorktree } from '../git-utils.js';
 import { getConfig } from '../config.js';
+import { removeActiveLabelSafely } from '../active-label.js';
+import { getBranchForIssue } from '../branch-linker.js';
+import { confirmWithDefault, isInteractive } from '../prompts.js';
 
 export async function doneCommand(issue: string): Promise<void> {
     const issueNumber = parseInt(issue, 10);
@@ -60,6 +63,36 @@ export async function doneCommand(issue: string): Promise<void> {
 
     if (success) {
         console.log(chalk.green('✓'), `Marked as done: ${item.title}`);
+
+        // Remove active label from this issue (but protect other worktree issues)
+        await removeActiveLabelSafely(repo, issueNumber, true);
+
+        // Check if this issue has a worktree and offer to remove it
+        const branchName = await getBranchForIssue(repo, issueNumber);
+        if (branchName) {
+            const worktrees = await listWorktrees();
+            const worktree = worktrees.find(wt => wt.branch === branchName && !wt.isMain);
+
+            if (worktree && isInteractive()) {
+                console.log();
+                console.log(chalk.dim('Found worktree:'), worktree.path);
+
+                const shouldRemove = await confirmWithDefault(
+                    'Remove worktree?',
+                    true
+                );
+
+                if (shouldRemove) {
+                    try {
+                        await removeWorktree(worktree.path);
+                        console.log(chalk.green('✓'), 'Removed worktree');
+                    } catch {
+                        console.log(chalk.yellow('⚠'), 'Could not remove worktree (may have uncommitted changes)');
+                        console.log(chalk.dim('Run:'), `git worktree remove --force "${worktree.path}"`);
+                    }
+                }
+            }
+        }
     } else {
         console.error(chalk.red('Error:'), 'Failed to update status');
         process.exit(1);

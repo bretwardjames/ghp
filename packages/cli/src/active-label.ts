@@ -30,13 +30,32 @@ export async function applyActiveLabel(
     await api.ensureLabel(repo, activeLabel);
 
     // In exclusive mode, remove label from other issues first
+    // But protect issues that have active worktrees
     if (exclusive) {
         const issuesWithLabel = await api.findIssuesWithLabel(repo, activeLabel);
+
+        // Get all worktree branches to protect issues with active worktrees
+        const worktrees = await listWorktrees();
+        const worktreeBranches = new Set(
+            worktrees
+                .filter(wt => wt.branch && !wt.isMain)
+                .map(wt => wt.branch!)
+        );
+
         for (const otherIssue of issuesWithLabel) {
-            if (otherIssue !== issueNumber) {
-                await api.removeLabelFromIssue(repo, otherIssue, activeLabel);
-                console.log(chalk.dim(`Removed ${activeLabel} from #${otherIssue}`));
+            if (otherIssue === issueNumber) continue;
+
+            // Check if this issue's branch has a worktree
+            const linkedBranch = await getBranchForIssue(repo, otherIssue);
+            if (linkedBranch && worktreeBranches.has(linkedBranch)) {
+                // Has active worktree - keep the label
+                console.log(chalk.dim(`Keeping ${activeLabel} on #${otherIssue} (has active worktree)`));
+                continue;
             }
+
+            // No worktree - remove label
+            await api.removeLabelFromIssue(repo, otherIssue, activeLabel);
+            console.log(chalk.dim(`Removed ${activeLabel} from #${otherIssue}`));
         }
     }
 

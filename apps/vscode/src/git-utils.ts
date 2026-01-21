@@ -16,8 +16,13 @@ import {
     branchExists as coreBranchExists,
     sanitizeForBranchName,
     generateBranchName as coreGenerateBranchName,
+    // Worktree operations
+    createWorktree as coreCreateWorktree,
     removeWorktree as coreRemoveWorktree,
+    listWorktrees as coreListWorktrees,
+    getWorktreeForBranch as coreGetWorktreeForBranch,
 } from '@bretwardjames/ghp-core';
+import type { WorktreeInfo } from '@bretwardjames/ghp-core';
 
 // Re-export pure functions that don't need cwd
 export { sanitizeForBranchName } from '@bretwardjames/ghp-core';
@@ -166,3 +171,27 @@ export function generateBranchName(
 export async function removeWorktree(worktreePath: string, force: boolean = false): Promise<void> {
     return coreRemoveWorktree(worktreePath, getGitOptions(), force);
 }
+
+/**
+ * Create a worktree for a branch
+ */
+export async function createWorktree(worktreePath: string, branch: string): Promise<void> {
+    return coreCreateWorktree(worktreePath, branch, getGitOptions());
+}
+
+/**
+ * List all worktrees for the repository
+ */
+export async function listWorktrees(): Promise<WorktreeInfo[]> {
+    return coreListWorktrees(getGitOptions());
+}
+
+/**
+ * Get worktree for a specific branch
+ */
+export async function getWorktreeForBranch(branch: string): Promise<WorktreeInfo | null> {
+    return coreGetWorktreeForBranch(branch, getGitOptions());
+}
+
+// Re-export WorktreeInfo type for convenience
+export type { WorktreeInfo } from '@bretwardjames/ghp-core';

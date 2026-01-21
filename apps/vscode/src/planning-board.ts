@@ -452,9 +452,9 @@ export class PlanningBoardPanel {
                 await this._loadAndRender();
                 vscode.commands.executeCommand('ghProjects.refresh');
 
-                // Check if moved to "done" status
-                const isDoneStatus = newStatus.toLowerCase().includes('done') ||
-                                     newStatus.toLowerCase().includes('complete');
+                // Check if moved to "done" status (use config setting)
+                const doneStatus = vscode.workspace.getConfiguration('ghProjects').get<string>('prMergedStatus', 'Done');
+                const isDoneStatus = newStatus.toLowerCase() === doneStatus.toLowerCase();
                 if (isDoneStatus && itemData.item.number && itemData.item.repository) {
                     const [owner, repo] = itemData.item.repository.split('/');
 

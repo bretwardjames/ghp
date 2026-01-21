@@ -132,8 +132,8 @@ function registerCommands(context: vscode.ExtensionContext) {
                         boardProvider.refresh();
 
                         // Handle "done" status cleanup
-                        const isDoneStatus = selected.toLowerCase().includes('done') ||
-                                             selected.toLowerCase().includes('complete');
+                        const doneStatus = vscode.workspace.getConfiguration('ghProjects').get<string>('prMergedStatus', 'Done');
+                        const isDoneStatus = selected.toLowerCase() === doneStatus.toLowerCase();
                         if (isDoneStatus && node.item.number && node.item.repository) {
                             const [owner, repo] = node.item.repository.split('/');
 

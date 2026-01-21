@@ -5,18 +5,26 @@ import { existsSync, copyFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { GitHubAPI } from './github-api';
-import { generateBranchName, branchExists, createBranch, checkoutBranch } from './git-utils';
+import {
+    generateBranchName,
+    branchExists,
+    createBranch,
+    checkoutBranch,
+    // Use core worktree functions with validation
+    createWorktree as coreCreateWorktree,
+    listWorktrees,
+    getWorktreeForBranch,
+} from './git-utils';
+import type { WorktreeInfo } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 import { getBranchLinker } from './extension';
 
 const execAsync = promisify(exec);
 
-export interface WorktreeInfo {
-    path: string;
-    head: string;
-    branch: string | null;
-    isMain: boolean;
-}
+// Re-export WorktreeInfo for consumers
+export type { WorktreeInfo } from './git-utils';
+// Re-export worktree query functions
+export { listWorktrees, getWorktreeForBranch } from './git-utils';
 
 export interface WorktreeConfig {
     path: string;
@@ -61,87 +69,6 @@ function getWorkspaceRoot(): string | undefined {
     return workspaceFolders?.[0]?.uri.fsPath;
 }
 
-/**
- * List all worktrees for the repository
- */
-export async function listWorktrees(): Promise<WorktreeInfo[]> {
-    const workspaceRoot = getWorkspaceRoot();
-    if (!workspaceRoot) {
-        return [];
-    }
-
-    try {
-        const { stdout } = await execAsync('git worktree list --porcelain', { cwd: workspaceRoot });
-        const worktrees: WorktreeInfo[] = [];
-
-        const entries = stdout.trim().split('\n\n');
-
-        for (const entry of entries) {
-            if (!entry.trim()) continue;
-
-            const lines = entry.split('\n');
-            const info: Partial<WorktreeInfo> = {
-                isMain: false,
-                branch: null,
-            };
-
-            for (const line of lines) {
-                if (line.startsWith('worktree ')) {
-                    info.path = line.substring(9);
-                } else if (line.startsWith('HEAD ')) {
-                    info.head = line.substring(5);
-                } else if (line.startsWith('branch ')) {
-                    info.branch = line.substring(7).replace(/^refs\/heads\//, '');
-                } else if (line === 'bare') {
-                    info.isMain = true;
-                }
-            }
-
-            if (worktrees.length === 0) {
-                info.isMain = true;
-            }
-
-            if (info.path && info.head) {
-                worktrees.push(info as WorktreeInfo);
-            }
-        }
-
-        return worktrees;
-    } catch {
-        return [];
-    }
-}
-
-/**
- * Get worktree for a specific branch
- */
-export async function getWorktreeForBranch(branch: string): Promise<WorktreeInfo | null> {
-    const worktrees = await listWorktrees();
-    return worktrees.find(wt => wt.branch === branch) || null;
-}
-
-/**
- * Create a worktree for a branch
- */
-export async function createWorktree(worktreePath: string, branch: string): Promise<void> {
-    const workspaceRoot = getWorkspaceRoot();
-    if (!workspaceRoot) {
-        throw new Error('No workspace folder open');
-    }
-
-    // Check if branch exists locally
-    const localExists = await branchExists(branch);
-
-    if (localExists) {
-        await execAsync(`git worktree add "${worktreePath}" "${branch}"`, { cwd: workspaceRoot });
-    } else {
-        try {
-            await execAsync(`git worktree add "${worktreePath}" -b "${branch}" "origin/${branch}"`, { cwd: workspaceRoot });
-        } catch {
-            await execAsync(`git worktree add -b "${branch}" "${worktreePath}"`, { cwd: workspaceRoot });
-        }
-    }
-}
 
 /**
  * Setup a worktree: copy files and run setup command
@@ -257,8 +184,8 @@ export async function executeStartInWorktree(
         mkdirSync(parentDir, { recursive: true });
     }
 
-    // Create the worktree
-    await createWorktree(worktreePath, branchName);
+    // Create the worktree (uses core function with input validation)
+    await coreCreateWorktree(worktreePath, branchName);
 
     // Setup the worktree (copy files, run setup command)
     await setupWorktree(worktreePath, workspaceRoot);

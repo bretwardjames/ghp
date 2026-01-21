@@ -8,6 +8,7 @@ import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
 import { executeStartWorking } from './start-working';
 import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow } from './worktree';
+import { removeWorktree } from './git-utils';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';
 import { executePROpened } from './pr-workflow';
@@ -129,6 +130,40 @@ function registerCommands(context: vscode.ExtensionContext) {
                     if (success) {
                         vscode.window.showInformationMessage(`Status changed to "${selected}"`);
                         boardProvider.refresh();
+
+                        // Handle "done" status cleanup
+                        const isDoneStatus = selected.toLowerCase().includes('done') ||
+                                             selected.toLowerCase().includes('complete');
+                        if (isDoneStatus && node.item.number && node.item.repository) {
+                            const [owner, repo] = node.item.repository.split('/');
+
+                            // Remove active label
+                            try {
+                                const labelName = api.getActiveLabelName();
+                                await api.removeLabelFromIssue(owner, repo, node.item.number, labelName);
+                            } catch {
+                                // Label might not exist, that's ok
+                            }
+
+                            // Check for worktree and offer to remove
+                            const worktree = await getWorktreeForIssue(node.item.number);
+                            if (worktree && !worktree.isMain) {
+                                const choice = await vscode.window.showInformationMessage(
+                                    `Issue #${node.item.number} has a worktree. Remove it?`,
+                                    'Yes', 'No'
+                                );
+                                if (choice === 'Yes') {
+                                    try {
+                                        await removeWorktree(worktree.path);
+                                        vscode.window.showInformationMessage('Worktree removed');
+                                    } catch {
+                                        vscode.window.showWarningMessage(
+                                            'Could not remove worktree (may have uncommitted changes)'
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         vscode.window.showErrorMessage('Failed to update status');
                     }

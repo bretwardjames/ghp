@@ -452,10 +452,21 @@ export class PlanningBoardPanel {
                 await this._loadAndRender();
                 vscode.commands.executeCommand('ghProjects.refresh');
 
-                // Check if moved to "done" status and has a worktree
+                // Check if moved to "done" status
                 const isDoneStatus = newStatus.toLowerCase().includes('done') ||
                                      newStatus.toLowerCase().includes('complete');
-                if (isDoneStatus && itemData.item.number) {
+                if (isDoneStatus && itemData.item.number && itemData.item.repository) {
+                    const [owner, repo] = itemData.item.repository.split('/');
+
+                    // Remove active label
+                    try {
+                        const labelName = this._api.getActiveLabelName();
+                        await this._api.removeLabelFromIssue(owner, repo, itemData.item.number, labelName);
+                    } catch {
+                        // Label might not exist, that's ok
+                    }
+
+                    // Check for worktree and offer to remove
                     const worktree = await getWorktreeForIssue(itemData.item.number);
                     if (worktree && !worktree.isMain) {
                         const choice = await vscode.window.showInformationMessage(

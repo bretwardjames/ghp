@@ -437,13 +437,12 @@ export function generateWorktreePath(
     repoName: string,
     identifier: string | number
 ): string {
-    const { join } = require('path');
-    const { homedir } = require('os');
-
     // Expand ~ to home directory
     const expandedBase = basePath.startsWith('~')
-        ? join(homedir(), basePath.slice(1))
+        ? basePath.replace('~', process.env.HOME || '')
         : basePath;
 
-    return join(expandedBase, repoName, String(identifier));
+    // Join path segments, handling trailing slashes
+    const cleanBase = expandedBase.replace(/\/+$/, '');
+    return `${cleanBase}/${repoName}/${String(identifier)}`;
 }

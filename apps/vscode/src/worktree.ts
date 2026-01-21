@@ -229,9 +229,9 @@ export async function executeStartInWorktree(
     // Generate worktree path
     const worktreePath = generateWorktreePath(wtConfig.path, repoName, item.number || branchName);
 
-    // Check if worktree already exists for this branch
+    // Check if worktree already exists for this branch (but not the main worktree)
     const existingWorktree = await getWorktreeForBranch(branchName);
-    if (existingWorktree) {
+    if (existingWorktree && !existingWorktree.isMain) {
         vscode.window.showInformationMessage(`Worktree already exists at: ${existingWorktree.path}`);
         return { success: true, worktreePath: existingWorktree.path };
     }

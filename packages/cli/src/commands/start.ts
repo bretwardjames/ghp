@@ -144,11 +144,24 @@ async function createParallelWorktree(
     // Generate worktree path
     const wtPath = customPath || generateWorktreePath(config.path, repo.name, issueNumber);
 
-    // Check if worktree already exists
+    // Check if worktree already exists for this branch
     const existingWorktree = await getWorktreeForBranch(branchName);
     if (existingWorktree) {
-        console.log(chalk.yellow('Worktree already exists:'), existingWorktree.path);
-        return existingWorktree.path;
+        if (existingWorktree.isMain) {
+            // Branch is checked out in main repo - can't create parallel worktree
+            // Git doesn't allow a branch to be checked out in multiple worktrees
+            console.log(chalk.yellow('Note:'), `Branch "${branchName}" is currently checked out in main repo.`);
+            console.log(chalk.dim('Switching main repo to default branch before creating worktree...'));
+
+            // Switch main repo to default branch first
+            const mainBranch = getConfig('mainBranch') || 'main';
+            await checkoutBranch(mainBranch);
+            console.log(chalk.green('✓'), `Switched main repo to ${mainBranch}`);
+        } else {
+            // Non-main worktree already exists
+            console.log(chalk.yellow('Worktree already exists:'), existingWorktree.path);
+            return existingWorktree.path;
+        }
     }
 
     // Ensure parent directory exists

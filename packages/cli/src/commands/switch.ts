@@ -15,7 +15,7 @@ import {
     getRepositoryRoot,
 } from '../git-utils.js';
 import { getBranchForIssue } from '../branch-linker.js';
-import { getWorktreeConfig } from '../config.js';
+import { getWorktreeConfig, getConfig } from '../config.js';
 import { applyActiveLabel } from '../active-label.js';
 import { promptSelectWithDefault, isInteractive } from '../prompts.js';
 
@@ -148,12 +148,21 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
         // Generate worktree path
         const wtPath = options.worktreePath || generateWorktreePath(config.path, repo.name, issueNumber);
 
-        // Check if worktree already exists
+        // Check if worktree already exists for this branch
         const existingWorktree = await getWorktreeForBranch(branchName);
-        if (existingWorktree) {
+        if (existingWorktree && !existingWorktree.isMain) {
+            // Non-main worktree already exists
             console.log(chalk.yellow('Worktree already exists:'), existingWorktree.path);
             worktreePath = existingWorktree.path;
         } else {
+            // If branch is checked out in main, switch main to default branch first
+            if (existingWorktree?.isMain) {
+                const mainBranch = getConfig('mainBranch') || 'main';
+                console.log(chalk.yellow('Note:'), `Branch "${branchName}" is currently checked out in main repo.`);
+                console.log(chalk.dim('Switching main repo to default branch before creating worktree...'));
+                await checkoutBranch(mainBranch);
+                console.log(chalk.green('✓'), `Switched main repo to ${mainBranch}`);
+            }
             // Ensure parent directory exists
             const parentDir = dirname(wtPath);
             if (!existsSync(parentDir)) {

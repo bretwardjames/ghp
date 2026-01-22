@@ -1,32 +1,33 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerContext } from '../server.js';
 
-import { registerWorkTool } from './work.js';
-import { registerPlanTool } from './plan.js';
-import { registerMoveTool } from './move.js';
-import { registerDoneTool } from './done.js';
-import { registerStartTool } from './start.js';
-import { registerAddIssueTool } from './add-issue.js';
-import { registerAssignTool } from './assign.js';
-import { registerCommentTool } from './comment.js';
-import { registerSetFieldTool } from './set-field.js';
-import { registerUpdateIssueTool } from './update-issue.js';
+import { register as registerWork } from './work.js';
+import { register as registerPlan } from './plan.js';
+import { register as registerMove } from './move.js';
+import { register as registerDone } from './done.js';
+import { register as registerStart } from './start.js';
+import { register as registerAddIssue } from './add-issue.js';
+import { register as registerUpdateIssue } from './update-issue.js';
+import { register as registerAssign } from './assign.js';
+import { register as registerComment } from './comment.js';
+import { register as registerSetField } from './set-field.js';
 
 /**
- * Registers all MCP tools with the server.
+ * @deprecated Use registerEnabledTools from '../tool-registry.js' instead.
+ * This function registers all tools without respecting configuration.
  */
 export function registerAllTools(server: McpServer, context: ServerContext): void {
     // Read tools
-    registerWorkTool(server, context);
-    registerPlanTool(server, context);
+    registerWork(server, context);
+    registerPlan(server, context);
 
     // Action tools
-    registerMoveTool(server, context);
-    registerDoneTool(server, context);
-    registerStartTool(server, context);
-    registerAddIssueTool(server, context);
-    registerUpdateIssueTool(server, context);
-    registerAssignTool(server, context);
-    registerCommentTool(server, context);
-    registerSetFieldTool(server, context);
+    registerMove(server, context);
+    registerDone(server, context);
+    registerStart(server, context);
+    registerAddIssue(server, context);
+    registerUpdateIssue(server, context);
+    registerAssign(server, context);
+    registerComment(server, context);
+    registerSetField(server, context);
 }

@@ -217,6 +217,7 @@ program
     .option('-c, --config', 'Show the MCP configuration JSON')
     .option('-i, --install', 'Auto-configure Claude Desktop')
     .option('--install-claude-commands', 'Also install Claude slash commands (use with --install)')
+    .option('-s, --status', 'Show enabled/disabled MCP tools')
     .action(mcpCommand);
 
 // Slash command installation

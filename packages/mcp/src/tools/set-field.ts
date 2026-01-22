@@ -1,12 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
+import type { ToolMeta } from '../types.js';
+
+/** Tool metadata for registry */
+export const meta: ToolMeta = {
+    name: 'set_field',
+    category: 'action',
+};
 
 /**
  * Registers the set_field tool.
  * Sets a custom field value on a project item.
  */
-export function registerSetFieldTool(server: McpServer, context: ServerContext): void {
+export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
         'set_field',
         {

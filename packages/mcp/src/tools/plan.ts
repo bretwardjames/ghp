@@ -1,12 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
+import type { ToolMeta } from '../types.js';
+
+/** Tool metadata for registry */
+export const meta: ToolMeta = {
+    name: 'get_project_board',
+    category: 'read',
+};
 
 /**
  * Registers the get_project_board tool.
  * Returns the project board view grouped by status.
  */
-export function registerPlanTool(server: McpServer, context: ServerContext): void {
+export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
         'get_project_board',
         {

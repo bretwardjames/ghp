@@ -2,6 +2,13 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import { execSync } from 'child_process';
 import type { ServerContext } from '../server.js';
+import type { ToolMeta } from '../types.js';
+
+/** Tool metadata for registry */
+export const meta: ToolMeta = {
+    name: 'create_worktree',
+    category: 'action',
+};
 
 /**
  * Subagent spawn directive returned by the CLI.
@@ -46,7 +53,7 @@ function parseSpawnDirective(output: string): SubagentSpawnDirective | null {
  * Registers the create_worktree tool.
  * Creates a git worktree for parallel work on an issue, with optional subagent spawning context.
  */
-export function registerWorktreeTool(server: McpServer, context: ServerContext): void {
+export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
         'create_worktree',
         {

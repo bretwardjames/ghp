@@ -6,6 +6,7 @@ import {
     getConfig, setConfig, listConfigWithSources, getFullConfigWithSources, CONFIG_KEYS,
     getConfigPath, getWorkspaceConfigPath, getUserConfigPath, getVSCodeSettingsPaths,
     getCliSyncableSettings, getVSCodeSyncableSettings, writeToVSCode, saveConfig,
+    getConfigByPath, setConfigByPath, getConfigSection, parseValue,
     type Config, type ConfigScope, type ConfigSource, type PlanShortcut,
 } from '../config.js';
 import {
@@ -280,10 +281,52 @@ export async function configSyncCommand(
     }
 }
 
+/**
+ * Format a config value for display
+ */
+function formatConfigValue(value: unknown, indent: string = ''): void {
+    if (value === null || value === undefined) {
+        console.log(`${indent}${chalk.dim('(not set)')}`);
+        return;
+    }
+
+    if (typeof value === 'object' && !Array.isArray(value)) {
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                console.log(`${indent}${chalk.cyan(k)}:`);
+                formatConfigValue(v, indent + '  ');
+            } else {
+                const displayVal = Array.isArray(v) ? v.join(', ') : String(v);
+                console.log(`${indent}${k}: ${displayVal}`);
+            }
+        }
+    } else if (Array.isArray(value)) {
+        console.log(`${indent}${value.join(', ')}`);
+    } else {
+        console.log(`${indent}${value}`);
+    }
+}
+
+/**
+ * Determine the scope for --show: if -w, show workspace only; if -u, show user only
+ */
+function resolveShowScope(options: { workspace?: boolean; user?: boolean }): ConfigScope | 'merged' {
+    if (options.workspace) return 'workspace';
+    if (options.user) return 'user';
+    return 'merged';
+}
+
 export async function configCommand(
     key?: string,
     value?: string,
-    options: { show?: boolean; edit?: boolean; workspace?: boolean; user?: boolean } = {}
+    options: {
+        show?: boolean;
+        edit?: boolean;
+        workspace?: boolean;
+        user?: boolean;
+        disableTool?: string;
+        enableTool?: string;
+    } = {}
 ): Promise<void> {
     const scope = resolveScope(options);
 
@@ -293,8 +336,74 @@ export async function configCommand(
         return;
     }
 
-    // --show: display merged config from all sources with source indicators
+    // Handle --disable-tool convenience command
+    if (options.disableTool) {
+        const toolName = options.disableTool;
+        const currentDisabled = (getConfigByPath('mcp.disabledTools') as string[] | undefined) || [];
+        if (!currentDisabled.includes(toolName)) {
+            currentDisabled.push(toolName);
+            setConfigByPath('mcp.disabledTools', currentDisabled, scope);
+            console.log(`Disabled tool "${toolName}" (in ${scope} config)`);
+        } else {
+            console.log(`Tool "${toolName}" is already disabled`);
+        }
+        return;
+    }
+
+    // Handle --enable-tool convenience command
+    if (options.enableTool) {
+        const toolName = options.enableTool;
+        const currentDisabled = (getConfigByPath('mcp.disabledTools') as string[] | undefined) || [];
+        const index = currentDisabled.indexOf(toolName);
+        if (index !== -1) {
+            currentDisabled.splice(index, 1);
+            setConfigByPath('mcp.disabledTools', currentDisabled, scope);
+            console.log(`Enabled tool "${toolName}" (in ${scope} config)`);
+        } else {
+            console.log(`Tool "${toolName}" is not disabled`);
+        }
+        return;
+    }
+
+    // --show: display config with optional section filtering and scope filtering
     if (options.show) {
+        const showScope = resolveShowScope(options);
+
+        // If a key/section is provided, show only that section
+        if (key) {
+            const sectionValue = getConfigSection(key, showScope === 'merged' ? undefined : showScope);
+
+            if (showScope === 'merged') {
+                console.log(`\n${chalk.bold(key)} ${chalk.dim('(merged)')}`);
+            } else {
+                console.log(`\n${chalk.bold(key)} ${SOURCE_LABELS[showScope]}`);
+            }
+            console.log('─'.repeat(60));
+
+            if (sectionValue === undefined) {
+                console.log(chalk.dim('  (not set)'));
+            } else {
+                formatConfigValue(sectionValue, '  ');
+            }
+            return;
+        }
+
+        // Show full config (with scope filter if specified)
+        if (showScope !== 'merged') {
+            // Show only one scope
+            const scopedConfig = getConfigSection('', showScope) as Record<string, unknown> | undefined;
+            console.log(`\n${chalk.bold('Config')} ${SOURCE_LABELS[showScope]}`);
+            console.log('─'.repeat(60));
+            if (scopedConfig && Object.keys(scopedConfig).length > 0) {
+                formatConfigValue(scopedConfig, '  ');
+            } else {
+                console.log(chalk.dim('  (empty)'));
+            }
+            console.log(`\nFile: ${getConfigPath(showScope)}`);
+            return;
+        }
+
+        // Show merged config with sources (original behavior)
         const fullConfig = getFullConfigWithSources();
 
         console.log('\n' + chalk.bold('Settings:'));
@@ -352,16 +461,16 @@ export async function configCommand(
         return;
     }
 
-    // Get/set specific key
+    // Get/set with dotted path support
     if (key && !value) {
-        if (!isValidKey(key)) {
-            console.log(`Unknown config key: "${key}"`);
-            console.log('Available keys:', CONFIG_KEYS.join(', '));
-            return;
-        }
-        const val = getConfig(key as keyof Config);
+        // Get a value (supports dotted paths like "mcp.tools.workflows")
+        const val = key.includes('.') ? getConfigByPath(key) : getConfig(key as keyof Config);
         if (val !== undefined) {
-            console.log(val);
+            if (typeof val === 'object') {
+                formatConfigValue(val);
+            } else {
+                console.log(val);
+            }
         } else {
             console.log(`Config key "${key}" is not set`);
         }
@@ -369,12 +478,13 @@ export async function configCommand(
     }
 
     if (key && value) {
-        if (!isValidKey(key)) {
-            console.log(`Unknown config key: "${key}"`);
-            console.log('Available keys:', CONFIG_KEYS.join(', '));
-            return;
+        // Set a value (supports dotted paths like "mcp.tools.workflows")
+        const parsedValue = parseValue(value);
+        if (key.includes('.')) {
+            setConfigByPath(key, parsedValue, scope);
+        } else {
+            setConfig(key as keyof Config, parsedValue as Config[keyof Config], scope);
         }
-        setConfig(key as keyof Config, value as Config[keyof Config], scope);
         console.log(`Set ${key} = ${value} (in ${scope} config)`);
         return;
     }

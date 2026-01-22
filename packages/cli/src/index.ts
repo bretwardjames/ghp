@@ -24,6 +24,7 @@ import { commentCommand } from './commands/comment.js';
 import { syncCommand } from './commands/sync.js';
 import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
+import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
 
 const program = new Command();
@@ -43,13 +44,15 @@ program
 // Configuration
 program
     .command('config')
-    .description('View or set configuration')
-    .argument('[key]', 'Config key to get/set')
+    .description('View or set configuration (supports dotted paths like mcp.tools.workflows)')
+    .argument('[key]', 'Config key or dotted path to get/set (e.g., mcp.tools.workflows)')
     .argument('[value]', 'Value to set')
-    .option('-s, --show', 'Show merged config from all sources')
+    .option('-s, --show', 'Show config (use with -w/-u to filter by scope, add key for section)')
     .option('-e, --edit', 'Open config file in editor (explicit)')
     .option('-w, --workspace', 'Target workspace config (.ghp/config.json)')
     .option('-u, --user', 'Target user config (~/.config/ghp-cli/config.json)')
+    .option('--disable-tool <name>', 'Add a tool to mcp.disabledTools')
+    .option('--enable-tool <name>', 'Remove a tool from mcp.disabledTools')
     .action(configCommand);
 
 // Main views
@@ -217,7 +220,19 @@ program
     .description('Configure ghp MCP server for Claude Desktop')
     .option('-c, --config', 'Show the MCP configuration JSON')
     .option('-i, --install', 'Auto-configure Claude Desktop')
+    .option('--install-claude-commands', 'Also install Claude slash commands (use with --install)')
+    .option('-s, --status', 'Show enabled/disabled MCP tools')
     .action(mcpCommand);
+
+// Slash command installation
+program
+    .command('install-commands')
+    .description('Install bundled slash commands for AI assistants')
+    .option('--claude', 'Install commands for Claude Code')
+    .option('--only <commands>', 'Install only specific commands (comma-separated)')
+    .option('-f, --force', 'Overwrite existing command files')
+    .option('-n, --namespace <prefix>', 'Namespace prefix for commands (default: ghp)')
+    .action(installCommandsCommand);
 
 // Worktree management
 const worktreeCmd = program

@@ -2,10 +2,12 @@ import chalk from 'chalk';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
 import { join, dirname } from 'path';
+import { installClaudeCommandsQuiet } from './install-commands.js';
 
 interface McpOptions {
     config?: boolean;
     install?: boolean;
+    installClaudeCommands?: boolean;
 }
 
 /**
@@ -103,6 +105,17 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             console.log('Current config:', JSON.stringify(mcpServers.ghp, null, 2));
             console.log();
             console.log('To reconfigure, remove the "ghp" entry from your config and run this again.');
+
+            // Still install Claude commands if requested
+            if (options.installClaudeCommands) {
+                console.log();
+                const success = await installClaudeCommandsQuiet({ force: false });
+                if (success) {
+                    console.log(chalk.green('✓'), 'Installed Claude slash commands to .claude/commands/');
+                } else {
+                    console.log(chalk.yellow('○'), 'Could not install Claude slash commands');
+                }
+            }
             return;
         }
 
@@ -121,6 +134,18 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
 
             writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
             console.log(chalk.green('✓'), 'Configured ghp MCP server for Claude Desktop');
+
+            // Install Claude commands if requested
+            if (options.installClaudeCommands) {
+                console.log();
+                const success = await installClaudeCommandsQuiet({ force: false });
+                if (success) {
+                    console.log(chalk.green('✓'), 'Installed Claude slash commands to .claude/commands/');
+                } else {
+                    console.log(chalk.yellow('○'), 'Could not install Claude slash commands');
+                }
+            }
+
             console.log();
             console.log(chalk.bold('Next steps:'));
             console.log('  1. Make sure ghp-mcp is installed globally:');

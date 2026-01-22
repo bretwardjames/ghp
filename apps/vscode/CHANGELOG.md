@@ -2,7 +2,7 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
-## [0.1.13] - 2025-01-18
+## [0.1.13] - 2026-01-18
 
 ### Added
 - **Sync Settings with CLI** command - bidirectional settings sync between VS Code and ghp-cli
@@ -11,18 +11,18 @@ All notable changes to the "GitHub Projects" extension will be documented in thi
   - Sync settings that only exist in one place to the other
   - Accessible via Command Palette: "GitHub Projects: Sync Settings with CLI"
 
-## [0.1.12] - 2025-01-17
+## [0.1.12] - 2026-01-17
 
 ### Added
 - Assignment check on Start Working - prompts to reassign/add yourself if not assigned
 
-## [0.1.11] - 2025-01-17
+## [0.1.11] - 2026-01-17
 
 ### Fixed
 - "Open in GitHub" button now works from sidebar (was broken)
 - Renamed from "Open in Browser" to "Open in GitHub"
 
-## [0.1.10] - 2025-01-17
+## [0.1.10] - 2026-01-17
 
 ### Added
 - **Active item indicator** - Items you're working on (with `@user:active` label) now show:
@@ -36,19 +36,19 @@ All notable changes to the "GitHub Projects" extension will be documented in thi
   - Branches sorted by relevance (matches issue number/title)
 - New setting `ghProjects.showSwitchButton` to optionally hide the separate Switch button
 
-## [0.1.9] - 2025-01-17
+## [0.1.9] - 2026-01-17
 
 ### Changed
 - Updated README with GHP Tools ecosystem documentation
 - Added install script reference and cross-links to ghp-cli
 
-## [0.1.8] - 2025-01-17
+## [0.1.8] - 2026-01-17
 
 ### Fixed
 - Planning Board list view now correctly applies type, label, and state filters
 - Refresh now re-fetches project views to pick up filter changes from GitHub
 
-## [0.1.7] - 2025-01-17
+## [0.1.7] - 2026-01-17
 
 ### Changed
 - Branch links now stored in GitHub issue bodies (shared with CLI)
@@ -71,7 +71,7 @@ All notable changes to the "GitHub Projects" extension will be documented in thi
 - Issue detail panel improvements
 - Active label sync functionality
 
-## [0.1.0] - 2025-01-15
+## [0.1.0] - 2026-01-15
 
 ### Added
 - View GitHub Project boards directly in VS Code sidebar

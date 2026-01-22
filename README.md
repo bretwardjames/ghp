@@ -72,6 +72,29 @@ ghp done 123                  # Mark complete
 }
 ```
 
+### Parallel Work Mode (Worktrees)
+
+Work on multiple issues simultaneously using git worktrees:
+
+```bash
+ghp start 123 --parallel      # Create worktree instead of switching
+ghp switch 456 --parallel     # Open existing issue in worktree
+ghp worktree list             # List all active worktrees
+ghp worktree remove 123       # Clean up worktree when done
+```
+
+Each worktree gets automatic setup: copies `.env` files and runs your install command.
+
+### MCP Server (AI Assistants)
+
+Use GitHub Projects with Claude Desktop or other MCP-compatible AI assistants:
+
+```bash
+ghp mcp --install             # Auto-configure Claude Desktop
+```
+
+See [@bretwardjames/ghp-mcp](https://github.com/bretwardjames/ghp/tree/main/packages/mcp) for details.
+
 ### Extension-Specific
 
 - **Drag and Drop** - Move issues between columns
@@ -96,16 +119,22 @@ ghp config sync            # Sync with VS Code/Cursor
 - User: `~/.config/ghp-cli/config.json`
 - Workspace: `.ghp/config.json` (commit this)
 
-### Extension Settings
+### All Configuration Options
 
-Settings are in VS Code settings under "GitHub Projects" (`ghProjects.*`).
+These options work in both CLI config and VS Code settings (with `ghProjects.` prefix):
 
-| Setting | Default | Description |
-|---------|---------|-------------|
+| Option | Default | Description |
+|--------|---------|-------------|
 | `mainBranch` | `"main"` | Main branch name |
-| `branchNamePattern` | `"{user}/{number}-{title}"` | Branch naming pattern |
-| `startWorkingStatus` | `"In Progress"` | Status when starting work |
+| `branchPattern` | `"{user}/{number}-{title}"` | Branch naming pattern. Tokens: `{user}`, `{number}`, `{title}` |
+| `startWorkingStatus` | `"In Progress"` | Status when starting work on an issue |
+| `doneStatus` | `"Done"` | Status when marking issue as done |
 | `prMergedStatus` | `"Done"` | Status when PR is merged |
+| `worktreePath` | `"~/.ghp/worktrees"` | Base directory for parallel worktrees |
+| `worktreeCopyFiles` | `[".env", ".env.local"]` | Files to copy from main repo to new worktrees |
+| `worktreeSetupCommand` | `"pnpm install"` | Command to run in new worktrees |
+| `worktreeAutoSetup` | `true` | Automatically run setup in new worktrees |
+| `shortcuts` | `{}` | Named filter combinations for `ghp plan` |
 
 ### Settings Sync
 

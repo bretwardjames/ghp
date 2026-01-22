@@ -30,7 +30,7 @@
 - Updated dependencies
   - @bretwardjames/ghp-core@0.2.0-beta.0
 
-## [0.1.7] - 2025-01-17
+## [0.1.7] - 2026-01-17
 
 ### Added
 
@@ -49,7 +49,7 @@
 
 - Handle `status` as array in plan command options
 
-## [0.1.6] - 2025-01-16
+## [0.1.6] - 2026-01-16
 
 ### Added
 
@@ -58,7 +58,7 @@
 - `ghp switch` to switch to linked branch
 - Branch column in table display
 
-## [0.1.5] - 2025-01-15
+## [0.1.5] - 2026-01-15
 
 ### Added
 

@@ -43,6 +43,15 @@ export interface WorkDefaults {
     hideDone?: boolean;
 }
 
+export interface ParallelWorkConfig {
+    /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'iTerm.app') */
+    terminal?: string;
+    /** Whether to open a terminal by default with --parallel (default: true) */
+    openTerminal?: boolean;
+    /** Whether to auto-run Claude in the new terminal (default: true) */
+    autoRunClaude?: boolean;
+}
+
 export interface Config {
     // General settings
     mainBranch: string;
@@ -58,6 +67,9 @@ export interface Config {
     worktreeCopyFiles?: string[];    // Files to copy to new worktrees (default: ['.env', '.env.local'])
     worktreeSetupCommand?: string;   // Command to run in new worktrees (default: 'pnpm install')
     worktreeAutoSetup?: boolean;     // Whether to run setup automatically (default: true)
+
+    // Parallel work terminal settings
+    parallelWork?: ParallelWorkConfig;
 
     // Command defaults
     defaults?: {
@@ -86,6 +98,11 @@ const DEFAULT_CONFIG: Config = {
     worktreeCopyFiles: ['.env', '.env.local'],
     worktreeSetupCommand: 'pnpm install',
     worktreeAutoSetup: true,
+    // Parallel work defaults
+    parallelWork: {
+        openTerminal: true,
+        autoRunClaude: true,
+    },
     defaults: {},
     shortcuts: {},
 };
@@ -286,7 +303,7 @@ export function getAddIssueDefaults(): { template?: string; project?: string; st
     return config.defaults?.addIssue || {};
 }
 
-export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSetupCommand', 'worktreeAutoSetup'] as const;
+export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSetupCommand', 'worktreeAutoSetup', 'parallelWork'] as const;
 
 export type ConfigSource = 'default' | 'workspace' | 'user';
 
@@ -326,6 +343,25 @@ export function getWorktreeConfig(): WorktreeConfig {
         copyFiles: config.worktreeCopyFiles ?? DEFAULT_CONFIG.worktreeCopyFiles!,
         setupCommand: config.worktreeSetupCommand ?? DEFAULT_CONFIG.worktreeSetupCommand!,
         autoSetup: config.worktreeAutoSetup ?? DEFAULT_CONFIG.worktreeAutoSetup!,
+    };
+}
+
+export interface ResolvedParallelWorkConfig {
+    terminal?: string;
+    openTerminal: boolean;
+    autoRunClaude: boolean;
+}
+
+/**
+ * Get the parallel work configuration with defaults applied
+ */
+export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
+    const config = loadConfig();
+    const parallelWork = config.parallelWork ?? {};
+    return {
+        terminal: parallelWork.terminal,
+        openTerminal: parallelWork.openTerminal ?? DEFAULT_CONFIG.parallelWork!.openTerminal!,
+        autoRunClaude: parallelWork.autoRunClaude ?? DEFAULT_CONFIG.parallelWork!.autoRunClaude!,
     };
 }
 

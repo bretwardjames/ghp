@@ -16,11 +16,12 @@ import {
     getWorktreeForBranch,
     type RepoInfo,
 } from '../git-utils.js';
-import { getConfig } from '../config.js';
+import { getConfig, getParallelWorkConfig } from '../config.js';
 import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
+import { openParallelWorkTerminal } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
 
 const execAsync = promisify(exec);
@@ -48,8 +49,8 @@ interface StartOptions {
     parallel?: boolean;
     /** Custom path for parallel worktree */
     worktreePath?: string;
-    /** Output subagent spawn directive for AI assistant integration */
-    spawnSubagent?: boolean;
+    /** Whether to open a terminal (default: true with --parallel, set to false with --no-open) */
+    open?: boolean;
 }
 
 /**
@@ -539,34 +540,31 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     if (isParallelMode && worktreePath) {
         console.log();
         console.log(chalk.cyan('Worktree created at:'), worktreePath);
-        console.log(chalk.dim('Run:'), `cd ${worktreePath}`);
 
-        // Output subagent spawn directive if requested
-        if (options.spawnSubagent) {
-            const mainBranchConfig = getConfig('mainBranch') || 'main';
-            // TODO: Use getConfig('memory.namespacePrefix') once #39 is implemented
-            const namespacePrefix = 'ghp';
-            const branchForDirective = worktreeBranch || linkedBranch || 'unknown';
+        const mainBranchConfig = getConfig('mainBranch') || 'main';
+        // TODO: Use getConfig('memory.namespacePrefix') once memory config is fully integrated
+        const namespacePrefix = 'ghp';
+        const branchForDirective = worktreeBranch || linkedBranch || 'unknown';
 
-            const directive: SubagentSpawnDirective = {
-                action: 'spawn_subagent',
-                workingDirectory: worktreePath,
-                issue: {
-                    number: issueNumber,
-                    title: item.title,
-                    status: item.status ?? null,
-                    url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
-                },
-                branch: branchForDirective,
-                repository: {
-                    owner: repo.owner,
-                    name: repo.name,
-                    mainBranch: mainBranchConfig,
-                },
-                memory: {
-                    namespace: `${namespacePrefix}-issue-${issueNumber}`,
-                },
-                handoffPrompt: `You are now working in a dedicated worktree for issue #${issueNumber}: "${item.title}"
+        const directive: SubagentSpawnDirective = {
+            action: 'spawn_subagent',
+            workingDirectory: worktreePath,
+            issue: {
+                number: issueNumber,
+                title: item.title,
+                status: item.status ?? null,
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            },
+            branch: branchForDirective,
+            repository: {
+                owner: repo.owner,
+                name: repo.name,
+                mainBranch: mainBranchConfig,
+            },
+            memory: {
+                namespace: `${namespacePrefix}-issue-${issueNumber}`,
+            },
+            handoffPrompt: `You are now working in a dedicated worktree for issue #${issueNumber}: "${item.title}"
 
 Worktree Location: ${worktreePath}
 Branch: ${branchForDirective}
@@ -582,8 +580,35 @@ Use the GHP tools available via MCP to:
 - Save your progress with save_session
 - Search for relevant context with memory_search
 - Mark the issue done when complete`,
-            };
+        };
 
+        // Determine if we should open a terminal
+        const parallelWorkConfig = getParallelWorkConfig();
+        const shouldOpenTerminal = options.open !== false && parallelWorkConfig.openTerminal;
+
+        if (shouldOpenTerminal) {
+            console.log(chalk.dim('Opening terminal...'));
+            const result = await openParallelWorkTerminal(
+                worktreePath,
+                issueNumber,
+                item.title,
+                directive
+            );
+
+            if (result.success) {
+                console.log(chalk.green('✓'), 'Opened new terminal with Claude');
+            } else {
+                console.log(chalk.yellow('⚠'), 'Could not open terminal:', result.error);
+                console.log(chalk.dim('Run manually:'), `cd ${worktreePath} && claude`);
+                // Output spawn directive as fallback
+                console.log();
+                console.log('[GHP_SPAWN_DIRECTIVE]');
+                console.log(JSON.stringify(directive, null, 2));
+                console.log('[/GHP_SPAWN_DIRECTIVE]');
+            }
+        } else {
+            // --no-open flag: output spawn directive for scripting/automation
+            console.log(chalk.dim('Run:'), `cd ${worktreePath}`);
             console.log();
             console.log('[GHP_SPAWN_DIRECTIVE]');
             console.log(JSON.stringify(directive, null, 2));

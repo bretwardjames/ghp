@@ -92,9 +92,9 @@ program
     .option('--no-branch', 'Skip branch creation')
     .option('--no-status', 'Skip status update')
     // Parallel work mode
-    .option('--parallel', 'Create worktree instead of switching (work in parallel)')
+    .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
+    .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
-    .option('--spawn-subagent', 'Output subagent spawn directive for AI assistant integration')
     // Non-interactive flags
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
@@ -120,9 +120,9 @@ program
     .command('switch <issue>')
     .alias('sw')
     .description('Switch to the branch linked to an issue')
-    .option('--parallel', 'Create worktree instead of switching (work in parallel)')
+    .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
+    .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
-    .option('--spawn-subagent', 'Output subagent spawn directive for AI assistant integration')
     .action(switchCommand);
 
 program

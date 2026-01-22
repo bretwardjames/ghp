@@ -24,6 +24,7 @@ import { commentCommand } from './commands/comment.js';
 import { syncCommand } from './commands/sync.js';
 import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
+import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
 
 const program = new Command();
@@ -217,7 +218,19 @@ program
     .description('Configure ghp MCP server for Claude Desktop')
     .option('-c, --config', 'Show the MCP configuration JSON')
     .option('-i, --install', 'Auto-configure Claude Desktop')
+    .option('--install-claude-commands', 'Also install Claude slash commands (use with --install)')
+    .option('-s, --status', 'Show enabled/disabled MCP tools')
     .action(mcpCommand);
+
+// Slash command installation
+program
+    .command('install-commands')
+    .description('Install bundled slash commands for AI assistants')
+    .option('--claude', 'Install commands for Claude Code')
+    .option('--only <commands>', 'Install only specific commands (comma-separated)')
+    .option('-f, --force', 'Overwrite existing command files')
+    .option('-n, --namespace <prefix>', 'Namespace prefix for commands (default: ghp)')
+    .action(installCommandsCommand);
 
 // Worktree management
 const worktreeCmd = program

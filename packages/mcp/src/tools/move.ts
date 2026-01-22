@@ -1,12 +1,19 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
+import type { ToolMeta } from '../types.js';
+
+/** Tool metadata for registry */
+export const meta: ToolMeta = {
+    name: 'move_issue',
+    category: 'action',
+};
 
 /**
  * Registers the move_issue tool.
  * Changes the status of an issue in a GitHub Project.
  */
-export function registerMoveTool(server: McpServer, context: ServerContext): void {
+export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
         'move_issue',
         {

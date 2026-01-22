@@ -44,20 +44,22 @@ export interface WorkDefaults {
 }
 
 /**
- * MCP tool enablement configuration
+ * MCP tool category configuration
  */
 export interface McpToolsConfig {
-    memory?: boolean;
-    workflows?: boolean;
-    issues?: boolean;
-    worktrees?: boolean;
+    /** Enable read-only tools (get_my_work, get_project_board) */
+    read?: boolean;
+    /** Enable action tools (move, done, start, add-issue, etc.) */
+    action?: boolean;
 }
 
 /**
  * MCP server configuration
  */
 export interface McpConfig {
+    /** Category-level tool toggles (default: all enabled) */
     tools?: McpToolsConfig;
+    /** Array of specific tool names to disable */
     disabledTools?: string[];
 }
 
@@ -86,6 +88,7 @@ export interface MemoryConfig {
         modulePath?: string;
     };
 }
+
 
 export interface Config {
     // General settings
@@ -138,6 +141,14 @@ const DEFAULT_CONFIG: Config = {
     worktreeAutoSetup: true,
     defaults: {},
     shortcuts: {},
+    // MCP defaults (all tools enabled)
+    mcp: {
+        tools: {
+            read: true,
+            action: true,
+        },
+        disabledTools: [],
+    },
 };
 
 /**
@@ -384,6 +395,23 @@ export function saveConfig(config: Partial<Config>, scope: ConfigScope = 'user')
 export function getConfig<K extends keyof Config>(key: K): Config[K] {
     const config = loadConfig();
     return config[key];
+}
+
+/**
+ * Get the MCP configuration with defaults applied
+ */
+export function getMcpConfig(): McpConfig {
+    const config = loadConfig();
+    const defaultMcp = DEFAULT_CONFIG.mcp!;
+    const userMcp = config.mcp || {};
+
+    return {
+        tools: {
+            ...defaultMcp.tools,
+            ...userMcp.tools,
+        },
+        disabledTools: userMcp.disabledTools || defaultMcp.disabledTools || [],
+    };
 }
 
 export function setConfig<K extends keyof Config>(key: K, value: Config[K], scope: ConfigScope = 'user'): void {

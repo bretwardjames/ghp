@@ -44,13 +44,15 @@ program
 // Configuration
 program
     .command('config')
-    .description('View or set configuration')
-    .argument('[key]', 'Config key to get/set')
+    .description('View or set configuration (supports dotted paths like mcp.tools.workflows)')
+    .argument('[key]', 'Config key or dotted path to get/set (e.g., mcp.tools.workflows)')
     .argument('[value]', 'Value to set')
-    .option('-s, --show', 'Show merged config from all sources')
+    .option('-s, --show', 'Show config (use with -w/-u to filter by scope, add key for section)')
     .option('-e, --edit', 'Open config file in editor (explicit)')
     .option('-w, --workspace', 'Target workspace config (.ghp/config.json)')
     .option('-u, --user', 'Target user config (~/.config/ghp-cli/config.json)')
+    .option('--disable-tool <name>', 'Add a tool to mcp.disabledTools')
+    .option('--enable-tool <name>', 'Remove a tool from mcp.disabledTools')
     .action(configCommand);
 
 // Main views

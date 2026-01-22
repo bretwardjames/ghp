@@ -63,6 +63,33 @@ export interface McpConfig {
     disabledTools?: string[];
 }
 
+/**
+ * Memory backend configuration
+ */
+export interface MemoryConfig {
+    backend?: 'local' | 'mem0' | 'pinecone' | 'weaviate' | 'custom';
+    namespacePrefix?: string;
+    local?: {
+        storagePath?: string;
+    };
+    mem0?: {
+        apiKey?: string;
+    };
+    pinecone?: {
+        apiKey?: string;
+        environment?: string;
+        indexName?: string;
+    };
+    weaviate?: {
+        host?: string;
+        apiKey?: string;
+    };
+    custom?: {
+        modulePath?: string;
+    };
+}
+
+
 export interface Config {
     // General settings
     mainBranch: string;
@@ -79,6 +106,12 @@ export interface Config {
     worktreeSetupCommand?: string;   // Command to run in new worktrees (default: 'pnpm install')
     worktreeAutoSetup?: boolean;     // Whether to run setup automatically (default: true)
 
+    // MCP server configuration
+    mcp?: McpConfig;
+
+    // Memory configuration
+    memory?: MemoryConfig;
+
     // Command defaults
     defaults?: {
         plan?: PlanShortcut;
@@ -94,9 +127,6 @@ export interface Config {
     shortcuts?: {
         [name: string]: PlanShortcut;
     };
-
-    // MCP server settings
-    mcp?: McpConfig;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -215,6 +245,118 @@ export function loadConfig(): Config {
 }
 
 export type ConfigScope = 'user' | 'workspace';
+
+// =============================================================================
+// Dotted Path Helpers
+// =============================================================================
+
+/**
+ * Get a value from an object using a dotted path (e.g., "mcp.tools.workflows")
+ */
+export function getByPath(obj: Record<string, unknown>, path: string): unknown {
+    const parts = path.split('.');
+    let current: unknown = obj;
+
+    for (const part of parts) {
+        if (current === null || current === undefined) return undefined;
+        if (typeof current !== 'object') return undefined;
+        current = (current as Record<string, unknown>)[part];
+    }
+
+    return current;
+}
+
+/**
+ * Set a value in an object using a dotted path (e.g., "mcp.tools.workflows")
+ * Creates intermediate objects as needed.
+ */
+export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): void {
+    const parts = path.split('.');
+    let current = obj;
+
+    for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (current[part] === undefined || current[part] === null) {
+            current[part] = {};
+        }
+        current = current[part] as Record<string, unknown>;
+    }
+
+    current[parts[parts.length - 1]] = value;
+}
+
+/**
+ * Parse a value string into the appropriate type
+ */
+export function parseValue(value: string): unknown {
+    // Boolean
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+
+    // Number
+    const num = Number(value);
+    if (!isNaN(num) && value.trim() !== '') return num;
+
+    // Array (comma-separated)
+    if (value.includes(',')) {
+        return value.split(',').map(v => v.trim());
+    }
+
+    // String
+    return value;
+}
+
+/**
+ * Get a config value using a dotted path
+ */
+export function getConfigByPath(path: string): unknown {
+    const config = loadConfig();
+    return getByPath(config as unknown as Record<string, unknown>, path);
+}
+
+/**
+ * Set a config value using a dotted path
+ */
+export function setConfigByPath(path: string, value: unknown, scope: ConfigScope = 'user'): void {
+    const scopeConfig = scope === 'workspace' ? loadWorkspaceConfig() : loadUserConfig();
+    setByPath(scopeConfig as Record<string, unknown>, path, value);
+
+    if (scope === 'workspace') {
+        const repoRoot = getRepoRoot();
+        if (!repoRoot) {
+            throw new Error('Not in a git repository');
+        }
+        const configDir = join(repoRoot, WORKSPACE_CONFIG_DIR);
+        const configPath = join(configDir, WORKSPACE_CONFIG_FILE);
+
+        if (!existsSync(configDir)) {
+            mkdirSync(configDir, { recursive: true });
+        }
+        writeFileSync(configPath, JSON.stringify(scopeConfig, null, 2));
+    } else {
+        if (!existsSync(USER_CONFIG_DIR)) {
+            mkdirSync(USER_CONFIG_DIR, { recursive: true });
+        }
+        writeFileSync(USER_CONFIG_FILE, JSON.stringify(scopeConfig, null, 2));
+    }
+}
+
+/**
+ * Get a section of config (e.g., "mcp" returns the whole mcp object)
+ */
+export function getConfigSection(section: string, scope?: ConfigScope): unknown {
+    if (scope === 'workspace') {
+        const config = loadWorkspaceConfig();
+        return getByPath(config as Record<string, unknown>, section);
+    } else if (scope === 'user') {
+        const config = loadUserConfig();
+        return getByPath(config as Record<string, unknown>, section);
+    } else {
+        // Merged config
+        const config = loadConfig();
+        return getByPath(config as unknown as Record<string, unknown>, section);
+    }
+}
 
 /**
  * Save config to the specified scope

@@ -109,9 +109,15 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             // Still install Claude commands if requested
             if (options.installClaudeCommands) {
                 console.log();
-                const success = await installClaudeCommandsQuiet({ force: false });
-                if (success) {
-                    console.log(chalk.green('✓'), 'Installed Claude slash commands to .claude/commands/');
+                const result = await installClaudeCommandsQuiet({ force: false });
+                if (result) {
+                    if (result.installed.length > 0) {
+                        console.log(chalk.green('✓'), `Installed: ${result.installed.map(n => chalk.cyan(n)).join(', ')}`);
+                    }
+                    if (result.skipped.length > 0) {
+                        console.log(chalk.yellow('○'), `Skipped (already exist): ${result.skipped.map(n => chalk.dim(n)).join(', ')}`);
+                    }
+                    console.log(chalk.dim(`  Location: ${result.targetDir}`));
                 } else {
                     console.log(chalk.yellow('○'), 'Could not install Claude slash commands');
                 }
@@ -138,9 +144,15 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             // Install Claude commands if requested
             if (options.installClaudeCommands) {
                 console.log();
-                const success = await installClaudeCommandsQuiet({ force: false });
-                if (success) {
-                    console.log(chalk.green('✓'), 'Installed Claude slash commands to .claude/commands/');
+                const result = await installClaudeCommandsQuiet({ force: false });
+                if (result) {
+                    if (result.installed.length > 0) {
+                        console.log(chalk.green('✓'), `Installed: ${result.installed.map(n => chalk.cyan(n)).join(', ')}`);
+                    }
+                    if (result.skipped.length > 0) {
+                        console.log(chalk.yellow('○'), `Skipped (already exist): ${result.skipped.map(n => chalk.dim(n)).join(', ')}`);
+                    }
+                    console.log(chalk.dim(`  Location: ${result.targetDir}`));
                 } else {
                     console.log(chalk.yellow('○'), 'Could not install Claude slash commands');
                 }

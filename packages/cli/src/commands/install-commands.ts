@@ -160,14 +160,19 @@ async function installClaudeCommands(options: InstallCommandsOptions): Promise<v
 }
 
 // Export for use by mcp command
-export async function installClaudeCommandsQuiet(options: { force?: boolean; namespace?: string }): Promise<boolean> {
+export async function installClaudeCommandsQuiet(options: { force?: boolean; namespace?: string }): Promise<{ installed: string[]; skipped: string[]; targetDir: string } | null> {
     const commands = getBundledCommands('claude');
     if (commands.size === 0) {
-        return false;
+        return null;
     }
 
     const targetDir = join(process.cwd(), '.claude', 'commands');
     const result = installCommands(commands, targetDir, options);
+    const namespace = options.namespace || 'ghp';
 
-    return result.installed.length > 0 || result.skipped.length > 0;
+    return {
+        installed: result.installed.map(n => `${namespace}-${n}`),
+        skipped: result.skipped.map(n => `${namespace}-${n}`),
+        targetDir,
+    };
 }

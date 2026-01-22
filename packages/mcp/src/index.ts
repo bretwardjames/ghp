@@ -3,7 +3,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
 import { createTokenProvider } from './auth/token-provider.js';
-import { registerAllTools } from './tools/index.js';
+import { registerEnabledTools } from './tool-registry.js';
 import { registerAllResources } from './resources/index.js';
 
 /**
@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     const { server, context } = createServer(tokenProvider);
 
     // Register all tools and resources
-    registerAllTools(server, context);
+    registerEnabledTools(server, context);
     registerAllResources(server, context);
 
     // Connect via stdio

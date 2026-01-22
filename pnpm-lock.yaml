@@ -51,6 +51,9 @@ importers:
       '@bretwardjames/ghp-core':
         specifier: workspace:*
         version: link:../core
+      '@bretwardjames/ghp-mcp':
+        specifier: workspace:*
+        version: link:../mcp
       chalk:
         specifier: ^5.3.0
         version: 5.6.2

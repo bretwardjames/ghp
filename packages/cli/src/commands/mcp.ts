@@ -2,10 +2,13 @@ import chalk from 'chalk';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
 import { join, dirname } from 'path';
+import { getMcpConfig as getGhpMcpConfig } from '../config.js';
+import { getToolStatus, type ToolCategory } from '@bretwardjames/ghp-mcp/tool-registry';
 
 interface McpOptions {
     config?: boolean;
     install?: boolean;
+    status?: boolean;
 }
 
 /**
@@ -42,8 +45,59 @@ function getMcpConfig(): object {
 
 export async function mcpCommand(options: McpOptions): Promise<void> {
     // Default to showing config if no option specified
-    if (!options.config && !options.install) {
+    if (!options.config && !options.install && !options.status) {
         options.config = true;
+    }
+
+    if (options.status) {
+        const mcpConfig = getGhpMcpConfig();
+        const toolStatuses = getToolStatus(mcpConfig);
+
+        console.log(chalk.bold('MCP Tool Status'));
+        console.log();
+
+        // Show category status
+        console.log(chalk.bold('Categories:'));
+        const categories: ToolCategory[] = ['read', 'action'];
+        for (const cat of categories) {
+            const enabled = mcpConfig.tools?.[cat] !== false;
+            const status = enabled
+                ? chalk.green('enabled')
+                : chalk.red('disabled');
+            console.log(`  ${cat}: ${status}`);
+        }
+        console.log();
+
+        // Show individual tool status
+        console.log(chalk.bold('Tools:'));
+        for (const tool of toolStatuses) {
+            const statusIcon = tool.enabled ? chalk.green('✓') : chalk.red('✗');
+            const categoryTag = chalk.dim(`[${tool.category}]`);
+
+            let line = `  ${statusIcon} ${tool.displayName} ${categoryTag}`;
+
+            if (!tool.enabled && tool.disabledReason) {
+                const reason = tool.disabledReason === 'category'
+                    ? chalk.dim('(category disabled)')
+                    : chalk.dim('(explicitly disabled)');
+                line += ` ${reason}`;
+            }
+
+            console.log(line);
+        }
+
+        // Show disabled tools config
+        if (mcpConfig.disabledTools && mcpConfig.disabledTools.length > 0) {
+            console.log();
+            console.log(chalk.bold('Explicitly disabled tools:'));
+            for (const name of mcpConfig.disabledTools) {
+                console.log(`  - ${name}`);
+            }
+        }
+
+        console.log();
+        console.log(chalk.dim('Configure via ghp config or edit ~/.config/ghp-cli/config.json'));
+        return;
     }
 
     if (options.config) {

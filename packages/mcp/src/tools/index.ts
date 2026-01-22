@@ -15,6 +15,10 @@ import { registerUpdateIssueTool } from './update-issue.js';
 /**
  * Registers all MCP tools with the server.
  */
+/**
+ * @deprecated Use registerEnabledTools from '../tool-registry.js' instead.
+ * This function registers all tools without respecting configuration.
+ */
 export function registerAllTools(server: McpServer, context: ServerContext): void {
     // Read tools
     registerWorkTool(server, context);

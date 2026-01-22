@@ -94,6 +94,7 @@ program
     // Parallel work mode
     .option('--parallel', 'Create worktree instead of switching (work in parallel)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
+    .option('--spawn-subagent', 'Output subagent spawn directive for AI assistant integration')
     // Non-interactive flags
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
@@ -121,6 +122,7 @@ program
     .description('Switch to the branch linked to an issue')
     .option('--parallel', 'Create worktree instead of switching (work in parallel)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
+    .option('--spawn-subagent', 'Output subagent spawn directive for AI assistant integration')
     .action(switchCommand);
 
 program

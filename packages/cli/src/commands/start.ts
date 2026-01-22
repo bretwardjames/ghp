@@ -21,6 +21,7 @@ import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
+import type { SubagentSpawnDirective } from '../types.js';
 
 const execAsync = promisify(exec);
 
@@ -47,6 +48,8 @@ interface StartOptions {
     parallel?: boolean;
     /** Custom path for parallel worktree */
     worktreePath?: string;
+    /** Output subagent spawn directive for AI assistant integration */
+    spawnSubagent?: boolean;
 }
 
 /**
@@ -227,6 +230,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     // Track if we're in parallel mode (for active label handling)
     let isParallelMode = options.parallel === true;
     let worktreePath: string | undefined;
+    let worktreeBranch: string | undefined; // Branch name for worktree (used in spawn directive)
 
     if (linkedBranch) {
         // ═══════════════════════════════════════════════════════════════════════
@@ -275,6 +279,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     process.exit(1);
                 }
                 worktreePath = result.path;
+                worktreeBranch = linkedBranch;
             } else {
                 // ─────────────────────────────────────────────────────────────────
                 // Switch mode: checkout the branch
@@ -462,6 +467,35 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 }
             }
         }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Handle --parallel flag after new branch creation
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (options.parallel) {
+            // We just created a new branch and are now on it
+            // For parallel mode, create a worktree and switch back to original branch
+            const newBranchName = await getCurrentBranch();
+            if (newBranchName) {
+                const mainBranch = getConfig('mainBranch') || 'main';
+                const result = await createParallelWorktree(
+                    repo,
+                    issueNumber,
+                    newBranchName,
+                    options.worktreePath
+                );
+                if (!result.success) {
+                    console.error(chalk.red('Error:'), result.error);
+                    process.exit(1);
+                }
+                worktreePath = result.path;
+                worktreeBranch = newBranchName;
+                isParallelMode = true;
+
+                // Switch back to main branch so user stays in original context
+                await checkoutBranch(mainBranch);
+                console.log(chalk.green('✓'), `Switched back to ${mainBranch} (worktree created)`);
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -506,6 +540,55 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         console.log();
         console.log(chalk.cyan('Worktree created at:'), worktreePath);
         console.log(chalk.dim('Run:'), `cd ${worktreePath}`);
+
+        // Output subagent spawn directive if requested
+        if (options.spawnSubagent) {
+            const mainBranchConfig = getConfig('mainBranch') || 'main';
+            // TODO: Use getConfig('memory.namespacePrefix') once #39 is implemented
+            const namespacePrefix = 'ghp';
+            const branchForDirective = worktreeBranch || linkedBranch || 'unknown';
+
+            const directive: SubagentSpawnDirective = {
+                action: 'spawn_subagent',
+                workingDirectory: worktreePath,
+                issue: {
+                    number: issueNumber,
+                    title: item.title,
+                    status: item.status ?? null,
+                    url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+                },
+                branch: branchForDirective,
+                repository: {
+                    owner: repo.owner,
+                    name: repo.name,
+                    mainBranch: mainBranchConfig,
+                },
+                memory: {
+                    namespace: `${namespacePrefix}-issue-${issueNumber}`,
+                },
+                handoffPrompt: `You are now working in a dedicated worktree for issue #${issueNumber}: "${item.title}"
+
+Worktree Location: ${worktreePath}
+Branch: ${branchForDirective}
+Status: ${item.status || 'None'}
+Repository: ${repo.owner}/${repo.name}
+
+Your task is to implement this issue. The worktree has:
+- Dependencies installed (if worktreeAutoSetup is enabled)
+- Environment files copied from the main repository
+- Isolated git state with the issue branch checked out
+
+Use the GHP tools available via MCP to:
+- Save your progress with save_session
+- Search for relevant context with memory_search
+- Mark the issue done when complete`,
+            };
+
+            console.log();
+            console.log('[GHP_SPAWN_DIRECTIVE]');
+            console.log(JSON.stringify(directive, null, 2));
+            console.log('[/GHP_SPAWN_DIRECTIVE]');
+        }
     }
 }
 

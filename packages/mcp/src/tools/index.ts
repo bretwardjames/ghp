@@ -11,6 +11,7 @@ import { registerAssignTool } from './assign.js';
 import { registerCommentTool } from './comment.js';
 import { registerSetFieldTool } from './set-field.js';
 import { registerUpdateIssueTool } from './update-issue.js';
+import { registerWorktreeTool } from './worktree.js';
 
 /**
  * Registers all MCP tools with the server.
@@ -29,4 +30,7 @@ export function registerAllTools(server: McpServer, context: ServerContext): voi
     registerAssignTool(server, context);
     registerCommentTool(server, context);
     registerSetFieldTool(server, context);
+
+    // Worktree tools (parallel work)
+    registerWorktreeTool(server, context);
 }

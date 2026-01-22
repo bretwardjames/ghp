@@ -215,6 +215,7 @@ program
     .description('Configure ghp MCP server for Claude Desktop')
     .option('-c, --config', 'Show the MCP configuration JSON')
     .option('-i, --install', 'Auto-configure Claude Desktop')
+    .option('-s, --status', 'Show enabled/disabled MCP tools')
     .action(mcpCommand);
 
 // Worktree management

@@ -2,8 +2,7 @@ import chalk from 'chalk';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
 import { join, dirname } from 'path';
-import { getMcpConfig as getGhpMcpConfig } from '../config.js';
-import { getToolStatus, type ToolCategory } from '@bretwardjames/ghp-mcp/tool-registry';
+import { getMcpConfig } from '../config.js';
 
 interface McpOptions {
     config?: boolean;
@@ -33,7 +32,7 @@ function getClaudeConfigPath(): string | null {
 /**
  * Generate the MCP server config for ghp.
  */
-function getMcpConfig(): object {
+function getClaudeDesktopConfig(): object {
     return {
         mcpServers: {
             ghp: {
@@ -50,15 +49,14 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
     }
 
     if (options.status) {
-        const mcpConfig = getGhpMcpConfig();
-        const toolStatuses = getToolStatus(mcpConfig);
+        const mcpConfig = getMcpConfig();
 
-        console.log(chalk.bold('MCP Tool Status'));
+        console.log(chalk.bold('MCP Tool Configuration'));
         console.log();
 
         // Show category status
-        console.log(chalk.bold('Categories:'));
-        const categories: ToolCategory[] = ['read', 'action'];
+        console.log(chalk.bold('Tool Categories:'));
+        const categories = ['read', 'action'] as const;
         for (const cat of categories) {
             const enabled = mcpConfig.tools?.[cat] !== false;
             const status = enabled
@@ -66,37 +64,29 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
                 : chalk.red('disabled');
             console.log(`  ${cat}: ${status}`);
         }
-        console.log();
 
-        // Show individual tool status
-        console.log(chalk.bold('Tools:'));
-        for (const tool of toolStatuses) {
-            const statusIcon = tool.enabled ? chalk.green('✓') : chalk.red('✗');
-            const categoryTag = chalk.dim(`[${tool.category}]`);
-
-            let line = `  ${statusIcon} ${tool.displayName} ${categoryTag}`;
-
-            if (!tool.enabled && tool.disabledReason) {
-                const reason = tool.disabledReason === 'category'
-                    ? chalk.dim('(category disabled)')
-                    : chalk.dim('(explicitly disabled)');
-                line += ` ${reason}`;
-            }
-
-            console.log(line);
-        }
-
-        // Show disabled tools config
+        // Show disabled tools
         if (mcpConfig.disabledTools && mcpConfig.disabledTools.length > 0) {
             console.log();
-            console.log(chalk.bold('Explicitly disabled tools:'));
+            console.log(chalk.bold('Disabled Tools:'));
             for (const name of mcpConfig.disabledTools) {
-                console.log(`  - ${name}`);
+                console.log(`  ${chalk.red('✗')} ${name}`);
             }
         }
 
         console.log();
-        console.log(chalk.dim('Configure via ghp config or edit ~/.config/ghp-cli/config.json'));
+        console.log(chalk.dim('Configure in ~/.config/ghp-cli/config.json or .ghp/config.json'));
+        console.log();
+        console.log(chalk.bold('Example configuration:'));
+        console.log(chalk.dim(`{
+  "mcp": {
+    "tools": {
+      "read": true,
+      "action": false
+    },
+    "disabledTools": ["create_issue"]
+  }
+}`));
         return;
     }
 
@@ -105,7 +95,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
         console.log();
         console.log('Add this to your Claude Desktop config file:');
         console.log();
-        console.log(chalk.cyan(JSON.stringify(getMcpConfig(), null, 2)));
+        console.log(chalk.cyan(JSON.stringify(getClaudeDesktopConfig(), null, 2)));
         console.log();
 
         const configPath = getClaudeConfigPath();

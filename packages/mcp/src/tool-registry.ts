@@ -1,137 +1,48 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerContext } from './server.js';
-import { registerWorkTool } from './tools/work.js';
-import { registerPlanTool } from './tools/plan.js';
-import { registerMoveTool } from './tools/move.js';
-import { registerDoneTool } from './tools/done.js';
-import { registerStartTool } from './tools/start.js';
-import { registerAddIssueTool } from './tools/add-issue.js';
-import { registerUpdateIssueTool } from './tools/update-issue.js';
-import { registerAssignTool } from './tools/assign.js';
-import { registerCommentTool } from './tools/comment.js';
-import { registerSetFieldTool } from './tools/set-field.js';
+import type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { execSync } from 'child_process';
 
-/**
- * Tool categories for grouping and enabling/disabling tools
- */
-export type ToolCategory = 'read' | 'action';
+// Import tools with their metadata
+import * as workTool from './tools/work.js';
+import * as planTool from './tools/plan.js';
+import * as moveTool from './tools/move.js';
+import * as doneTool from './tools/done.js';
+import * as startTool from './tools/start.js';
+import * as addIssueTool from './tools/add-issue.js';
+import * as updateIssueTool from './tools/update-issue.js';
+import * as assignTool from './tools/assign.js';
+import * as commentTool from './tools/comment.js';
+import * as setFieldTool from './tools/set-field.js';
+
+// Re-export types
+export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
 
 /**
- * Definition of a tool with metadata for registration and display
+ * Tool module with metadata and registration function
  */
-export interface ToolDefinition {
-    /** Internal tool name (used in MCP registration) */
-    name: string;
-    /** Human-readable display name */
-    displayName: string;
-    /** Tool category */
-    category: ToolCategory;
-    /** Brief description of what the tool does */
-    description: string;
-    /** Function to register the tool with the MCP server */
+interface ToolModule {
+    meta: { name: string; category: ToolCategory };
     register: (server: McpServer, context: ServerContext) => void;
 }
 
 /**
- * Configuration for MCP tool categories
+ * All available tools collected from individual modules
  */
-export interface McpToolsConfig {
-    /** Enable read-only tools (get_my_work, get_project_board) */
-    read?: boolean;
-    /** Enable action tools (move, done, start, add-issue, etc.) */
-    action?: boolean;
-}
-
-/**
- * Full MCP configuration section
- */
-export interface McpConfig {
-    /** Category-level tool toggles */
-    tools?: McpToolsConfig;
-    /** Array of specific tool names to disable */
-    disabledTools?: string[];
-}
-
-/**
- * All available tools with their metadata
- */
-export const TOOL_DEFINITIONS: ToolDefinition[] = [
-    // Read tools - for fetching information
-    {
-        name: 'get_my_work',
-        displayName: 'Get My Work',
-        category: 'read',
-        description: 'Get GitHub Project issues assigned to you',
-        register: registerWorkTool,
-    },
-    {
-        name: 'get_project_board',
-        displayName: 'Get Project Board',
-        category: 'read',
-        description: 'View a GitHub Project board with items grouped by status',
-        register: registerPlanTool,
-    },
-    // Action tools - for modifying state
-    {
-        name: 'move_issue',
-        displayName: 'Move Issue',
-        category: 'action',
-        description: 'Move an issue to a different status column',
-        register: registerMoveTool,
-    },
-    {
-        name: 'done_issue',
-        displayName: 'Mark Done',
-        category: 'action',
-        description: 'Mark an issue as done',
-        register: registerDoneTool,
-    },
-    {
-        name: 'start_work',
-        displayName: 'Start Work',
-        category: 'action',
-        description: 'Start working on an issue (sets status to In Progress)',
-        register: registerStartTool,
-    },
-    {
-        name: 'add_issue',
-        displayName: 'Add Issue',
-        category: 'action',
-        description: 'Create a new issue and add it to a project',
-        register: registerAddIssueTool,
-    },
-    {
-        name: 'update_issue',
-        displayName: 'Update Issue',
-        category: 'action',
-        description: 'Update an existing issue title or body',
-        register: registerUpdateIssueTool,
-    },
-    {
-        name: 'assign_issue',
-        displayName: 'Assign Issue',
-        category: 'action',
-        description: 'Assign or unassign users to an issue',
-        register: registerAssignTool,
-    },
-    {
-        name: 'comment_issue',
-        displayName: 'Comment on Issue',
-        category: 'action',
-        description: 'Add a comment to an issue',
-        register: registerCommentTool,
-    },
-    {
-        name: 'set_field',
-        displayName: 'Set Field',
-        category: 'action',
-        description: 'Set a custom field value on a project item',
-        register: registerSetFieldTool,
-    },
+const TOOLS: ToolModule[] = [
+    workTool,
+    planTool,
+    moveTool,
+    doneTool,
+    startTool,
+    addIssueTool,
+    updateIssueTool,
+    assignTool,
+    commentTool,
+    setFieldTool,
 ];
 
 /**
@@ -230,73 +141,34 @@ export function loadMcpConfig(): McpConfig {
 }
 
 /**
- * Get all tool definitions
+ * Get list of all tool names and categories
  */
-export function getToolDefinitions(): ToolDefinition[] {
-    return TOOL_DEFINITIONS;
+export function getToolList(): Array<{ name: string; category: ToolCategory }> {
+    return TOOLS.map(tool => ({
+        name: tool.meta.name,
+        category: tool.meta.category,
+    }));
 }
 
 /**
- * Get tools filtered by enabled status based on config
+ * Check if a tool is enabled based on config
  */
-export function getEnabledTools(config?: McpConfig): ToolDefinition[] {
-    const mcpConfig = config || loadMcpConfig();
-    const toolsConfig = mcpConfig.tools || DEFAULT_MCP_CONFIG.tools!;
-    const disabledTools = new Set(mcpConfig.disabledTools || []);
+function isToolEnabled(tool: ToolModule, config: McpConfig): boolean {
+    const toolsConfig = config.tools || DEFAULT_MCP_CONFIG.tools!;
+    const disabledTools = new Set(config.disabledTools || []);
 
-    return TOOL_DEFINITIONS.filter((tool) => {
-        // Check if category is enabled
-        const categoryEnabled = toolsConfig[tool.category] !== false;
-        if (!categoryEnabled) {
-            return false;
-        }
+    // Check if category is enabled
+    const categoryEnabled = toolsConfig[tool.meta.category] !== false;
+    if (!categoryEnabled) {
+        return false;
+    }
 
-        // Check if specifically disabled
-        if (disabledTools.has(tool.name)) {
-            return false;
-        }
+    // Check if specifically disabled
+    if (disabledTools.has(tool.meta.name)) {
+        return false;
+    }
 
-        return true;
-    });
-}
-
-/**
- * Get tool status for display (used by CLI --status command)
- */
-export function getToolStatus(config?: McpConfig): Array<{
-    name: string;
-    displayName: string;
-    category: ToolCategory;
-    enabled: boolean;
-    disabledReason?: 'category' | 'explicit';
-}> {
-    const mcpConfig = config || loadMcpConfig();
-    const toolsConfig = mcpConfig.tools || DEFAULT_MCP_CONFIG.tools!;
-    const disabledTools = new Set(mcpConfig.disabledTools || []);
-
-    return TOOL_DEFINITIONS.map((tool) => {
-        const categoryEnabled = toolsConfig[tool.category] !== false;
-        const explicitlyDisabled = disabledTools.has(tool.name);
-
-        let enabled = true;
-        let disabledReason: 'category' | 'explicit' | undefined;
-
-        if (!categoryEnabled) {
-            enabled = false;
-            disabledReason = 'category';
-        } else if (explicitlyDisabled) {
-            enabled = false;
-            disabledReason = 'explicit';
-        }
-
-        return {
-            name: tool.name,
-            displayName: tool.displayName,
-            category: tool.category,
-            enabled,
-            disabledReason,
-        };
-    });
+    return true;
 }
 
 /**
@@ -307,8 +179,11 @@ export function registerEnabledTools(
     context: ServerContext,
     config?: McpConfig
 ): void {
-    const enabledTools = getEnabledTools(config);
-    for (const tool of enabledTools) {
-        tool.register(server, context);
+    const mcpConfig = config || loadMcpConfig();
+
+    for (const tool of TOOLS) {
+        if (isToolEnabled(tool, mcpConfig)) {
+            tool.register(server, context);
+        }
     }
 }

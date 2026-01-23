@@ -3,7 +3,7 @@
   "private": true,
   "displayName": "GitHub Projects",
   "description": "View GitHub Project boards directly in VS Code - mirrors your project views exactly as configured on GitHub",
-  "version": "0.2.0-beta.2",
+  "version": "0.3.1",
   "publisher": "bretwardjames",
   "license": "MIT",
   "repository": {

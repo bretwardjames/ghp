@@ -2,7 +2,7 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
-## [0.2.0-beta.2] - 2026-01-22
+## [0.3.1] - 2026-01-22
 
 ### Added
 - **Parallel Agent Spawning** - Full support for AI-assisted parallel work in Cursor/VS Code

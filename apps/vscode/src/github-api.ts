@@ -10,23 +10,17 @@ import type {
     ProjectWithViews,
     ProjectV2View,
     ProjectField,
+    IssueRelationships,
 } from './types';
 import type { RepoInfo } from './repo-detector';
+
+// Re-export for consumers that import from github-api
+export type { IssueRelationships } from './types';
 
 /**
  * GitHub API client for Projects V2
  * Uses VS Code's built-in GitHub authentication provider
  */
-/**
- * Issue relationship info (parent/sub-issues)
- */
-export interface IssueRelationships {
-    id: string;
-    number: number;
-    title: string;
-    parent: { id: string; number: number; title: string; state: string } | null;
-    subIssues: Array<{ id: string; number: number; title: string; state: string }>;
-}
 
 export class GitHubAPI {
     private graphqlClient: typeof graphql | null = null;

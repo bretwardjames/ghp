@@ -44,7 +44,7 @@ export interface WorkDefaults {
 }
 
 export interface ParallelWorkConfig {
-    /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'iTerm.app') */
+    /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'tmux') */
     terminal?: string;
     /** Whether to open a terminal by default with --parallel (default: true) */
     openTerminal?: boolean;
@@ -54,6 +54,13 @@ export interface ParallelWorkConfig {
     claudeCommand?: string;
     /** Whether to auto-resume previous Claude sessions when switching to worktree (default: true) */
     autoResume?: boolean;
+    /** Tmux-specific configuration (used when terminal is 'tmux' or auto-detected inside tmux) */
+    tmux?: {
+        /** Whether to spawn a new window or split the current window into a pane */
+        mode?: 'window' | 'pane';
+        /** Direction to split when mode is 'pane' */
+        paneDirection?: 'horizontal' | 'vertical';
+    };
 }
 
 /**

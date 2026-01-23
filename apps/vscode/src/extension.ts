@@ -7,7 +7,7 @@ import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropControl
 import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
 import { executeStartWorking } from './start-working';
-import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow } from './worktree';
+import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow, checkForSpawnContext } from './worktree';
 import { removeWorktree } from './git-utils';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';
@@ -67,6 +67,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize on startup
     await initialize();
+
+    // Check if this workspace was created as a GHP worktree
+    // and offer to start Claude if so
+    checkForSpawnContext();
 }
 
 function registerCommands(context: vscode.ExtensionContext) {

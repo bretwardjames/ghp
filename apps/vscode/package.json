@@ -382,6 +382,21 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically run setup command in new worktrees"
+        },
+        "ghProjects.parallelWork.autoRunClaude": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start Claude when opening a worktree in a new window"
+        },
+        "ghProjects.parallelWork.autoResume": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect and offer to resume previous Claude sessions"
+        },
+        "ghProjects.parallelWork.claudeCommand": {
+          "type": "string",
+          "default": "ghp-start",
+          "description": "Claude slash command to run (e.g., 'ghp-start'). Set to empty string to use default prompt."
         }
       }
     }

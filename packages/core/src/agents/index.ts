@@ -36,9 +36,11 @@ export {
     parseSessionLine,
     formatAction,
     createSessionWatcher,
+    checkTmuxForPermission,
 } from './session-watcher.js';
 
 export type {
     SessionEvent,
     AgentSessionStatus,
+    PermissionPrompt,
 } from './session-watcher.js';

@@ -255,7 +255,9 @@ async function startSessionWatchers(): Promise<void> {
         if (sessionWatchers.has(agent.id)) continue;
 
         try {
-            const watcher = await createSessionWatcher(agent.worktreePath);
+            // Pass tmux window name for permission detection
+            const tmuxWindowName = `ghp-${agent.issueNumber}`;
+            const watcher = await createSessionWatcher(agent.worktreePath, tmuxWindowName);
             if (watcher) {
                 // Update registry when status changes
                 watcher.on('status', (status) => {

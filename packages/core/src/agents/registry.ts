@@ -124,6 +124,12 @@ export function updateAgent(id: string, options: UpdateAgentOptions): AgentInsta
     if (options.error !== undefined) {
         agent.error = options.error;
     }
+    if (options.currentAction !== undefined) {
+        agent.currentAction = options.currentAction;
+    }
+    if (options.waitingForInput !== undefined) {
+        agent.waitingForInput = options.waitingForInput;
+    }
 
     agent.lastSeen = new Date().toISOString();
     saveRegistry(registry);

@@ -209,6 +209,7 @@ export {
     parseSessionLine,
     formatAction,
     createSessionWatcher,
+    checkTmuxForPermission,
 } from './agents/index.js';
 
 export type {
@@ -220,6 +221,7 @@ export type {
     UpdateAgentOptions,
     SessionEvent,
     AgentSessionStatus,
+    PermissionPrompt,
 } from './agents/index.js';
 
 // =============================================================================

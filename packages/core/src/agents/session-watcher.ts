@@ -9,6 +9,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { EventEmitter } from 'events';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * Parsed event from a Claude session file
@@ -93,7 +97,64 @@ export function parseSessionLine(line: string): SessionEvent | null {
         const entry = JSON.parse(line);
         const timestamp = new Date(entry.timestamp || Date.now());
 
-        // Handle tool_use entries
+        // Handle new "progress" wrapper format (Claude 2.1+)
+        if (entry.type === 'progress' && entry.data?.message) {
+            const innerMessage = entry.data.message;
+            const messageType = innerMessage.type;
+            const messageContent = innerMessage.message?.content;
+
+            // Handle assistant messages with tool_use
+            if (messageType === 'assistant' && messageContent) {
+                for (const block of messageContent) {
+                    if (block.type === 'tool_use') {
+                        return {
+                            type: 'tool_start',
+                            timestamp,
+                            toolName: block.name,
+                            toolInput: block.input,
+                        };
+                    }
+                    if (block.type === 'text' && block.text) {
+                        return {
+                            type: 'text',
+                            timestamp,
+                            text: block.text,
+                        };
+                    }
+                    if (block.type === 'thinking') {
+                        return {
+                            type: 'thinking',
+                            timestamp,
+                            text: block.thinking,
+                        };
+                    }
+                }
+            }
+
+            // Handle user messages (tool results)
+            if (messageType === 'user' && messageContent) {
+                for (const block of messageContent) {
+                    if (block.type === 'tool_result') {
+                        // Check for rejection
+                        if (typeof block.content === 'string' && block.content.includes('rejected')) {
+                            return {
+                                type: 'user_input',
+                                timestamp,
+                                interrupted: true,
+                            };
+                        }
+                        // Normal tool result = tool_end
+                        return {
+                            type: 'tool_end',
+                            timestamp,
+                            interrupted: false,
+                        };
+                    }
+                }
+            }
+        }
+
+        // Handle legacy direct format (Claude 2.0 and earlier)
         if (entry.type === 'assistant' && entry.message?.content) {
             for (const block of entry.message.content) {
                 if (block.type === 'tool_use') {
@@ -121,7 +182,7 @@ export function parseSessionLine(line: string): SessionEvent | null {
             }
         }
 
-        // Handle tool results
+        // Handle tool results (legacy)
         if (entry.type === 'user' && entry.toolUseResult !== undefined) {
             return {
                 type: 'tool_end',
@@ -131,7 +192,7 @@ export function parseSessionLine(line: string): SessionEvent | null {
             };
         }
 
-        // Handle user messages (potential permission requests)
+        // Handle user messages (potential permission requests, legacy)
         if (entry.type === 'user' && entry.message?.content) {
             const content = entry.message.content;
             // Check if this is a tool rejection
@@ -187,6 +248,49 @@ export function formatAction(toolName: string, toolInput?: Record<string, unknow
 }
 
 /**
+ * Permission prompt info extracted from tmux pane
+ */
+export interface PermissionPrompt {
+    /** The tool requesting permission */
+    toolName: string;
+    /** Brief description of what it wants to do */
+    description?: string;
+}
+
+/**
+ * Check a tmux pane for Claude permission prompts
+ */
+export async function checkTmuxForPermission(windowName: string): Promise<PermissionPrompt | null> {
+    try {
+        // Use -S -50 to get more scrollback in case prompt is higher up
+        const { stdout } = await execAsync(`tmux capture-pane -t "${windowName}" -p -S -50 2>/dev/null`);
+
+        // Look for permission prompt pattern
+        if (!stdout.includes('Do you want to proceed?')) {
+            return null;
+        }
+
+        // Try to extract tool name from the output
+        // Format: "Tool use\n\n   toolName(args) (MCP)"
+        // Example: "plugin:serena:serena - List Dir(relative_path: ".", recursive: true) (MCP)"
+        const toolMatch = stdout.match(/Tool use\s*\n\s*\n\s*([^\n(]+)\(/);
+        let toolName = toolMatch ? toolMatch[1].trim() : 'Unknown tool';
+
+        // Clean up the tool name (remove MCP suffix indicators)
+        toolName = toolName.replace(/\s*\(MCP\)\s*$/, '').trim();
+
+        // Try to get args/description from the input
+        const argsMatch = stdout.match(/Tool use\s*\n\s*\n\s*[^\n(]+\(([^)]*)\)/);
+        const description = argsMatch ? argsMatch[1].substring(0, 40) : undefined;
+
+        return { toolName, description };
+    } catch {
+        // tmux not available or window doesn't exist
+        return null;
+    }
+}
+
+/**
  * Session Watcher - monitors a Claude session file for events
  */
 export class SessionWatcher extends EventEmitter {
@@ -196,10 +300,13 @@ export class SessionWatcher extends EventEmitter {
     private position: number = 0;
     private status: AgentSessionStatus;
     private isWatching: boolean = false;
+    private tmuxWindow: string | null = null;
+    private tmuxPollInterval: NodeJS.Timeout | null = null;
 
-    constructor(sessionFilePath: string) {
+    constructor(sessionFilePath: string, tmuxWindowName?: string) {
         super();
         this.filePath = sessionFilePath;
+        this.tmuxWindow = tmuxWindowName || null;
         this.status = {
             waitingForInput: false,
             lastActivity: new Date(),
@@ -232,6 +339,11 @@ export class SessionWatcher extends EventEmitter {
                 }
             });
 
+            // Start tmux polling if window name provided
+            if (this.tmuxWindow) {
+                this.startTmuxPolling();
+            }
+
             this.isWatching = true;
             this.emit('started');
         } catch (error) {
@@ -247,8 +359,38 @@ export class SessionWatcher extends EventEmitter {
             this.watcher.close();
             this.watcher = null;
         }
+        if (this.tmuxPollInterval) {
+            clearInterval(this.tmuxPollInterval);
+            this.tmuxPollInterval = null;
+        }
         this.isWatching = false;
         this.emit('stopped');
+    }
+
+    /**
+     * Start polling tmux for permission prompts
+     */
+    private startTmuxPolling(): void {
+        // Poll every 2 seconds
+        this.tmuxPollInterval = setInterval(async () => {
+            if (!this.tmuxWindow) return;
+
+            const prompt = await checkTmuxForPermission(this.tmuxWindow);
+
+            if (prompt && !this.status.waitingForInput) {
+                // Detected a permission prompt
+                this.status.waitingForInput = true;
+                this.status.currentAction = `Waiting: ${prompt.toolName}`;
+                this.status.currentTool = prompt.toolName;
+                this.emit('permission', prompt);
+                this.emit('status', this.getStatus());
+            } else if (!prompt && this.status.waitingForInput) {
+                // Permission prompt cleared (user responded)
+                this.status.waitingForInput = false;
+                // Keep last action until new one comes in
+                this.emit('status', this.getStatus());
+            }
+        }, 2000);
     }
 
     /**
@@ -334,9 +476,14 @@ export class SessionWatcher extends EventEmitter {
 
 /**
  * Create a watcher for an agent's session
+ * @param worktreePath Path to the agent's worktree
+ * @param tmuxWindowName Optional tmux window name for permission detection
  */
-export async function createSessionWatcher(worktreePath: string): Promise<SessionWatcher | null> {
+export async function createSessionWatcher(
+    worktreePath: string,
+    tmuxWindowName?: string
+): Promise<SessionWatcher | null> {
     const sessionFile = await findSessionFile(worktreePath);
     if (!sessionFile) return null;
-    return new SessionWatcher(sessionFile);
+    return new SessionWatcher(sessionFile, tmuxWindowName);
 }

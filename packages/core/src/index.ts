@@ -54,6 +54,7 @@ export {
     getRepositoryRoot,
     sanitizeForBranchName,
     generateBranchName,
+    extractIssueNumberFromBranch,
     getDefaultBranch,
     getLocalBranches,
     getRemoteBranches,

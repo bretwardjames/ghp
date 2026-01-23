@@ -256,6 +256,33 @@ export function generateBranchName(
 }
 
 /**
+ * Extract issue number from a branch name.
+ * Supports common patterns:
+ * - user/123-feature-name
+ * - feature/123-something
+ * - 123-fix-bug
+ * - fix-123-something
+ * - ends with #123 or /123
+ */
+export function extractIssueNumberFromBranch(branchName: string): number | null {
+    const patterns = [
+        /\/(\d+)-/,      // user/123-title
+        /^(\d+)-/,       // 123-title
+        /-(\d+)-/,       // feature-123-title
+        /[/#](\d+)$/,    // ends with #123 or /123
+    ];
+
+    for (const pattern of patterns) {
+        const match = branchName.match(pattern);
+        if (match) {
+            return parseInt(match[1], 10);
+        }
+    }
+
+    return null;
+}
+
+/**
  * Get all local branches
  */
 export async function getLocalBranches(options: GitOptions = {}): Promise<string[]> {

@@ -705,6 +705,177 @@ function registerCommands(context: vscode.ExtensionContext) {
             }
         }),
 
+        // Parent/Child relationship commands
+        vscode.commands.registerCommand('ghProjects.setParent', async (node: unknown) => {
+            if (!(node instanceof ItemNode)) {
+                vscode.window.showErrorMessage('Please select an issue to set a parent for');
+                return;
+            }
+
+            const item = node.item;
+            if (!item.number || !item.repository) {
+                vscode.window.showWarningMessage('Issue number or repository not available');
+                return;
+            }
+
+            const [owner, repo] = item.repository.split('/');
+            if (!owner || !repo) {
+                vscode.window.showWarningMessage('Could not determine repository');
+                return;
+            }
+
+            // Ask user for parent issue number
+            const parentNumberStr = await vscode.window.showInputBox({
+                prompt: `Enter parent issue number for #${item.number}`,
+                placeHolder: 'e.g., 42',
+                validateInput: (value) => {
+                    const num = parseInt(value, 10);
+                    if (isNaN(num) || num <= 0) {
+                        return 'Please enter a valid issue number';
+                    }
+                    if (num === item.number) {
+                        return 'An issue cannot be its own parent';
+                    }
+                    return null;
+                },
+            });
+
+            if (!parentNumberStr) {
+                return;
+            }
+
+            const parentNumber = parseInt(parentNumberStr, 10);
+
+            await vscode.window.withProgress(
+                { location: vscode.ProgressLocation.Notification, title: 'Setting parent issue...' },
+                async () => {
+                    const success = await api.addSubIssue(owner, repo, parentNumber, item.number!);
+                    if (success) {
+                        vscode.window.showInformationMessage(
+                            `Linked #${item.number} as sub-issue of #${parentNumber}`
+                        );
+                        boardProvider.refresh();
+                    } else {
+                        vscode.window.showErrorMessage('Failed to set parent issue');
+                    }
+                }
+            );
+        }),
+
+        vscode.commands.registerCommand('ghProjects.removeParent', async (node: unknown) => {
+            if (!(node instanceof ItemNode)) {
+                vscode.window.showErrorMessage('Please select an issue');
+                return;
+            }
+
+            const item = node.item;
+            if (!item.number || !item.repository) {
+                vscode.window.showWarningMessage('Issue number or repository not available');
+                return;
+            }
+
+            const [owner, repo] = item.repository.split('/');
+            if (!owner || !repo) {
+                vscode.window.showWarningMessage('Could not determine repository');
+                return;
+            }
+
+            await vscode.window.withProgress(
+                { location: vscode.ProgressLocation.Notification, title: 'Checking relationships...' },
+                async () => {
+                    const relationships = await api.getIssueRelationships(owner, repo, item.number!);
+                    if (!relationships) {
+                        vscode.window.showErrorMessage('Could not get issue relationships');
+                        return;
+                    }
+
+                    if (!relationships.parent) {
+                        vscode.window.showInformationMessage(`Issue #${item.number} has no parent`);
+                        return;
+                    }
+
+                    const confirm = await vscode.window.showWarningMessage(
+                        `Remove #${item.number} from parent #${relationships.parent.number}?`,
+                        'Remove',
+                        'Cancel'
+                    );
+
+                    if (confirm === 'Remove') {
+                        const success = await api.removeSubIssue(
+                            owner,
+                            repo,
+                            relationships.parent.number,
+                            item.number!
+                        );
+                        if (success) {
+                            vscode.window.showInformationMessage(
+                                `Removed #${item.number} from parent #${relationships.parent.number}`
+                            );
+                            boardProvider.refresh();
+                        } else {
+                            vscode.window.showErrorMessage('Failed to remove parent');
+                        }
+                    }
+                }
+            );
+        }),
+
+        vscode.commands.registerCommand('ghProjects.addChild', async (node: unknown) => {
+            if (!(node instanceof ItemNode)) {
+                vscode.window.showErrorMessage('Please select an issue to add a child to');
+                return;
+            }
+
+            const item = node.item;
+            if (!item.number || !item.repository) {
+                vscode.window.showWarningMessage('Issue number or repository not available');
+                return;
+            }
+
+            const [owner, repo] = item.repository.split('/');
+            if (!owner || !repo) {
+                vscode.window.showWarningMessage('Could not determine repository');
+                return;
+            }
+
+            // Ask user for child issue number
+            const childNumberStr = await vscode.window.showInputBox({
+                prompt: `Enter issue number to add as child of #${item.number}`,
+                placeHolder: 'e.g., 42',
+                validateInput: (value) => {
+                    const num = parseInt(value, 10);
+                    if (isNaN(num) || num <= 0) {
+                        return 'Please enter a valid issue number';
+                    }
+                    if (num === item.number) {
+                        return 'An issue cannot be its own child';
+                    }
+                    return null;
+                },
+            });
+
+            if (!childNumberStr) {
+                return;
+            }
+
+            const childNumber = parseInt(childNumberStr, 10);
+
+            await vscode.window.withProgress(
+                { location: vscode.ProgressLocation.Notification, title: 'Adding child issue...' },
+                async () => {
+                    const success = await api.addSubIssue(owner, repo, item.number!, childNumber);
+                    if (success) {
+                        vscode.window.showInformationMessage(
+                            `Added #${childNumber} as sub-issue of #${item.number}`
+                        );
+                        boardProvider.refresh();
+                    } else {
+                        vscode.window.showErrorMessage('Failed to add child issue');
+                    }
+                }
+            );
+        }),
+
         vscode.commands.registerCommand('ghProjects.installMcpServer', async () => {
             // Get Claude Desktop config path for current OS
             const home = homedir();

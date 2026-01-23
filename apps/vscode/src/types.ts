@@ -29,6 +29,10 @@ export type {
     LabelInfo,
     FieldInfo,
     AssigneeInfo,
+
+    // Issue Relationships (Parent/Child)
+    RelatedIssue,
+    IssueRelationships,
 } from '@bretwardjames/ghp-core';
 
 // Alias for backwards compatibility

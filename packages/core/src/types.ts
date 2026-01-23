@@ -382,3 +382,28 @@ export interface AssigneeInfo {
     login: string;
     avatarUrl: string | null;
 }
+
+// =============================================================================
+// Issue Relationships (Parent/Child)
+// =============================================================================
+
+/**
+ * A related issue reference (parent or sub-issue)
+ */
+export interface RelatedIssue {
+    id: string;
+    number: number;
+    title: string;
+    state: string;
+}
+
+/**
+ * Issue relationships including parent and sub-issues
+ */
+export interface IssueRelationships {
+    id: string;
+    number: number;
+    title: string;
+    parent: RelatedIssue | null;
+    subIssues: RelatedIssue[];
+}

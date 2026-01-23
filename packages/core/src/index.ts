@@ -226,4 +226,8 @@ export type {
 
     // Configuration
     ProjectConfig,
+
+    // Issue Relationships (Parent/Child)
+    RelatedIssue,
+    IssueRelationships,
 } from './types.js';

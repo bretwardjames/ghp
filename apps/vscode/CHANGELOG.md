@@ -2,6 +2,25 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.2.0-beta.2] - 2026-01-22
+
+### Added
+- **Parallel Agent Spawning** - Full support for AI-assisted parallel work in Cursor/VS Code
+  - Auto-start Claude when opening a worktree in a new window
+  - Persistent worktree context (`.ghp/worktree.json`) survives window restarts
+  - Manual "Start Claude Session" command when you dismiss the prompt
+  - Session resume detection - finds previous Claude sessions and offers to resume
+  - Works with Claude Code extension or falls back to integrated terminal
+- **Descriptive worktree directory names** - Now uses `271-fix-auth-bug` instead of just `271`
+- **New configuration options:**
+  - `parallelWork.autoRunClaude` - Auto-start Claude in new windows (default: true)
+  - `parallelWork.autoResume` - Detect previous sessions (default: true)
+  - `parallelWork.claudeCommand` - Slash command to run (default: `ghp-start`)
+
+### Changed
+- Worktree context is now persistent, allowing "Don't Ask Again" to work across sessions
+- Extension now activates on startup to detect worktree context
+
 ## [0.1.13] - 2026-01-18
 
 ### Added

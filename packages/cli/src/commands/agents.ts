@@ -267,6 +267,11 @@ async function startSessionWatchers(): Promise<void> {
                     });
                 });
 
+                // Handle errors gracefully (don't crash the dashboard)
+                watcher.on('error', () => {
+                    // Silently ignore - file might be temporarily unavailable
+                });
+
                 await watcher.start();
                 sessionWatchers.set(agent.id, watcher);
             }
@@ -343,8 +348,12 @@ export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Prom
     // Initial render
     await refresh();
 
-    // Set up refresh interval
-    const timer = setInterval(refresh, intervalMs);
+    // Set up refresh interval (wrap async to catch errors)
+    const timer = setInterval(() => {
+        refresh().catch(() => {
+            // Silently ignore refresh errors
+        });
+    }, intervalMs);
 
     // Handle Ctrl+C gracefully
     process.on('SIGINT', () => {

@@ -262,6 +262,12 @@ export interface PermissionPrompt {
  */
 export async function checkTmuxForPermission(windowName: string): Promise<PermissionPrompt | null> {
     try {
+        // Validate window name to prevent command injection
+        // Only allow alphanumeric, dashes, and underscores
+        if (!/^[a-zA-Z0-9_-]+$/.test(windowName)) {
+            return null;
+        }
+
         // Use -S -50 to get more scrollback in case prompt is higher up
         const { stdout } = await execAsync(`tmux capture-pane -t "${windowName}" -p -S -50 2>/dev/null`);
 
@@ -313,10 +319,10 @@ export async function checkTmuxForPermission(windowName: string): Promise<Permis
 export class SessionWatcher extends EventEmitter {
     private filePath: string;
     private watcher: fs.FSWatcher | null = null;
-    private fileHandle: fs.promises.FileHandle | null = null;
     private position: number = 0;
     private status: AgentSessionStatus;
     private isWatching: boolean = false;
+    private isReading: boolean = false;
     private tmuxWindow: string | null = null;
     private tmuxPollInterval: NodeJS.Timeout | null = null;
 
@@ -335,7 +341,10 @@ export class SessionWatcher extends EventEmitter {
      * Get current status
      */
     getStatus(): AgentSessionStatus {
-        return { ...this.status };
+        return {
+            ...this.status,
+            recentEvents: [...this.status.recentEvents],
+        };
     }
 
     /**
@@ -414,6 +423,10 @@ export class SessionWatcher extends EventEmitter {
      * Read new lines from the file
      */
     private async readNewLines(): Promise<void> {
+        // Prevent concurrent reads (race condition from rapid fs.watch triggers)
+        if (this.isReading) return;
+        this.isReading = true;
+
         try {
             const handle = await fs.promises.open(this.filePath, 'r');
             const stat = await handle.stat();
@@ -442,6 +455,8 @@ export class SessionWatcher extends EventEmitter {
             }
         } catch (error) {
             this.emit('error', error);
+        } finally {
+            this.isReading = false;
         }
     }
 

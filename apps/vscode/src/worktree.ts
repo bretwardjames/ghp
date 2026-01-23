@@ -402,11 +402,40 @@ function expandPath(path: string): string {
 }
 
 /**
- * Generate a worktree path for an issue
+ * Create a slug from a title (for directory names)
  */
-export function generateWorktreePath(basePath: string, repoName: string, identifier: string | number): string {
+function slugify(text: string, maxLength: number = 40): string {
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with dashes
+        .replace(/^-+|-+$/g, '')       // Trim leading/trailing dashes
+        .slice(0, maxLength)           // Limit length
+        .replace(/-+$/, '');           // Remove trailing dash after slice
+}
+
+/**
+ * Generate a worktree path for an issue.
+ * Format: {basePath}/{repoName}/{number}-{title-slug}
+ * Example: ~/.ghp/worktrees/care/271-macos-stat-fallback
+ */
+export function generateWorktreePath(
+    basePath: string,
+    repoName: string,
+    issueNumber: number | undefined,
+    issueTitle: string
+): string {
     const expandedBase = expandPath(basePath);
-    return join(expandedBase, repoName, String(identifier));
+
+    // Build directory name: {number}-{title-slug} or just {title-slug}
+    let dirName: string;
+    if (issueNumber) {
+        const titleSlug = slugify(issueTitle, 35); // Leave room for number
+        dirName = `${issueNumber}-${titleSlug}`;
+    } else {
+        dirName = slugify(issueTitle, 50);
+    }
+
+    return join(expandedBase, repoName, dirName);
 }
 
 /**
@@ -501,8 +530,8 @@ export async function executeStartInWorktree(
         }
     }
 
-    // Generate worktree path
-    const worktreePath = generateWorktreePath(wtConfig.path, repoName, item.number || branchName);
+    // Generate worktree path with descriptive name
+    const worktreePath = generateWorktreePath(wtConfig.path, repoName, item.number, item.title);
 
     // Check if worktree already exists for this branch
     const existingWorktree = await getWorktreeForBranch(branchName);

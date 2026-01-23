@@ -52,6 +52,10 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
         process.exit(1);
     }
 
+    // Fetch issue details for title (used in worktree path naming)
+    const item = await api.findItemByNumber(repo, issueNumber);
+    const issueTitle = item?.title || `issue-${issueNumber}`;
+
     // Check if branch exists
     if (!(await branchExists(branchName))) {
         console.error(chalk.red('Error:'), `Branch "${branchName}" no longer exists`);
@@ -103,6 +107,7 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
             repo,
             issueNumber,
             branchName,
+            issueTitle,
             options.worktreePath
         );
         if (!result.success) {

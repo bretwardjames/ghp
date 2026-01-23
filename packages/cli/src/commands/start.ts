@@ -273,6 +273,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     repo,
                     issueNumber,
                     linkedBranch,
+                    item.title,
                     options.worktreePath
                 );
                 if (!result.success) {
@@ -482,6 +483,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     repo,
                     issueNumber,
                     newBranchName,
+                    item.title,
                     options.worktreePath
                 );
                 if (!result.success) {

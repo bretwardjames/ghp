@@ -21,7 +21,6 @@ export type { IssueRelationships } from './types';
  * GitHub API client for Projects V2
  * Uses VS Code's built-in GitHub authentication provider
  */
-
 export class GitHubAPI {
     private graphqlClient: typeof graphql | null = null;
     private graphqlWithSubIssues: typeof graphql | null = null;

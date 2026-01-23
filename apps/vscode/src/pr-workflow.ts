@@ -1,37 +1,14 @@
 import * as vscode from 'vscode';
 import { GitHubAPI } from './github-api';
-import { getCurrentBranch } from './git-utils';
+import { getCurrentBranch, extractIssueNumberFromBranch } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 
 /**
  * PR Workflow module - handles status transitions based on PR lifecycle
  */
 
-/**
- * Extract issue number from a branch name.
- * Supports common patterns like:
- * - user/123-feature-name
- * - feature/123-something
- * - 123-fix-bug
- */
-export function extractIssueNumber(branchName: string): number | null {
-    // Try to find a number pattern like /123- or -123- or just 123 at start
-    const patterns = [
-        /\/(\d+)-/,      // user/123-title
-        /^(\d+)-/,       // 123-title
-        /-(\d+)-/,       // feature-123-title
-        /[/#](\d+)$/,    // ends with #123 or /123
-    ];
-
-    for (const pattern of patterns) {
-        const match = branchName.match(pattern);
-        if (match) {
-            return parseInt(match[1], 10);
-        }
-    }
-
-    return null;
-}
+// Re-export for backwards compatibility
+export const extractIssueNumber = extractIssueNumberFromBranch;
 
 /**
  * Find a project item by issue number

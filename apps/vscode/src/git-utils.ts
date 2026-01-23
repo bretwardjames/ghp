@@ -25,7 +25,7 @@ import {
 import type { WorktreeInfo } from '@bretwardjames/ghp-core';
 
 // Re-export pure functions that don't need cwd
-export { sanitizeForBranchName } from '@bretwardjames/ghp-core';
+export { sanitizeForBranchName, extractIssueNumberFromBranch } from '@bretwardjames/ghp-core';
 
 export interface GitStatus {
     currentBranch: string;

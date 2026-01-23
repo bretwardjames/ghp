@@ -10,6 +10,7 @@ import {
     branchExists,
     createBranch,
     checkoutBranch,
+    sanitizeForBranchName,
     // Use core worktree functions with validation
     createWorktree as coreCreateWorktree,
     listWorktrees,
@@ -265,12 +266,21 @@ export async function openClaudeTerminal(context: WorktreeContext, workspacePath
         resumeSession
     );
 
+    // Serialize context for environment variable (with defensive error handling)
+    let contextJson: string;
+    try {
+        contextJson = JSON.stringify(context);
+    } catch (err) {
+        console.error('Failed to serialize worktree context:', err);
+        contextJson = '{}';
+    }
+
     // Create and show terminal
     const terminal = vscode.window.createTerminal({
         name: `Claude: #${context.issue.number}`,
         cwd: workspacePath,
         env: {
-            GHP_SPAWN_CONTEXT: JSON.stringify(context),
+            GHP_SPAWN_CONTEXT: contextJson,
         },
     });
 
@@ -414,15 +424,11 @@ function expandPath(path: string): string {
 }
 
 /**
- * Create a slug from a title (for directory names)
+ * Create a slug from a title (for directory names).
+ * Uses sanitizeForBranchName from core for consistency across CLI and VS Code.
  */
 function slugify(text: string, maxLength: number = 40): string {
-    return text
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with dashes
-        .replace(/^-+|-+$/g, '')       // Trim leading/trailing dashes
-        .slice(0, maxLength)           // Limit length
-        .replace(/-+$/, '');           // Remove trailing dash after slice
+    return sanitizeForBranchName(text).slice(0, maxLength).replace(/-+$/, '');
 }
 
 /**

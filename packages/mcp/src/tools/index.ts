@@ -11,6 +11,7 @@ import { register as registerUpdateIssue } from './update-issue.js';
 import { register as registerAssign } from './assign.js';
 import { register as registerComment } from './comment.js';
 import { register as registerSetField } from './set-field.js';
+import { register as registerWorktree } from './worktree.js';
 
 /**
  * @deprecated Use registerEnabledTools from '../tool-registry.js' instead.
@@ -30,4 +31,7 @@ export function registerAllTools(server: McpServer, context: ServerContext): voi
     registerAssign(server, context);
     registerComment(server, context);
     registerSetField(server, context);
+
+    // Worktree tools (parallel work)
+    registerWorktree(server, context);
 }

@@ -10,12 +10,17 @@ import { getBranchForIssue } from '../branch-linker.js';
 import { applyActiveLabel } from '../active-label.js';
 import { promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
+import { getConfig, getParallelWorkConfig } from '../config.js';
+import { openParallelWorkTerminal } from '../terminal-utils.js';
+import type { SubagentSpawnDirective } from '../types.js';
 
 interface SwitchOptions {
     /** Create worktree instead of switching branches (parallel work mode) */
     parallel?: boolean;
     /** Custom path for parallel worktree */
     worktreePath?: string;
+    /** Whether to open a terminal (default: true with --parallel, set to false with --no-open) */
+    open?: boolean;
 }
 
 export async function switchCommand(issue: string, options: SwitchOptions = {}): Promise<void> {
@@ -135,6 +140,85 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
     if (isParallelMode && worktreePath) {
         console.log();
         console.log(chalk.cyan('Worktree at:'), worktreePath);
-        console.log(chalk.dim('Run:'), `cd ${worktreePath}`);
+
+        // Fetch issue details for the directive
+        const issueDetails = await api.getIssueDetails(repo, issueNumber);
+        const issueTitle = issueDetails?.title || `Issue #${issueNumber}`;
+        // Note: IssueDetails has 'state' (open/closed), not project status
+        // Project status would require a separate query to project items
+        const issueStatus: string | null = null;
+
+        const mainBranch = getConfig('mainBranch') || 'main';
+        // TODO: Use getConfig('memory.namespacePrefix') once memory config is fully integrated
+        const namespacePrefix = 'ghp';
+
+        const directive: SubagentSpawnDirective = {
+            action: 'spawn_subagent',
+            workingDirectory: worktreePath,
+            issue: {
+                number: issueNumber,
+                title: issueTitle,
+                status: issueStatus,
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            },
+            branch: branchName,
+            repository: {
+                owner: repo.owner,
+                name: repo.name,
+                mainBranch,
+            },
+            memory: {
+                namespace: `${namespacePrefix}-issue-${issueNumber}`,
+            },
+            handoffPrompt: `You are now working in a dedicated worktree for issue #${issueNumber}: "${issueTitle}"
+
+Worktree Location: ${worktreePath}
+Branch: ${branchName}
+Status: ${issueStatus || 'None'}
+Repository: ${repo.owner}/${repo.name}
+
+Your task is to implement this issue. The worktree has:
+- Dependencies installed (if worktreeAutoSetup is enabled)
+- Environment files copied from the main repository
+- Isolated git state with the issue branch checked out
+
+Use the GHP tools available via MCP to:
+- Save your progress with save_session
+- Search for relevant context with memory_search
+- Mark the issue done when complete`,
+        };
+
+        // Determine if we should open a terminal
+        const parallelWorkConfig = getParallelWorkConfig();
+        const shouldOpenTerminal = options.open !== false && parallelWorkConfig.openTerminal;
+
+        if (shouldOpenTerminal) {
+            console.log(chalk.dim('Opening terminal...'));
+            const result = await openParallelWorkTerminal(
+                worktreePath,
+                issueNumber,
+                issueTitle,
+                directive
+            );
+
+            if (result.success) {
+                console.log(chalk.green('✓'), 'Opened new terminal with Claude');
+            } else {
+                console.log(chalk.yellow('⚠'), 'Could not open terminal:', result.error);
+                console.log(chalk.dim('Run manually:'), `cd ${worktreePath} && claude`);
+                // Output spawn directive as fallback
+                console.log();
+                console.log('[GHP_SPAWN_DIRECTIVE]');
+                console.log(JSON.stringify(directive, null, 2));
+                console.log('[/GHP_SPAWN_DIRECTIVE]');
+            }
+        } else {
+            // --no-open flag: output spawn directive for scripting/automation
+            console.log(chalk.dim('Run:'), `cd ${worktreePath}`);
+            console.log();
+            console.log('[GHP_SPAWN_DIRECTIVE]');
+            console.log(JSON.stringify(directive, null, 2));
+            console.log('[/GHP_SPAWN_DIRECTIVE]');
+        }
     }
 }

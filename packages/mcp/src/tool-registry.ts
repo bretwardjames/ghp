@@ -17,6 +17,7 @@ import * as updateIssueTool from './tools/update-issue.js';
 import * as assignTool from './tools/assign.js';
 import * as commentTool from './tools/comment.js';
 import * as setFieldTool from './tools/set-field.js';
+import * as worktreeTool from './tools/worktree.js';
 
 // Re-export types
 export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
@@ -43,6 +44,7 @@ const TOOLS: ToolModule[] = [
     assignTool,
     commentTool,
     setFieldTool,
+    worktreeTool,
 ];
 
 /**

@@ -21,8 +21,9 @@ import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
-import { openParallelWorkTerminal } from '../terminal-utils.js';
+import { openParallelWorkTerminal, openAdminPane, isInsideTmux } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
+import { registerAgent, updateAgent, extractIssueNumberFromBranch, getAgentByIssue } from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
@@ -589,6 +590,26 @@ Use the GHP tools available via MCP to:
         const shouldOpenTerminal = options.open !== false && parallelWorkConfig.openTerminal;
 
         if (shouldOpenTerminal) {
+            // Register parent agent (this session) if inside tmux and not already registered
+            if (isInsideTmux()) {
+                const parentBranch = await getCurrentBranch();
+                if (parentBranch) {
+                    const parentIssueNumber = extractIssueNumberFromBranch(parentBranch);
+                    if (parentIssueNumber && !getAgentByIssue(parentIssueNumber)) {
+                        // Get issue title for the parent (we can fetch it or use a placeholder)
+                        const parentAgent = registerAgent({
+                            issueNumber: parentIssueNumber,
+                            issueTitle: `Issue #${parentIssueNumber}`, // Placeholder - could fetch from API
+                            pid: process.pid,
+                            worktreePath: process.cwd(),
+                            branch: parentBranch,
+                        });
+                        updateAgent(parentAgent.id, { status: 'running' });
+                        console.log(chalk.dim(`Parent agent registered: #${parentIssueNumber}`));
+                    }
+                }
+            }
+
             console.log(chalk.dim('Opening terminal...'));
             const result = await openParallelWorkTerminal(
                 worktreePath,
@@ -599,6 +620,25 @@ Use the GHP tools available via MCP to:
 
             if (result.success) {
                 console.log(chalk.green('✓'), 'Opened new terminal with Claude');
+
+                // Register agent in the registry
+                // Note: PID is 0 for now as tmux doesn't return the Claude process PID
+                // Cleanup can identify agents by worktree path instead (#108)
+                const agent = registerAgent({
+                    issueNumber,
+                    issueTitle: item.title,
+                    pid: 0, // placeholder - tmux manages the process
+                    worktreePath: worktreePath!,
+                    branch: branchForDirective,
+                });
+                updateAgent(agent.id, { status: 'running' });
+                console.log(chalk.dim(`Agent registered: ${agent.id.substring(0, 8)}...`));
+
+                // Open admin pane (ghp agents watch) if not already open
+                const adminResult = await openAdminPane();
+                if (adminResult.success && !adminResult.alreadyOpen) {
+                    console.log(chalk.dim('Opened admin pane (ghp-admin window)'));
+                }
             } else {
                 console.log(chalk.yellow('⚠'), 'Could not open terminal:', result.error);
                 console.log(chalk.dim('Run manually:'), `cd ${worktreePath} && claude`);

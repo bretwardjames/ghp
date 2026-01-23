@@ -78,10 +78,14 @@ function getTmuxConfig(): TmuxConfig {
 
 /**
  * Open a new tmux window or pane at the specified directory
+ * @param directory - Working directory for the new window/pane
+ * @param command - Optional command to run
+ * @param windowName - Optional window name (for tracking/killing later)
  */
 export async function openTmuxTerminal(
     directory: string,
-    command?: string
+    command?: string,
+    windowName?: string
 ): Promise<{ success: boolean; error?: string }> {
     const tmuxConfig = getTmuxConfig();
 
@@ -95,10 +99,16 @@ export async function openTmuxTerminal(
                 ? ['split-window', splitFlag, '-c', directory, command]
                 : ['split-window', splitFlag, '-c', directory];
         } else {
-            // Create a new window (default)
-            tmuxArgs = command
-                ? ['new-window', '-c', directory, command]
-                : ['new-window', '-c', directory];
+            // Create a new window (default) with optional name
+            if (windowName) {
+                tmuxArgs = command
+                    ? ['new-window', '-n', windowName, '-c', directory, command]
+                    : ['new-window', '-n', windowName, '-c', directory];
+            } else {
+                tmuxArgs = command
+                    ? ['new-window', '-c', directory, command]
+                    : ['new-window', '-c', directory];
+            }
         }
 
         const child = spawn('tmux', tmuxArgs, {
@@ -119,6 +129,37 @@ export async function openTmuxTerminal(
                 resolve({
                     success: false,
                     error: `tmux exited with code ${code}`,
+                });
+            }
+        });
+    });
+}
+
+/**
+ * Kill a tmux window by name
+ * @param windowName - The name of the window to kill (e.g., "ghp-39")
+ */
+export async function killTmuxWindow(windowName: string): Promise<{ success: boolean; error?: string }> {
+    return new Promise((resolve) => {
+        const child = spawn('tmux', ['kill-window', '-t', windowName], {
+            stdio: 'ignore',
+        });
+
+        child.on('error', (err) => {
+            resolve({
+                success: false,
+                error: `Failed to kill tmux window: ${err.message}`,
+            });
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                resolve({ success: true });
+            } else {
+                // Window might not exist - that's okay
+                resolve({
+                    success: false,
+                    error: `Window "${windowName}" not found`,
                 });
             }
         });
@@ -265,10 +306,14 @@ export async function getClaudeCommand(): Promise<string | null> {
 /**
  * Open a new terminal window at the specified directory and optionally run a command.
  * If running inside tmux and configured to use it, spawns a tmux window/pane instead.
+ * @param directory - Working directory for the new terminal
+ * @param command - Optional command to run
+ * @param windowName - Optional window name for tmux (e.g., "ghp-39")
  */
 export async function openTerminal(
     directory: string,
-    command?: string
+    command?: string,
+    windowName?: string
 ): Promise<{ success: boolean; error?: string }> {
     // Check if we should use tmux
     const parallelConfig = getConfig('parallelWork');
@@ -284,7 +329,7 @@ export async function openTerminal(
             };
         }
         console.log(chalk.dim('Using tmux for parallel terminal...'));
-        return openTmuxTerminal(directory, command);
+        return openTmuxTerminal(directory, command, windowName);
     }
 
     const terminal = await detectTerminal();
@@ -350,8 +395,68 @@ export async function openParallelWorkTerminal(
     const envJson = JSON.stringify(spawnDirective);
     const fullCommand = `export GHP_SPAWN_CONTEXT='${envJson.replace(/'/g, "'\\''")}' && ${command}`;
 
-    const result = await openTerminal(worktreePath, fullCommand);
+    // Name the tmux window with the issue number for tracking/cleanup
+    const windowName = `ghp-${issueNumber}`;
+    const result = await openTerminal(worktreePath, fullCommand, windowName);
     return { ...result, resumed: shouldResume };
+}
+
+/**
+ * Check if the admin pane (ghp agents watch) is already open
+ */
+export async function isAdminPaneOpen(): Promise<boolean> {
+    if (!isInsideTmux()) return false;
+
+    return new Promise((resolve) => {
+        const child = spawn('tmux', ['list-windows', '-F', '#{window_name}'], {
+            stdio: ['ignore', 'pipe', 'ignore'],
+        });
+
+        let output = '';
+        child.stdout.on('data', (data) => {
+            output += data.toString();
+        });
+
+        child.on('close', () => {
+            const windows = output.split('\n').map(w => w.trim());
+            resolve(windows.includes('ghp-admin'));
+        });
+    });
+}
+
+/**
+ * Open the admin pane (ghp agents watch) in a tmux window.
+ * Only opens if not already open.
+ */
+export async function openAdminPane(): Promise<{ success: boolean; alreadyOpen?: boolean; error?: string }> {
+    if (!isInsideTmux()) {
+        return { success: false, error: 'Not inside tmux session' };
+    }
+
+    // Check if admin pane is already open
+    if (await isAdminPaneOpen()) {
+        return { success: true, alreadyOpen: true };
+    }
+
+    // Open ghp agents watch in a new window named ghp-admin
+    const command = 'ghp agents watch';
+    return new Promise((resolve) => {
+        const child = spawn('tmux', ['new-window', '-n', 'ghp-admin', command], {
+            stdio: 'ignore',
+        });
+
+        child.on('error', (err) => {
+            resolve({ success: false, error: `Failed to open admin pane: ${err.message}` });
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                resolve({ success: true });
+            } else {
+                resolve({ success: false, error: `tmux exited with code ${code}` });
+            }
+        });
+    });
 }
 
 /**

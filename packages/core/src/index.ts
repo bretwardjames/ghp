@@ -186,6 +186,38 @@ export type { ProjectConventions } from './conventions.js';
 // Types
 // =============================================================================
 
+// =============================================================================
+// Agent Registry (parallel agent tracking)
+// =============================================================================
+
+export {
+    // Registry functions
+    getRegistryPath,
+    loadRegistry,
+    saveRegistry,
+    registerAgent,
+    updateAgent,
+    unregisterAgent,
+    getAgent,
+    getAgentByIssue,
+    listAgents,
+    getAgentSummaries,
+    cleanupStaleAgents,
+} from './agents/index.js';
+
+export type {
+    AgentStatus,
+    AgentInstance,
+    AgentRegistry,
+    AgentSummary,
+    RegisterAgentOptions,
+    UpdateAgentOptions,
+} from './agents/index.js';
+
+// =============================================================================
+// Types
+// =============================================================================
+
 export type {
     // Authentication & Configuration
     TokenProvider,

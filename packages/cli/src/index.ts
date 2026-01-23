@@ -28,6 +28,7 @@ import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
 import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
+import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 
 const program = new Command();
 
@@ -276,5 +277,31 @@ worktreeCmd
     .alias('ls')
     .description('List all worktrees')
     .action(worktreeListCommand);
+
+// Agent management
+const agentsCmd = program
+    .command('agents')
+    .alias('ag')
+    .description('Manage parallel Claude agents');
+
+agentsCmd
+    .command('list')
+    .alias('ls')
+    .description('List all running agents')
+    .action(agentsListCommand);
+
+agentsCmd
+    .command('stop [issue]')
+    .description('Stop an agent (by issue number) or all agents')
+    .option('-f, --force', 'Skip confirmation')
+    .option('-a, --all', 'Stop all agents')
+    .action(agentsStopCommand);
+
+agentsCmd
+    .command('watch')
+    .alias('w')
+    .description('Watch agents with auto-refresh (simple dashboard)')
+    .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
+    .action(agentsWatchCommand);
 
 program.parse();

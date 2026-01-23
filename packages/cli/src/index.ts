@@ -26,6 +26,7 @@ import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
 import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
+import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 
 const program = new Command();
@@ -55,6 +56,17 @@ program
     .option('--disable-tool <name>', 'Add a tool to mcp.disabledTools')
     .option('--enable-tool <name>', 'Remove a tool from mcp.disabledTools')
     .action(configCommand);
+
+// AI-powered commands
+program
+    .command('plan-epic <title>')
+    .alias('pe')
+    .description('Use AI to break down an epic into actionable issues')
+    .option('-p, --project <project>', 'Target project')
+    .option('-x, --execute', 'Execute plan (create issues)')
+    .option('--dry-run', 'Show what would be created without creating')
+    .option('-c, --context <context>', 'Additional context for planning')
+    .action(planEpicCommand);
 
 // Main views
 program
@@ -147,6 +159,7 @@ program
     .description('Create or view PR for an issue')
     .option('--create', 'Create a new PR')
     .option('--open', 'Open PR in browser')
+    .option('--ai-description', 'Generate PR description using AI (follows CLAUDE.md conventions)')
     .action(prCommand);
 
 // Assignment
@@ -167,6 +180,7 @@ program
     .option('-e, --edit', 'Open $EDITOR to write issue body')
     .option('-t, --template <name>', 'Use an issue template from .github/ISSUE_TEMPLATE/')
     .option('--list-templates', 'List available issue templates')
+    .option('--ai', 'Expand brief title into full issue using AI')
     .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
     // Non-interactive flags
     .option('--no-template', 'Skip template selection (blank issue)')

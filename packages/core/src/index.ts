@@ -128,6 +128,61 @@ export type {
 export * as queries from './queries.js';
 
 // =============================================================================
+// Claude AI Integration
+// =============================================================================
+
+export { ClaudeClient } from './claude/index.js';
+
+export type {
+    // Configuration
+    ApiKeyProvider,
+    ClaudeClientOptions,
+    ResolvedClaudeConfig,
+
+    // Streaming
+    StreamCallbacks,
+
+    // Tools
+    ClaudeTool,
+    ToolContext,
+    ToolHandler,
+    ToolHandlers,
+
+    // Messages
+    Message,
+    ContentBlock,
+    TokenUsage,
+    ClaudeResult,
+
+    // High-level API options
+    GeneratePRDescriptionOptions,
+    PlanEpicOptions,
+    PlanEpicResult,
+    ExpandIssueOptions,
+    ExpandedIssue,
+} from './claude/index.js';
+
+export {
+    GHP_TOOLS,
+    getTools,
+    TOOL_NAMES,
+} from './claude/index.js';
+
+export * as claudePrompts from './claude/prompts/index.js';
+
+// =============================================================================
+// Project Conventions
+// =============================================================================
+
+export {
+    loadProjectConventions,
+    buildConventionsContext,
+    getIssueReferenceText,
+} from './conventions.js';
+
+export type { ProjectConventions } from './conventions.js';
+
+// =============================================================================
 // Types
 // =============================================================================
 

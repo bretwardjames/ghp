@@ -1,12 +1,15 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
-import { getAddIssueDefaults } from '../config.js';
+import { getAddIssueDefaults, getClaudeConfig } from '../config.js';
 import { spawn } from 'child_process';
 import { writeFileSync, readFileSync, unlinkSync, existsSync, readdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { promptSelectWithDefault, isInteractive } from '../prompts.js';
+import { generateWithClaude } from '../claude-runner.js';
+import { runFeedbackLoop } from '../ai-feedback.js';
+import { ClaudeClient, claudePrompts } from '@bretwardjames/ghp-core';
 
 interface AddIssueOptions {
     body?: string;
@@ -19,6 +22,8 @@ interface AddIssueOptions {
     noTemplate?: boolean;
     /** Use default values for all prompts (non-interactive mode) */
     forceDefaults?: boolean;
+    /** Use AI to expand brief description into full issue */
+    ai?: boolean;
     /** Parent issue number to link as sub-issue */
     parent?: string;
 }
@@ -185,9 +190,23 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         }
     }
 
+    // AI expansion: if --ai flag is set, expand the brief title into a full issue
+    if (options.ai && title) {
+        console.log(chalk.dim('Expanding issue with AI...'));
+        console.log();
+
+        const expandedBody = await expandIssueWithAI(title, project.title);
+
+        if (expandedBody) {
+            body = expandedBody;
+            // Skip template selection since we're using AI
+            usingTemplate = false;
+        }
+    }
+
     // Open editor if: using template (always), -e flag, or no body provided
-    // But only if we're in interactive mode
-    const shouldOpenEditor = usingTemplate || options.edit || !options.body;
+    // But only if we're in interactive mode and not using AI (AI has its own feedback loop)
+    const shouldOpenEditor = !options.ai && (usingTemplate || options.edit || !options.body);
     if (shouldOpenEditor && isInteractive()) {
         const instructions = [
             `# ${title || '<Replace with issue title>'}`,
@@ -302,4 +321,75 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
 
     console.log();
     console.log(chalk.dim(`Start working: ${chalk.cyan(`ghp start ${issue.number}`)}`));
+}
+
+/**
+ * Expand a brief issue description into a full issue using AI
+ */
+async function expandIssueWithAI(
+    brief: string,
+    projectName: string
+): Promise<string | null> {
+    const systemPrompt = claudePrompts.EXPAND_ISSUE_PROMPT;
+    const userPrompt = claudePrompts.buildExpandIssueUserPrompt({
+        brief,
+        projectContext: `Project: ${projectName}`,
+    });
+
+    // Try to generate with Claude (handles auth fallback)
+    const initialContent = await generateWithClaude({
+        prompt: userPrompt,
+        systemPrompt,
+        contentType: 'issue description',
+    });
+
+    // If null, user chose to write manually - return null to open editor
+    if (initialContent === null) {
+        return null;
+    }
+
+    // Parse the AI response - it might be JSON or markdown
+    let expandedBody: string;
+    try {
+        const parsed = JSON.parse(initialContent);
+        // If JSON, extract just the body
+        expandedBody = parsed.body || initialContent;
+    } catch {
+        // Not JSON, use as-is
+        expandedBody = initialContent;
+    }
+
+    // Get Claude config for regeneration
+    const claudeConfig = getClaudeConfig();
+
+    // Run feedback loop
+    const result = await runFeedbackLoop({
+        contentType: 'issue description',
+        initialContent: expandedBody,
+        regenerate: async (feedback: string) => {
+            console.log(chalk.dim('Regenerating...'));
+
+            const feedbackPrompt = `${userPrompt}\n\n## User Feedback\nPlease regenerate taking this feedback into account:\n${feedback}`;
+
+            // Try to regenerate with Claude
+            const regenerated = await generateWithClaude({
+                prompt: feedbackPrompt,
+                systemPrompt,
+                contentType: 'issue description',
+            });
+
+            if (regenerated) {
+                try {
+                    const parsed = JSON.parse(regenerated);
+                    return parsed.body || regenerated;
+                } catch {
+                    return regenerated;
+                }
+            }
+
+            return expandedBody;
+        },
+    });
+
+    return result.content;
 }

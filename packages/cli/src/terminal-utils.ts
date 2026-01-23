@@ -50,6 +50,81 @@ export interface TerminalConfig {
 /**
  * Known terminal emulators by platform
  */
+/**
+ * Check if we're running inside a tmux session
+ */
+export function isInsideTmux(): boolean {
+    return !!process.env.TMUX;
+}
+
+/**
+ * Tmux configuration for spawning
+ */
+interface TmuxConfig {
+    mode: 'window' | 'pane';
+    paneDirection?: 'horizontal' | 'vertical';
+}
+
+/**
+ * Get tmux configuration from config
+ */
+function getTmuxConfig(): TmuxConfig {
+    const config = getConfig('parallelWork');
+    return {
+        mode: config?.tmux?.mode ?? 'window',
+        paneDirection: config?.tmux?.paneDirection ?? 'horizontal',
+    };
+}
+
+/**
+ * Open a new tmux window or pane at the specified directory
+ */
+export async function openTmuxTerminal(
+    directory: string,
+    command?: string
+): Promise<{ success: boolean; error?: string }> {
+    const tmuxConfig = getTmuxConfig();
+
+    return new Promise((resolve) => {
+        let tmuxArgs: string[];
+
+        if (tmuxConfig.mode === 'pane') {
+            // Split current window into a new pane
+            const splitFlag = tmuxConfig.paneDirection === 'vertical' ? '-v' : '-h';
+            tmuxArgs = command
+                ? ['split-window', splitFlag, '-c', directory, command]
+                : ['split-window', splitFlag, '-c', directory];
+        } else {
+            // Create a new window (default)
+            tmuxArgs = command
+                ? ['new-window', '-c', directory, command]
+                : ['new-window', '-c', directory];
+        }
+
+        const child = spawn('tmux', tmuxArgs, {
+            stdio: 'ignore',
+        });
+
+        child.on('error', (err) => {
+            resolve({
+                success: false,
+                error: `Failed to open tmux ${tmuxConfig.mode}: ${err.message}`,
+            });
+        });
+
+        child.on('close', (code) => {
+            if (code === 0) {
+                resolve({ success: true });
+            } else {
+                resolve({
+                    success: false,
+                    error: `tmux exited with code ${code}`,
+                });
+            }
+        });
+    });
+}
+
 const TERMINALS: Record<string, Array<{ command: string; args: (dir: string, cmd?: string) => string[] }>> = {
     linux: [
         { command: 'ghostty', args: (dir, cmd) => cmd ? ['--working-directory', dir, '-e', cmd] : ['--working-directory', dir] },
@@ -188,12 +263,30 @@ export async function getClaudeCommand(): Promise<string | null> {
 }
 
 /**
- * Open a new terminal window at the specified directory and optionally run a command
+ * Open a new terminal window at the specified directory and optionally run a command.
+ * If running inside tmux and configured to use it, spawns a tmux window/pane instead.
  */
 export async function openTerminal(
     directory: string,
     command?: string
 ): Promise<{ success: boolean; error?: string }> {
+    // Check if we should use tmux
+    const parallelConfig = getConfig('parallelWork');
+    const preferTmux = parallelConfig?.terminal === 'tmux';
+    const inTmux = isInsideTmux();
+
+    // Use tmux if: explicitly configured OR (inside tmux and not configured otherwise)
+    if (preferTmux || (inTmux && !parallelConfig?.terminal)) {
+        if (!inTmux) {
+            return {
+                success: false,
+                error: 'Configured to use tmux but not running inside a tmux session.',
+            };
+        }
+        console.log(chalk.dim('Using tmux for parallel terminal...'));
+        return openTmuxTerminal(directory, command);
+    }
+
     const terminal = await detectTerminal();
 
     if (!terminal) {
@@ -268,6 +361,11 @@ export async function listAvailableTerminals(): Promise<string[]> {
     const platform = os.platform();
     const terminals = TERMINALS[platform] || [];
     const available: string[] = [];
+
+    // Include tmux if we're inside a tmux session
+    if (isInsideTmux()) {
+        available.push('tmux');
+    }
 
     for (const terminal of terminals) {
         if (await commandExists(terminal.command)) {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-beta.3
+
+### Minor Changes
+
+- adding worktree functions
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.2.0-beta.3
+
 ## 0.2.0-beta.2
 
 ### Minor Changes

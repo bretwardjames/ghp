@@ -1,5 +1,16 @@
 # @bretwardjames/ghp-mcp
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- adding worktree functions
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.2.0-beta.3
+
 ## 0.1.0-beta.1
 
 ### Patch Changes

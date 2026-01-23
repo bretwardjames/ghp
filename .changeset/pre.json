@@ -5,10 +5,12 @@
     "gh-projects": "0.1.13",
     "@bretwardjames/ghp-cli": "0.1.14",
     "@bretwardjames/ghp-core": "0.1.8",
-    "@bretwardjames/ghp-mcp": "0.0.0"
+    "@bretwardjames/ghp-mcp": "0.0.0",
+    "@bretwardjames/ghp-memory": "0.2.0-beta.1"
   },
   "changesets": [
     "giant-bobcats-press",
-    "parallel-worktrees"
+    "parallel-worktrees",
+    "wise-lines-feel"
   ]
 }

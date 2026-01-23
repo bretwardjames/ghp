@@ -1,5 +1,11 @@
 # @bretwardjames/ghp-core
 
+## 0.2.0-beta.3
+
+### Minor Changes
+
+- adding worktree functions
+
 ## 0.2.0-beta.2
 
 ### Minor Changes

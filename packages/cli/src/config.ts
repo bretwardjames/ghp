@@ -84,6 +84,20 @@ export interface McpConfig {
 }
 
 /**
+ * Claude AI configuration
+ */
+export interface ClaudeConfig {
+    /** Auth mode: 'api' (direct API key) or 'cli' (use Claude Code CLI) */
+    auth?: 'api' | 'cli';
+    /** Anthropic API key (can also use ANTHROPIC_API_KEY env var) */
+    apiKey?: string;
+    /** Model to use (default: claude-sonnet-4-20250514) */
+    model?: string;
+    /** Max tokens for responses (default: 4096) */
+    maxTokens?: number;
+}
+
+/**
  * Memory backend configuration
  */
 export interface MemoryConfig {
@@ -134,6 +148,9 @@ export interface Config {
 
     // Memory configuration
     memory?: MemoryConfig;
+
+    // Claude AI configuration
+    claude?: ClaudeConfig;
 
     // Command defaults
     defaults?: {
@@ -444,6 +461,39 @@ export function getMcpConfig(): McpConfig {
 
 export function setConfig<K extends keyof Config>(key: K, value: Config[K], scope: ConfigScope = 'user'): void {
     saveConfig({ [key]: value }, scope);
+}
+
+/**
+ * Resolved Claude configuration with defaults
+ */
+export interface ResolvedClaudeConfig {
+    /** Explicit auth mode from config (if set) */
+    authMode: 'api' | 'cli' | undefined;
+    /** API key (from env or config) */
+    apiKey: string | undefined;
+    /** Model to use */
+    model: string;
+    /** Max tokens */
+    maxTokens: number;
+}
+
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const DEFAULT_CLAUDE_MAX_TOKENS = 4096;
+
+/**
+ * Get the Claude configuration with defaults applied.
+ * Also checks ANTHROPIC_API_KEY environment variable.
+ */
+export function getClaudeConfig(): ResolvedClaudeConfig {
+    const config = loadConfig();
+    const claudeConfig = config.claude || {};
+
+    return {
+        authMode: claudeConfig.auth,
+        apiKey: process.env.ANTHROPIC_API_KEY || claudeConfig.apiKey,
+        model: claudeConfig.model || DEFAULT_CLAUDE_MODEL,
+        maxTokens: claudeConfig.maxTokens || DEFAULT_CLAUDE_MAX_TOKENS,
+    };
 }
 
 export function getShortcut(name: string): PlanShortcut | undefined {

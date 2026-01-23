@@ -1,16 +1,24 @@
 import chalk from 'chalk';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { api } from '../github-api.js';
 import { detectRepository, getCurrentBranch } from '../git-utils.js';
 import { getIssueForBranch } from '../branch-linker.js';
-import { getConfig } from '../config.js';
+import { getConfig, getClaudeConfig } from '../config.js';
+import { loadProjectConventions, buildConventionsContext } from '../conventions.js';
+import { runFeedbackLoop } from '../ai-feedback.js';
+import { generateWithClaude } from '../claude-runner.js';
+import { ClaudeClient, claudePrompts } from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
 interface PrOptions {
     create?: boolean;
     open?: boolean;
+    aiDescription?: boolean;
 }
 
 export async function prCommand(issue: string | undefined, options: PrOptions): Promise<void> {
@@ -50,7 +58,7 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
     }
 
     if (options.create) {
-        await createPr(repo.fullName, issueNumber, linkedIssue?.issueTitle);
+        await createPr(repo.fullName, issueNumber, linkedIssue?.issueTitle, options.aiDescription);
     } else if (options.open) {
         await openPr();
     } else {
@@ -62,7 +70,8 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
 async function createPr(
     repoFullName: string,
     issueNumber: number | null,
-    issueTitle: string | undefined
+    issueTitle: string | undefined,
+    useAiDescription?: boolean
 ): Promise<void> {
     try {
         // Build title from issue if available
@@ -71,12 +80,21 @@ async function createPr(
 
         if (issueNumber && issueTitle) {
             title = issueTitle;
-            body = `Related to #${issueNumber}`;
+            body = `Relates to #${issueNumber}`;
+        }
+
+        // Generate AI description if requested
+        if (useAiDescription) {
+            const aiBody = await generateAiDescription(issueNumber, issueTitle);
+            if (aiBody) {
+                body = aiBody;
+            }
         }
 
         // Use gh CLI to create PR
-        const titleArg = title ? `--title "${title}"` : '';
-        const bodyArg = body ? `--body "${body}"` : '';
+        const titleArg = title ? `--title "${title.replace(/"/g, '\\"')}"` : '';
+        // Use heredoc for body to handle multi-line content
+        const bodyArg = body ? `--body "$(cat <<'EOF'\n${body}\nEOF\n)"` : '';
 
         console.log(chalk.dim('Creating PR...'));
 
@@ -98,6 +116,173 @@ async function createPr(
             process.exit(1);
         }
     }
+}
+
+/**
+ * Open content in user's editor for manual writing
+ */
+async function openEditorForPR(template: string): Promise<string> {
+    const editor = process.env.EDITOR || process.env.VISUAL || 'vim';
+    const tmpFile = join(tmpdir(), `ghp-pr-${Date.now()}.md`);
+
+    writeFileSync(tmpFile, template);
+
+    return new Promise((resolve, reject) => {
+        const child = spawn(editor, [tmpFile], {
+            stdio: 'inherit',
+        });
+
+        child.on('exit', (code) => {
+            if (code !== 0) {
+                if (existsSync(tmpFile)) unlinkSync(tmpFile);
+                reject(new Error(`Editor exited with code ${code}`));
+                return;
+            }
+
+            try {
+                const content = readFileSync(tmpFile, 'utf-8');
+                unlinkSync(tmpFile);
+                resolve(content);
+            } catch (err) {
+                reject(err);
+            }
+        });
+    });
+}
+
+/**
+ * Generate PR description using AI with feedback loop
+ */
+async function generateAiDescription(
+    issueNumber: number | null,
+    issueTitle: string | undefined
+): Promise<string | null> {
+    // Get the diff
+    console.log(chalk.dim('Getting diff...'));
+    let diff: string;
+    try {
+        const mainBranch = getConfig('mainBranch') || 'main';
+        const { stdout } = await execAsync(`git diff ${mainBranch}...HEAD`);
+        diff = stdout;
+    } catch {
+        try {
+            const { stdout } = await execAsync('git diff HEAD~10...HEAD');
+            diff = stdout;
+        } catch {
+            console.error(chalk.red('Error:'), 'Could not get diff');
+            return null;
+        }
+    }
+
+    if (!diff.trim()) {
+        console.log(chalk.yellow('No changes to describe.'));
+        return null;
+    }
+
+    // Get commit messages
+    let commits: string[] = [];
+    try {
+        const mainBranch = getConfig('mainBranch') || 'main';
+        const { stdout } = await execAsync(`git log ${mainBranch}..HEAD --oneline`);
+        commits = stdout.trim().split('\n').filter(Boolean);
+    } catch {
+        // Ignore - commits are optional
+    }
+
+    // Load project conventions
+    const conventions = loadProjectConventions();
+    const conventionsContext = buildConventionsContext(conventions);
+
+    // Build prompts
+    const systemPrompt = claudePrompts.buildPRDescriptionSystemPrompt(conventionsContext);
+    const userPrompt = claudePrompts.buildPRDescriptionUserPrompt({
+        diff,
+        issue: issueNumber && issueTitle ? {
+            number: issueNumber,
+            title: issueTitle,
+            body: '',
+        } : undefined,
+        commits,
+    });
+
+    console.log(chalk.dim('Generating PR description...'));
+    console.log();
+
+    // Try to generate with Claude (handles auth fallback)
+    const initialContent = await generateWithClaude({
+        prompt: userPrompt,
+        systemPrompt,
+        contentType: 'PR description',
+    });
+
+    // If null, user chose to write manually
+    if (initialContent === null) {
+        console.log(chalk.dim('Opening editor for manual PR description...'));
+
+        const template = `## Summary
+<!-- Describe what this PR does -->
+
+## Changes
+<!-- List the key changes -->
+-
+
+## Notes
+<!-- Any additional notes, breaking changes, or migration steps -->
+
+${issueNumber ? `Relates to #${issueNumber}` : ''}
+`;
+
+        try {
+            return await openEditorForPR(template);
+        } catch (err) {
+            console.error(chalk.red('Error:'), 'Editor failed');
+            return null;
+        }
+    }
+
+    // Get Claude config for regeneration
+    const claudeConfig = getClaudeConfig();
+
+    // Run feedback loop
+    const result = await runFeedbackLoop({
+        contentType: 'PR description',
+        initialContent,
+        regenerate: async (feedback: string) => {
+            console.log(chalk.dim('Regenerating...'));
+
+            // For regeneration, we need a Claude client
+            if (!claudeConfig.apiKey) {
+                // Fall back to CLI regeneration
+                const feedbackPrompt = userPrompt + `\n\n## User Feedback\nPlease regenerate taking this feedback into account:\n${feedback}`;
+                const result = await generateWithClaude({
+                    prompt: feedbackPrompt,
+                    systemPrompt,
+                    contentType: 'PR description',
+                });
+                return result || initialContent;
+            }
+
+            const claude = new ClaudeClient({
+                apiKey: claudeConfig.apiKey,
+                model: claudeConfig.model,
+                maxTokens: claudeConfig.maxTokens,
+            });
+
+            return await claude.generatePRDescription({
+                diff,
+                issue: issueNumber && issueTitle ? {
+                    number: issueNumber,
+                    title: issueTitle,
+                    body: '',
+                } : undefined,
+                commits,
+                conventions: conventionsContext,
+                feedback,
+            });
+        },
+    });
+
+    return result.content;
 }
 
 async function openPr(): Promise<void> {

@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { getConfig } from './config.js';
+import { getConfig, getParallelWorkConfig } from './config.js';
 import type { SubagentSpawnDirective } from './types.js';
 
 const execAsync = promisify(exec);
@@ -106,11 +106,11 @@ export function buildClaudeCommand(
     issueNumber: number,
     issueTitle: string,
     worktreePath: string,
-    hasStartCommand: boolean
+    claudeCommand: string | null
 ): string {
-    if (hasStartCommand) {
-        // Use the /start slash command
-        return `claude "/start ${issueNumber}"`;
+    if (claudeCommand) {
+        // Use the configured slash command
+        return `claude "/${claudeCommand} ${issueNumber}"`;
     }
 
     // Fallback: claude with issue context as initial message
@@ -120,26 +120,35 @@ export function buildClaudeCommand(
 }
 
 /**
- * Check if the /start Claude command is installed
+ * Get the Claude command to use, checking if it exists
+ * Returns the command name if found, null otherwise
  */
-export async function hasClaudeStartCommand(): Promise<boolean> {
-    // Check for .claude/commands/start.md in the worktree or home directory
+export async function getClaudeCommand(): Promise<string | null> {
+    const config = getParallelWorkConfig();
+    const commandName = config.claudeCommand ?? 'ghp-start';
+
+    // Empty string means explicitly use fallback
+    if (commandName === '') {
+        return null;
+    }
+
+    // Check for .claude/commands/{commandName}.md in the worktree or home directory
     const homeDir = os.homedir();
     const possiblePaths = [
-        path.join(homeDir, '.claude', 'commands', 'start.md'),
-        path.join(process.cwd(), '.claude', 'commands', 'start.md'),
+        path.join(homeDir, '.claude', 'commands', `${commandName}.md`),
+        path.join(process.cwd(), '.claude', 'commands', `${commandName}.md`),
     ];
 
     for (const p of possiblePaths) {
         try {
             await fs.promises.access(p, fs.constants.F_OK);
-            return true;
+            return commandName;
         } catch {
             // File doesn't exist, try next
         }
     }
 
-    return false;
+    return null;
 }
 
 /**
@@ -192,8 +201,8 @@ export async function openParallelWorkTerminal(
     issueTitle: string,
     spawnDirective: SubagentSpawnDirective
 ): Promise<{ success: boolean; error?: string }> {
-    const hasStart = await hasClaudeStartCommand();
-    const command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, hasStart);
+    const claudeCommand = await getClaudeCommand();
+    const command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, claudeCommand);
 
     // Set the spawn context as an environment variable for Claude to potentially use
     const envJson = JSON.stringify(spawnDirective);

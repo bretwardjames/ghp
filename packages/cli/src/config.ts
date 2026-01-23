@@ -50,6 +50,8 @@ export interface ParallelWorkConfig {
     openTerminal?: boolean;
     /** Whether to auto-run Claude in the new terminal (default: true) */
     autoRunClaude?: boolean;
+    /** Claude slash command to run (default: 'ghp-start', set to empty string to use fallback prompt) */
+    claudeCommand?: string;
 }
 
 /**
@@ -540,6 +542,7 @@ export interface ResolvedParallelWorkConfig {
     terminal?: string;
     openTerminal: boolean;
     autoRunClaude: boolean;
+    claudeCommand?: string;
 }
 
 /**
@@ -550,8 +553,9 @@ export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
     const parallelWork = config.parallelWork ?? {};
     return {
         terminal: parallelWork.terminal,
-        openTerminal: parallelWork.openTerminal ?? DEFAULT_CONFIG.parallelWork!.openTerminal!,
-        autoRunClaude: parallelWork.autoRunClaude ?? DEFAULT_CONFIG.parallelWork!.autoRunClaude!,
+        openTerminal: parallelWork.openTerminal ?? true,
+        autoRunClaude: parallelWork.autoRunClaude ?? true,
+        claudeCommand: parallelWork.claudeCommand,
     };
 }
 

@@ -6,12 +6,17 @@
  */
 
 import chalk from 'chalk';
-import { spawn } from 'child_process';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import { createInterface } from 'readline';
 import { isInteractive } from './prompts.js';
+import { openEditor } from './editor.js';
+
+/** Error thrown when user cancels the feedback loop */
+export class UserCancelledError extends Error {
+    constructor() {
+        super('User cancelled');
+        this.name = 'UserCancelledError';
+    }
+}
 
 export interface FeedbackResult {
     /** The final accepted content */
@@ -20,6 +25,8 @@ export interface FeedbackResult {
     wasEdited: boolean;
     /** Number of regeneration attempts */
     regenerationCount: number;
+    /** Whether the user cancelled */
+    cancelled?: boolean;
 }
 
 export interface FeedbackOptions {
@@ -35,38 +42,6 @@ export interface FeedbackOptions {
     showPreview?: boolean;
     /** Maximum regeneration attempts (default: 5) */
     maxRegenerations?: number;
-}
-
-/**
- * Open content in user's editor
- */
-async function openEditor(content: string, extension: string = '.md'): Promise<string> {
-    const editor = process.env.EDITOR || process.env.VISUAL || 'vim';
-    const tmpFile = join(tmpdir(), `ghp-ai-${Date.now()}${extension}`);
-
-    writeFileSync(tmpFile, content);
-
-    return new Promise((resolve, reject) => {
-        const child = spawn(editor, [tmpFile], {
-            stdio: 'inherit',
-        });
-
-        child.on('exit', (code) => {
-            if (code !== 0) {
-                if (existsSync(tmpFile)) unlinkSync(tmpFile);
-                reject(new Error(`Editor exited with code ${code}`));
-                return;
-            }
-
-            try {
-                const edited = readFileSync(tmpFile, 'utf-8');
-                unlinkSync(tmpFile);
-                resolve(edited);
-            } catch (err) {
-                reject(err);
-            }
-        });
-    });
 }
 
 /**
@@ -206,7 +181,7 @@ export async function runFeedbackLoop(options: FeedbackOptions): Promise<Feedbac
             case 'quit':
             case 'cancel':
                 console.log(chalk.yellow('Cancelled.'));
-                process.exit(0);
+                throw new UserCancelledError();
 
             default:
                 console.log(chalk.yellow('Invalid choice. Please enter a, e, r, or q.'));

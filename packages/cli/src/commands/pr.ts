@@ -1,16 +1,14 @@
 import chalk from 'chalk';
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 import { api } from '../github-api.js';
 import { detectRepository, getCurrentBranch } from '../git-utils.js';
 import { getIssueForBranch } from '../branch-linker.js';
 import { getConfig, getClaudeConfig } from '../config.js';
 import { loadProjectConventions, buildConventionsContext } from '../conventions.js';
-import { runFeedbackLoop } from '../ai-feedback.js';
+import { runFeedbackLoop, UserCancelledError } from '../ai-feedback.js';
 import { generateWithClaude } from '../claude-runner.js';
+import { openEditor } from '../editor.js';
 import { ClaudeClient, claudePrompts } from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
@@ -92,8 +90,10 @@ async function createPr(
         }
 
         // Use gh CLI to create PR
-        const titleArg = title ? `--title "${title.replace(/"/g, '\\"')}"` : '';
-        // Use heredoc for body to handle multi-line content
+        // Escape shell special characters in title
+        const escapeShell = (str: string) => str.replace(/([`$\\"])/g, '\\$1');
+        const titleArg = title ? `--title "${escapeShell(title)}"` : '';
+        // Use heredoc for body to handle multi-line content safely
         const bodyArg = body ? `--body "$(cat <<'EOF'\n${body}\nEOF\n)"` : '';
 
         console.log(chalk.dim('Creating PR...'));
@@ -116,38 +116,6 @@ async function createPr(
             process.exit(1);
         }
     }
-}
-
-/**
- * Open content in user's editor for manual writing
- */
-async function openEditorForPR(template: string): Promise<string> {
-    const editor = process.env.EDITOR || process.env.VISUAL || 'vim';
-    const tmpFile = join(tmpdir(), `ghp-pr-${Date.now()}.md`);
-
-    writeFileSync(tmpFile, template);
-
-    return new Promise((resolve, reject) => {
-        const child = spawn(editor, [tmpFile], {
-            stdio: 'inherit',
-        });
-
-        child.on('exit', (code) => {
-            if (code !== 0) {
-                if (existsSync(tmpFile)) unlinkSync(tmpFile);
-                reject(new Error(`Editor exited with code ${code}`));
-                return;
-            }
-
-            try {
-                const content = readFileSync(tmpFile, 'utf-8');
-                unlinkSync(tmpFile);
-                resolve(content);
-            } catch (err) {
-                reject(err);
-            }
-        });
-    });
 }
 
 /**
@@ -233,7 +201,7 @@ ${issueNumber ? `Relates to #${issueNumber}` : ''}
 `;
 
         try {
-            return await openEditorForPR(template);
+            return await openEditor(template, '.md');
         } catch (err) {
             console.error(chalk.red('Error:'), 'Editor failed');
             return null;

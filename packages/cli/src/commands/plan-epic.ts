@@ -64,7 +64,7 @@ function createToolHandlers(
                 return { error: `Could not find issue #${childNumber}` };
             }
 
-            const updatedBody = `Part of #${parentNumber}\n\n${childDetails.body}`;
+            const updatedBody = `Part of #${parentNumber}\n\n${childDetails.body ?? ''}`;
             const success = await api.updateIssueBody(repo, childNumber, updatedBody);
 
             if (success) {
@@ -129,7 +129,7 @@ function createToolHandlers(
             }
 
             const blockNote = `\n\n**Blocked by:** #${blockingIssue}`;
-            const updatedBody = blockedDetails.body + blockNote;
+            const updatedBody = (blockedDetails.body ?? '') + blockNote;
             const success = await api.updateIssueBody(repo, blockedIssue, updatedBody);
 
             if (success) {

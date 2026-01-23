@@ -1,5 +1,11 @@
 # @bretwardjames/ghp-core
 
+## 0.2.0-beta.2
+
+### Minor Changes
+
+- **Descriptive worktree path generation** - `generateWorktreePath` now accepts optional title for names like `271-fix-auth-bug`
+
 ## 0.2.0-beta.1
 
 ### Minor Changes

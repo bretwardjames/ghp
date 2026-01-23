@@ -80,12 +80,14 @@ export type CreateWorktreeResult = {
  * @param repo - Repository info
  * @param issueNumber - Issue number for path generation
  * @param branchName - Branch to checkout in the worktree
+ * @param issueTitle - Optional issue title for descriptive directory names
  * @param customPath - Optional custom worktree path
  */
 export async function createParallelWorktree(
     repo: RepoInfo,
     issueNumber: number,
     branchName: string,
+    issueTitle?: string,
     customPath?: string
 ): Promise<CreateWorktreeResult> {
     const config = getWorktreeConfig();
@@ -98,8 +100,8 @@ export async function createParallelWorktree(
         };
     }
 
-    // Generate worktree path
-    const wtPath = customPath || generateWorktreePath(config.path, repo.name, issueNumber);
+    // Generate worktree path with descriptive name if title provided
+    const wtPath = customPath || generateWorktreePath(config.path, repo.name, issueNumber, issueTitle);
 
     // Check if worktree already exists for this branch
     const existingWorktree = await getWorktreeForBranch(branchName);

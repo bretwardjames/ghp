@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0-beta.2
+
+### Minor Changes
+
+- **Descriptive worktree directory names** - Worktrees now use names like `271-fix-auth-bug` instead of just `271`
+- **Auto-resume Claude sessions** - Detects previous Claude sessions in worktrees and offers to resume
+- **Subagent spawning support** - `--parallel` mode includes context for spawned Claude agents
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.2.0-beta.2
+
 ## 0.2.0-beta.1
 
 ### Minor Changes

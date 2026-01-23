@@ -44,6 +44,17 @@ Work on multiple issues simultaneously without switching branches:
 - **Start in Worktree** - Creates a git worktree for the issue
 - **Open Worktree** - Opens existing worktree in a new window
 - Automatic setup: copies `.env` files and runs install command
+- **Descriptive directory names** - Worktrees use names like `271-fix-auth-bug`
+
+### AI-Assisted Parallel Work
+
+Seamless Claude integration for worktree-based development:
+
+- **Auto-start Claude** - When opening a worktree, Claude starts automatically with issue context
+- **Session resume** - Detects previous Claude sessions and offers to resume
+- **Persistent context** - Worktree context survives window restarts
+- **Manual trigger** - "Start Claude Session" command when you want to start later
+- Works with Claude Code extension or falls back to integrated terminal
 
 ### Planning Board
 
@@ -88,6 +99,7 @@ Access via Command Palette (Cmd/Ctrl + Shift + P):
 | **GitHub Projects: Start Working** | Start working on selected issue |
 | **GitHub Projects: Start in Worktree** | Start issue in a parallel worktree |
 | **GitHub Projects: Open Worktree** | Open existing worktree in new window |
+| **GitHub Projects: Start Claude Session** | Start Claude in current worktree |
 | **GitHub Projects: New Issue** | Create a new issue |
 | **GitHub Projects: Open Planning Board** | Open full-screen kanban view |
 | **GitHub Projects: Link Branch** | Link current branch to an issue |
@@ -141,6 +153,14 @@ Access via Command Palette (Cmd/Ctrl + Shift + P):
 | `ghProjects.worktreeCopyFiles` | `[".env", ".env.local"]` | Files to copy to new worktrees |
 | `ghProjects.worktreeSetupCommand` | `"pnpm install"` | Setup command for new worktrees |
 | `ghProjects.worktreeAutoSetup` | `true` | Auto-run setup in new worktrees |
+
+### Parallel Work (Claude Integration)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ghProjects.parallelWork.autoRunClaude` | `true` | Auto-start Claude in new worktree windows |
+| `ghProjects.parallelWork.autoResume` | `true` | Detect and offer to resume previous sessions |
+| `ghProjects.parallelWork.claudeCommand` | `"ghp-start"` | Claude slash command to run |
 
 ## Requirements
 

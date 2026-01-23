@@ -495,20 +495,31 @@ export async function worktreeExists(
 }
 
 /**
- * Generate a worktree path based on repo and branch info
+ * Generate a worktree path based on repo and issue info
  * @param basePath - Base directory for worktrees (e.g., ~/.ghp/worktrees)
  * @param repoName - Repository name
  * @param identifier - Issue number or branch name to use as identifier
+ * @param title - Optional title to create a descriptive directory name (e.g., "123-fix-auth-bug")
  * @returns Full path to the worktree directory
  */
 export function generateWorktreePath(
     basePath: string,
     repoName: string,
-    identifier: string | number
+    identifier: string | number,
+    title?: string
 ): string {
     // Sanitize inputs to prevent path traversal and command injection
     const safeRepoName = sanitizeForPath(repoName);
-    const safeIdentifier = sanitizeForPath(String(identifier));
+
+    // Generate directory name: if title provided, use "{number}-{title-slug}" format
+    let dirName: string;
+    if (title && typeof identifier === 'number') {
+        // Create a slug from the title (max 35 chars for the slug portion)
+        const titleSlug = sanitizeForBranchName(title).substring(0, 35).replace(/-$/, '');
+        dirName = `${identifier}-${titleSlug}`;
+    } else {
+        dirName = sanitizeForPath(String(identifier));
+    }
 
     // Expand ~ to home directory using os.homedir() for cross-platform support
     const expandedBase = basePath.startsWith('~')
@@ -517,5 +528,5 @@ export function generateWorktreePath(
 
     // Join path segments, handling trailing slashes
     const cleanBase = expandedBase.replace(/\/+$/, '');
-    return `${cleanBase}/${safeRepoName}/${safeIdentifier}`;
+    return `${cleanBase}/${safeRepoName}/${dirName}`;
 }

@@ -3,7 +3,7 @@
   "private": true,
   "displayName": "GitHub Projects",
   "description": "View GitHub Project boards directly in VS Code - mirrors your project views exactly as configured on GitHub",
-  "version": "0.3.0",
+  "version": "0.2.0-beta.2",
   "publisher": "bretwardjames",
   "license": "MIT",
   "repository": {
@@ -32,7 +32,9 @@
     "issues",
     "kanban"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -110,6 +112,12 @@
         "command": "ghProjects.openWorktree",
         "title": "Open Worktree in New Window",
         "icon": "$(multiple-windows)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.startClaude",
+        "title": "Start Claude Session",
+        "icon": "$(comment-discussion)",
         "category": "GitHub Projects"
       },
       {
@@ -382,6 +390,21 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically run setup command in new worktrees"
+        },
+        "ghProjects.parallelWork.autoRunClaude": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start Claude when opening a worktree in a new window"
+        },
+        "ghProjects.parallelWork.autoResume": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect and offer to resume previous Claude sessions"
+        },
+        "ghProjects.parallelWork.claudeCommand": {
+          "type": "string",
+          "default": "ghp-start",
+          "description": "Claude slash command to run (e.g., 'ghp-start'). Set to empty string to use default prompt."
         }
       }
     }

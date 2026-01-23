@@ -7,7 +7,7 @@ import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropControl
 import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
 import { executeStartWorking } from './start-working';
-import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow, checkForWorktreeContext, startClaudeInWorktree, getCurrentWorktreeContext } from './worktree';
+import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow, checkForWorktreeContext, startClaudeInWorktree } from './worktree';
 import { removeWorktree } from './git-utils';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';

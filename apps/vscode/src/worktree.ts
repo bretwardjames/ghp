@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, copyFileSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync } from 'fs';
+import { existsSync, copyFileSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { GitHubAPI } from './github-api';
@@ -130,6 +130,17 @@ export function getClaudeConfig(): { autoRun: boolean; autoResume: boolean; comm
 }
 
 /**
+ * Escape a string for safe use in shell commands using single quotes.
+ * This is the safest method as single quotes prevent all shell interpretation
+ * except for the single quote character itself.
+ */
+function shellEscape(str: string): string {
+    // Wrap in single quotes and escape any embedded single quotes
+    // 'foo'bar' -> 'foo'\''bar'
+    return "'" + str.replace(/'/g, "'\\''") + "'";
+}
+
+/**
  * Build the Claude command to run in terminal
  */
 export function buildClaudeCommand(
@@ -147,8 +158,9 @@ export function buildClaudeCommand(
     }
 
     // Fallback: claude with issue context as initial message
-    const escapedTitle = issueTitle.replace(/"/g, '\\"').replace(/'/g, "\\'");
-    return `ghp open ${issueNumber} && claude "I'm working on issue #${issueNumber}: ${escapedTitle}. Please help me implement this."`;
+    // Use proper shell escaping to prevent command injection
+    const prompt = `I'm working on issue #${issueNumber}: ${issueTitle}. Please help me implement this.`;
+    return `ghp open ${issueNumber} && claude ${shellEscape(prompt)}`;
 }
 
 /**

@@ -47,9 +47,12 @@ export interface AgentSessionStatus {
 /**
  * Convert a worktree path to Claude's project directory name format.
  * Claude encodes paths like /home/user/project as -home-user-project
+ * Also removes dots from hidden directory names (-.ghp- -> --ghp-)
  */
 function pathToClaudeProjectName(dirPath: string): string {
-    return dirPath.replace(/\//g, '-');
+    return dirPath
+        .replace(/\//g, '-')     // Replace slashes with dashes
+        .replace(/-\./g, '--');  // Remove dots after dashes (hidden dirs: -.ghp -> --ghp)
 }
 
 /**

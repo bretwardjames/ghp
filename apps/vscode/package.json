@@ -192,6 +192,23 @@
         "command": "ghProjects.installMcpServer",
         "title": "Install MCP Server for Claude Desktop",
         "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.setParent",
+        "title": "Set Parent Issue...",
+        "icon": "$(arrow-up)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.removeParent",
+        "title": "Remove Parent",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.addChild",
+        "title": "Add Child Issue...",
+        "icon": "$(add)",
+        "category": "GitHub Projects"
       }
     ],
     "menus": {
@@ -257,6 +274,21 @@
           "command": "ghProjects.openWorktree",
           "when": "viewItem == projectItem",
           "group": "worktree@2"
+        },
+        {
+          "command": "ghProjects.setParent",
+          "when": "viewItem == projectItem",
+          "group": "parent@1"
+        },
+        {
+          "command": "ghProjects.removeParent",
+          "when": "viewItem == projectItem",
+          "group": "parent@2"
+        },
+        {
+          "command": "ghProjects.addChild",
+          "when": "viewItem == projectItem",
+          "group": "parent@3"
         },
         {
           "command": "ghProjects.openProjectInBrowser",

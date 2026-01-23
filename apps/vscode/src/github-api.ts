@@ -17,8 +17,20 @@ import type { RepoInfo } from './repo-detector';
  * GitHub API client for Projects V2
  * Uses VS Code's built-in GitHub authentication provider
  */
+/**
+ * Issue relationship info (parent/sub-issues)
+ */
+export interface IssueRelationships {
+    id: string;
+    number: number;
+    title: string;
+    parent: { id: string; number: number; title: string; state: string } | null;
+    subIssues: Array<{ id: string; number: number; title: string; state: string }>;
+}
+
 export class GitHubAPI {
     private graphqlClient: typeof graphql | null = null;
+    private graphqlWithSubIssues: typeof graphql | null = null;
     private currentUser: string | null = null;
 
     /**
@@ -38,6 +50,14 @@ export class GitHubAPI {
             this.graphqlClient = graphql.defaults({
                 headers: {
                     authorization: `token ${session.accessToken}`,
+                },
+            });
+
+            // Separate client for sub-issues API (experimental feature)
+            this.graphqlWithSubIssues = graphql.defaults({
+                headers: {
+                    authorization: `token ${session.accessToken}`,
+                    'GraphQL-Features': 'sub_issues',
                 },
             });
 
@@ -1907,5 +1927,173 @@ export class GitHubAPI {
 
         // Add label to target issue
         return await this.addLabelToIssue(owner, repo, targetIssueNumber, labelName);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sub-Issue / Parent-Child Relationships
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Get the node ID for an issue
+     */
+    async getIssueNodeId(owner: string, repo: string, issueNumber: number): Promise<string | null> {
+        if (!this.graphqlClient) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            const response = await this.graphqlClient<{
+                repository: {
+                    issue: { id: string } | null;
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $number: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                        issue(number: $number) {
+                            id
+                        }
+                    }
+                }
+            `, { owner, repo, number: issueNumber });
+
+            return response.repository.issue?.id ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Add a sub-issue to a parent issue
+     */
+    async addSubIssue(
+        owner: string,
+        repo: string,
+        parentNumber: number,
+        childNumber: number
+    ): Promise<boolean> {
+        if (!this.graphqlWithSubIssues) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            const [parentId, childId] = await Promise.all([
+                this.getIssueNodeId(owner, repo, parentNumber),
+                this.getIssueNodeId(owner, repo, childNumber),
+            ]);
+
+            if (!parentId || !childId) {
+                return false;
+            }
+
+            await this.graphqlWithSubIssues(`
+                mutation($issueId: ID!, $subIssueId: ID!) {
+                    addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) {
+                        issue { id number title }
+                        subIssue { id number title }
+                    }
+                }
+            `, { issueId: parentId, subIssueId: childId });
+
+            return true;
+        } catch (error) {
+            console.error('Failed to add sub-issue:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Remove a sub-issue from its parent issue
+     */
+    async removeSubIssue(
+        owner: string,
+        repo: string,
+        parentNumber: number,
+        childNumber: number
+    ): Promise<boolean> {
+        if (!this.graphqlWithSubIssues) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            const [parentId, childId] = await Promise.all([
+                this.getIssueNodeId(owner, repo, parentNumber),
+                this.getIssueNodeId(owner, repo, childNumber),
+            ]);
+
+            if (!parentId || !childId) {
+                return false;
+            }
+
+            await this.graphqlWithSubIssues(`
+                mutation($issueId: ID!, $subIssueId: ID!) {
+                    removeSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) {
+                        issue { id number title }
+                        subIssue { id number title }
+                    }
+                }
+            `, { issueId: parentId, subIssueId: childId });
+
+            return true;
+        } catch (error) {
+            console.error('Failed to remove sub-issue:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get issue relationships (parent and sub-issues)
+     */
+    async getIssueRelationships(
+        owner: string,
+        repo: string,
+        issueNumber: number
+    ): Promise<IssueRelationships | null> {
+        if (!this.graphqlWithSubIssues) {
+            throw new Error('Not authenticated');
+        }
+
+        try {
+            const response = await this.graphqlWithSubIssues<{
+                repository: {
+                    issue: {
+                        id: string;
+                        number: number;
+                        title: string;
+                        parent: { id: string; number: number; title: string; state: string } | null;
+                        subIssues: {
+                            nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                        };
+                    } | null;
+                };
+            }>(`
+                query($owner: String!, $repo: String!, $number: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                        issue(number: $number) {
+                            id
+                            number
+                            title
+                            parent { id number title state }
+                            subIssues(first: 50) {
+                                nodes { id number title state }
+                            }
+                        }
+                    }
+                }
+            `, { owner, repo, number: issueNumber });
+
+            const issue = response.repository.issue;
+            if (!issue) return null;
+
+            return {
+                id: issue.id,
+                number: issue.number,
+                title: issue.title,
+                parent: issue.parent,
+                subIssues: issue.subIssues.nodes,
+            };
+        } catch (error) {
+            console.error('Failed to get issue relationships:', error);
+            return null;
+        }
     }
 }

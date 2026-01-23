@@ -26,6 +26,7 @@ import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
 import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
+import { setParentCommand } from './commands/set-parent.js';
 
 const program = new Command();
 
@@ -166,10 +167,19 @@ program
     .option('-e, --edit', 'Open $EDITOR to write issue body')
     .option('-t, --template <name>', 'Use an issue template from .github/ISSUE_TEMPLATE/')
     .option('--list-templates', 'List available issue templates')
+    .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
     // Non-interactive flags
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .action(addIssueCommand);
+
+// Parent/child relationships
+program
+    .command('set-parent <issue>')
+    .description('Set or remove parent issue (sub-issue relationship)')
+    .option('-p, --parent <issue>', 'Parent issue number')
+    .option('--remove', 'Remove current parent')
+    .action(setParentCommand);
 
 // Field management
 program

@@ -19,6 +19,8 @@ interface AddIssueOptions {
     noTemplate?: boolean;
     /** Use default values for all prompts (non-interactive mode) */
     forceDefaults?: boolean;
+    /** Parent issue number to link as sub-issue */
+    parent?: string;
 }
 
 async function openEditor(initialContent: string): Promise<string> {
@@ -280,6 +282,21 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             console.log(chalk.green('Status:'), statusName);
         } else {
             console.log(chalk.yellow('Warning:'), `Status "${statusName}" not found`);
+        }
+    }
+
+    // Link to parent issue if specified
+    if (options.parent) {
+        const parentNumber = parseInt(options.parent, 10);
+        if (isNaN(parentNumber)) {
+            console.log(chalk.yellow('Warning:'), `Invalid parent issue number: ${options.parent}`);
+        } else {
+            const success = await api.addSubIssue(repo, parentNumber, issue.number);
+            if (success) {
+                console.log(chalk.green('Parent:'), `#${parentNumber}`);
+            } else {
+                console.log(chalk.yellow('Warning:'), `Failed to link to parent #${parentNumber}`);
+            }
         }
     }
 

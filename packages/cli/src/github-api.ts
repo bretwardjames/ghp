@@ -83,6 +83,7 @@ export type {
     IssueDetails,
     Collaborator,
     IssueReference,
+    IssueRelationships,
 } from '@bretwardjames/ghp-core';
 
 // Singleton instance for CLI usage

@@ -463,3 +463,50 @@ export const UPDATE_ISSUE_MUTATION = `
         }
     }
 `;
+
+// =============================================================================
+// Sub-Issue Mutations (require GraphQL-Features: sub_issues header)
+// =============================================================================
+
+/**
+ * Mutation to add a sub-issue to a parent issue
+ */
+export const ADD_SUB_ISSUE_MUTATION = `
+    mutation($issueId: ID!, $subIssueId: ID!) {
+        addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) {
+            issue { id number title }
+            subIssue { id number title }
+        }
+    }
+`;
+
+/**
+ * Mutation to remove a sub-issue from a parent issue
+ */
+export const REMOVE_SUB_ISSUE_MUTATION = `
+    mutation($issueId: ID!, $subIssueId: ID!) {
+        removeSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) {
+            issue { id number title }
+            subIssue { id number title }
+        }
+    }
+`;
+
+/**
+ * Query to get issue relationships (parent and sub-issues)
+ */
+export const ISSUE_RELATIONSHIPS_QUERY = `
+    query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+            issue(number: $number) {
+                id
+                number
+                title
+                parent { id number title state }
+                subIssues(first: 50) {
+                    nodes { id number title state }
+                }
+            }
+        }
+    }
+`;

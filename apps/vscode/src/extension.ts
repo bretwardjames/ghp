@@ -7,7 +7,7 @@ import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropControl
 import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
 import { executeStartWorking } from './start-working';
-import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow, checkForSpawnContext } from './worktree';
+import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow, checkForWorktreeContext, startClaudeInWorktree, getCurrentWorktreeContext } from './worktree';
 import { removeWorktree } from './git-utils';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';
@@ -68,9 +68,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize on startup
     await initialize();
 
-    // Check if this workspace was created as a GHP worktree
+    // Check if this workspace is a GHP worktree
     // and offer to start Claude if so
-    checkForSpawnContext();
+    checkForWorktreeContext();
 }
 
 function registerCommands(context: vscode.ExtensionContext) {
@@ -425,6 +425,11 @@ function registerCommands(context: vscode.ExtensionContext) {
             } else {
                 vscode.window.showErrorMessage('Please select an issue or PR');
             }
+        }),
+
+        // Start Claude in current worktree
+        vscode.commands.registerCommand('ghProjects.startClaude', async () => {
+            await startClaudeInWorktree();
         }),
 
         vscode.commands.registerCommand('ghProjects.openPlanningMode', async () => {

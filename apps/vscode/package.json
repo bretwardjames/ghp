@@ -115,6 +115,12 @@
         "category": "GitHub Projects"
       },
       {
+        "command": "ghProjects.startClaude",
+        "title": "Start Claude Session",
+        "icon": "$(comment-discussion)",
+        "category": "GitHub Projects"
+      },
+      {
         "command": "ghProjects.prOpened",
         "title": "PR Opened: Update Issue Status",
         "icon": "$(git-pull-request)",

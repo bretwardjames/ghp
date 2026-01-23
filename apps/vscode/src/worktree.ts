@@ -22,10 +22,10 @@ import { getBranchLinker } from './extension';
 const execAsync = promisify(exec);
 
 /**
- * Spawn context written to worktree for the new window to pick up
+ * Persistent worktree configuration stored in .ghp/worktree.json
+ * This file persists across window reopens to identify GHP worktrees
  */
-export interface SpawnContext {
-    action: 'spawn_subagent';
+export interface WorktreeContext {
     issue: {
         number: number;
         title: string;
@@ -38,26 +38,30 @@ export interface SpawnContext {
         name: string;
     };
     createdAt: string;
+    /** Set to true after user dismisses the "Start Claude?" prompt */
+    claudePromptDismissed?: boolean;
+    /** Set to true when this is a fresh worktree (not yet opened) */
+    isNew?: boolean;
 }
 
-const SPAWN_CONTEXT_FILE = '.ghp/spawn-context.json';
+const WORKTREE_CONFIG_FILE = '.ghp/worktree.json';
 
 /**
- * Write spawn context to worktree for the new window to detect
+ * Write worktree context (persistent, not deleted after use)
  */
-export function writeSpawnContext(worktreePath: string, context: SpawnContext): void {
+export function writeWorktreeContext(worktreePath: string, context: WorktreeContext): void {
     const ghpDir = join(worktreePath, '.ghp');
     if (!existsSync(ghpDir)) {
         mkdirSync(ghpDir, { recursive: true });
     }
-    writeFileSync(join(worktreePath, SPAWN_CONTEXT_FILE), JSON.stringify(context, null, 2));
+    writeFileSync(join(worktreePath, WORKTREE_CONFIG_FILE), JSON.stringify(context, null, 2));
 }
 
 /**
- * Read spawn context from current workspace
+ * Read worktree context from workspace
  */
-export function readSpawnContext(workspacePath: string): SpawnContext | null {
-    const contextPath = join(workspacePath, SPAWN_CONTEXT_FILE);
+export function readWorktreeContext(workspacePath: string): WorktreeContext | null {
+    const contextPath = join(workspacePath, WORKTREE_CONFIG_FILE);
     if (!existsSync(contextPath)) {
         return null;
     }
@@ -69,17 +73,20 @@ export function readSpawnContext(workspacePath: string): SpawnContext | null {
 }
 
 /**
- * Remove spawn context after it's been consumed
+ * Update worktree context (preserves existing fields)
  */
-export function removeSpawnContext(workspacePath: string): void {
-    const contextPath = join(workspacePath, SPAWN_CONTEXT_FILE);
-    if (existsSync(contextPath)) {
-        try {
-            unlinkSync(contextPath);
-        } catch {
-            // Ignore errors
-        }
+export function updateWorktreeContext(workspacePath: string, updates: Partial<WorktreeContext>): void {
+    const existing = readWorktreeContext(workspacePath);
+    if (existing) {
+        writeWorktreeContext(workspacePath, { ...existing, ...updates });
     }
+}
+
+/**
+ * Check if this workspace is a GHP worktree
+ */
+export function isGhpWorktree(workspacePath: string): boolean {
+    return existsSync(join(workspacePath, WORKTREE_CONFIG_FILE));
 }
 
 /**
@@ -170,7 +177,7 @@ function getClaudeExtension(): vscode.Extension<unknown> | undefined {
  * Try to start Claude via the extension's command
  * Returns true if successful, false if should fall back to terminal
  */
-async function tryClaudeExtension(context: SpawnContext, resumeSession: boolean): Promise<boolean> {
+async function tryClaudeExtension(context: WorktreeContext, resumeSession: boolean): Promise<boolean> {
     const claudeExt = getClaudeExtension();
     if (!claudeExt) {
         return false;
@@ -215,9 +222,9 @@ async function tryClaudeExtension(context: SpawnContext, resumeSession: boolean)
 }
 
 /**
- * Open Claude for the spawn context - tries extension first, falls back to terminal
+ * Open Claude for the worktree context - tries extension first, falls back to terminal
  */
-export async function openClaudeTerminal(context: SpawnContext, workspacePath: string): Promise<void> {
+export async function openClaudeTerminal(context: WorktreeContext, workspacePath: string): Promise<void> {
     const claudeConfig = getClaudeConfig();
 
     // Check for existing sessions
@@ -260,52 +267,106 @@ export async function openClaudeTerminal(context: SpawnContext, workspacePath: s
 }
 
 /**
- * Check for spawn context on extension activation and offer to start Claude
+ * Check for worktree context on extension activation and offer to start Claude.
+ * Works for both new worktrees and reopened existing worktrees.
  */
-export async function checkForSpawnContext(): Promise<void> {
+export async function checkForWorktreeContext(): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
         return;
     }
 
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    const context = readSpawnContext(workspacePath);
+    const context = readWorktreeContext(workspacePath);
 
     if (!context) {
         return;
     }
 
-    // Check if context is recent (within last 5 minutes)
-    const createdAt = new Date(context.createdAt);
-    const now = new Date();
-    const ageMinutes = (now.getTime() - createdAt.getTime()) / 1000 / 60;
-
-    if (ageMinutes > 5) {
-        // Context is stale, remove it
-        removeSpawnContext(workspacePath);
+    // If user previously dismissed the prompt, don't ask again
+    if (context.claudePromptDismissed) {
         return;
     }
 
     const claudeConfig = getClaudeConfig();
+    const isNewWorktree = context.isNew === true;
 
-    if (claudeConfig.autoRun) {
-        // Auto-start Claude
+    // For new worktrees with autoRun, start Claude immediately
+    if (isNewWorktree && claudeConfig.autoRun) {
         await openClaudeTerminal(context, workspacePath);
-        removeSpawnContext(workspacePath);
-    } else {
-        // Ask user
-        const action = await vscode.window.showInformationMessage(
-            `This workspace was created for issue #${context.issue.number}: ${context.issue.title}. Start Claude?`,
-            'Start Claude',
-            'Dismiss'
-        );
-
-        if (action === 'Start Claude') {
-            await openClaudeTerminal(context, workspacePath);
-        }
-
-        removeSpawnContext(workspacePath);
+        // Mark as no longer new
+        updateWorktreeContext(workspacePath, { isNew: false });
+        return;
     }
+
+    // For reopened worktrees or when autoRun is disabled, ask the user
+    const sessionCount = detectClaudeSessions(workspacePath);
+    const hasExistingSessions = sessionCount > 0;
+
+    const message = hasExistingSessions
+        ? `GHP Worktree: #${context.issue.number} - ${context.issue.title} (${sessionCount} previous session${sessionCount > 1 ? 's' : ''})`
+        : `GHP Worktree: #${context.issue.number} - ${context.issue.title}`;
+
+    const startLabel = hasExistingSessions ? 'Resume Claude' : 'Start Claude';
+
+    const action = await vscode.window.showInformationMessage(
+        message,
+        startLabel,
+        "Don't Ask Again",
+        'Dismiss'
+    );
+
+    if (action === startLabel) {
+        await openClaudeTerminal(context, workspacePath);
+        // Mark as no longer new
+        if (isNewWorktree) {
+            updateWorktreeContext(workspacePath, { isNew: false });
+        }
+    } else if (action === "Don't Ask Again") {
+        updateWorktreeContext(workspacePath, { claudePromptDismissed: true, isNew: false });
+    } else {
+        // Dismiss - just mark as not new so we ask again next time
+        if (isNewWorktree) {
+            updateWorktreeContext(workspacePath, { isNew: false });
+        }
+    }
+}
+
+/**
+ * Manually start Claude in the current worktree (command handler)
+ */
+export async function startClaudeInWorktree(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage('No workspace folder open');
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    const context = readWorktreeContext(workspacePath);
+
+    if (!context) {
+        vscode.window.showWarningMessage('This is not a GHP worktree');
+        return;
+    }
+
+    // Reset the dismissed flag since user explicitly wants Claude
+    if (context.claudePromptDismissed) {
+        updateWorktreeContext(workspacePath, { claudePromptDismissed: false });
+    }
+
+    await openClaudeTerminal(context, workspacePath);
+}
+
+/**
+ * Get the current worktree context (for status bar, etc.)
+ */
+export function getCurrentWorktreeContext(): WorktreeContext | null {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return null;
+    }
+    return readWorktreeContext(workspaceFolders[0].uri.fsPath);
 }
 
 // Re-export WorktreeInfo for consumers
@@ -488,11 +549,10 @@ export async function executeStartInWorktree(
     // Apply active label (non-exclusive for parallel work)
     await applyActiveLabelNonExclusive(api, item);
 
-    // Write spawn context for the new window to pick up
+    // Write worktree context for the new window to pick up
     if (item.number && item.repository) {
         const [owner, repoNamePart] = item.repository.split('/');
-        const spawnContext: SpawnContext = {
-            action: 'spawn_subagent',
+        const worktreeContext: WorktreeContext = {
             issue: {
                 number: item.number,
                 title: item.title,
@@ -505,8 +565,9 @@ export async function executeStartInWorktree(
                 name: repoNamePart,
             },
             createdAt: new Date().toISOString(),
+            isNew: true, // Mark as new so auto-run works
         };
-        writeSpawnContext(worktreePath, spawnContext);
+        writeWorktreeContext(worktreePath, worktreeContext);
     }
 
     return { success: true, worktreePath };

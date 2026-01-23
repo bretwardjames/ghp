@@ -203,6 +203,13 @@ export {
     listAgents,
     getAgentSummaries,
     cleanupStaleAgents,
+    // Session watcher
+    SessionWatcher,
+    findSessionFile,
+    parseSessionLine,
+    formatAction,
+    createSessionWatcher,
+    checkTmuxForPermission,
 } from './agents/index.js';
 
 export type {
@@ -212,6 +219,9 @@ export type {
     AgentSummary,
     RegisterAgentOptions,
     UpdateAgentOptions,
+    SessionEvent,
+    AgentSessionStatus,
+    PermissionPrompt,
 } from './agents/index.js';
 
 // =============================================================================

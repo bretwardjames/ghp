@@ -12,16 +12,22 @@ import {
     getAgentByIssue,
     unregisterAgent,
     updateAgent,
+    createSessionWatcher,
     type AgentSummary,
     type AgentStatus,
+    type SessionWatcher,
 } from '@bretwardjames/ghp-core';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
 import { killTmuxWindow, isInsideTmux } from '../terminal-utils.js';
+
+// Track active session watchers
+const sessionWatchers: Map<string, SessionWatcher> = new Map();
 
 // Status colors
 const STATUS_COLORS: Record<AgentStatus, (s: string) => string> = {
     starting: chalk.yellow,
     running: chalk.green,
+    waiting: chalk.yellow,
     stopped: chalk.gray,
     error: chalk.red,
 };
@@ -30,6 +36,7 @@ const STATUS_COLORS: Record<AgentStatus, (s: string) => string> = {
 const STATUS_SYMBOLS: Record<AgentStatus, string> = {
     starting: '○',
     running: '●',
+    waiting: '⚠',
     stopped: '○',
     error: '✗',
 };
@@ -37,18 +44,30 @@ const STATUS_SYMBOLS: Record<AgentStatus, string> = {
 /**
  * Format a single agent row for display
  */
-function formatAgentRow(agent: AgentSummary): string {
-    const statusColor = STATUS_COLORS[agent.status];
-    const symbol = STATUS_SYMBOLS[agent.status];
+function formatAgentRow(agent: AgentSummary, showAction: boolean = false): string {
+    // Use 'waiting' status if agent is waiting for input
+    const effectiveStatus: AgentStatus = agent.waitingForInput ? 'waiting' : agent.status;
+    const statusColor = STATUS_COLORS[effectiveStatus];
+    const symbol = STATUS_SYMBOLS[effectiveStatus];
     const portStr = agent.port ? `:${agent.port}` : '';
 
-    return [
-        statusColor(`${symbol} ${agent.status.padEnd(8)}`),
+    const row = [
+        statusColor(`${symbol} ${effectiveStatus.padEnd(8)}`),
         chalk.cyan(`#${agent.issueNumber.toString().padEnd(5)}`),
         agent.issueTitle.substring(0, 40).padEnd(40),
         chalk.dim(agent.uptime.padStart(8)),
         chalk.dim(portStr.padStart(6)),
     ].join('  ');
+
+    // Add action line if showing and available
+    if (showAction && agent.currentAction) {
+        const actionLine = agent.waitingForInput
+            ? chalk.yellow(`  └─ ⚠ ${agent.currentAction}`)
+            : chalk.dim(`  └─ ${agent.currentAction}`);
+        return row + '\n' + actionLine;
+    }
+
+    return row;
 }
 
 /**
@@ -226,6 +245,52 @@ interface AgentsWatchOptions {
 }
 
 /**
+ * Start session watchers for all agents
+ */
+async function startSessionWatchers(): Promise<void> {
+    const agents = listAgents();
+
+    for (const agent of agents) {
+        // Skip if already watching
+        if (sessionWatchers.has(agent.id)) continue;
+
+        try {
+            // Pass tmux window name for permission detection
+            const tmuxWindowName = `ghp-${agent.issueNumber}`;
+            const watcher = await createSessionWatcher(agent.worktreePath, tmuxWindowName);
+            if (watcher) {
+                // Update registry when status changes
+                watcher.on('status', (status) => {
+                    updateAgent(agent.id, {
+                        currentAction: status.currentAction,
+                        waitingForInput: status.waitingForInput,
+                    });
+                });
+
+                // Handle errors gracefully (don't crash the dashboard)
+                watcher.on('error', () => {
+                    // Silently ignore - file might be temporarily unavailable
+                });
+
+                await watcher.start();
+                sessionWatchers.set(agent.id, watcher);
+            }
+        } catch {
+            // Session file might not exist yet
+        }
+    }
+
+    // Clean up watchers for agents that no longer exist
+    const agentIds = new Set(agents.map(a => a.id));
+    for (const [id, watcher] of sessionWatchers) {
+        if (!agentIds.has(id)) {
+            watcher.stop();
+            sessionWatchers.delete(id);
+        }
+    }
+}
+
+/**
  * Watch agents with auto-refresh (simple dashboard)
  */
 export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Promise<void> {
@@ -235,14 +300,26 @@ export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Prom
     console.log(chalk.dim(`Watching agents (refresh every ${intervalSec}s, Ctrl+C to exit)`));
     console.log();
 
-    const refresh = () => {
+    // Start session watchers for all agents
+    await startSessionWatchers();
+
+    const refresh = async () => {
+        // Start watchers for any new agents
+        await startSessionWatchers();
+
         // Clear screen (keep some context)
         process.stdout.write('\x1b[2J\x1b[H');
 
         const summaries = getAgentSummaries();
         const now = new Date().toLocaleTimeString();
 
-        console.log(chalk.bold('Agent Dashboard'), chalk.dim(`[${now}]`));
+        // Count waiting agents for header
+        const waitingCount = summaries.filter(a => a.waitingForInput).length;
+        const headerExtra = waitingCount > 0
+            ? chalk.yellow(` │ ⚠ ${waitingCount} waiting`)
+            : '';
+
+        console.log(chalk.bold('Agent Dashboard'), chalk.dim(`[${now}]`), headerExtra);
         console.log(chalk.dim('─'.repeat(80)));
 
         if (summaries.length === 0) {
@@ -260,7 +337,7 @@ export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Prom
             console.log(chalk.dim('─'.repeat(80)));
 
             for (const agent of summaries) {
-                console.log(formatAgentRow(agent));
+                console.log(formatAgentRow(agent, true)); // Show action
             }
         }
 
@@ -269,14 +346,23 @@ export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Prom
     };
 
     // Initial render
-    refresh();
+    await refresh();
 
-    // Set up refresh interval
-    const timer = setInterval(refresh, intervalMs);
+    // Set up refresh interval (wrap async to catch errors)
+    const timer = setInterval(() => {
+        refresh().catch(() => {
+            // Silently ignore refresh errors
+        });
+    }, intervalMs);
 
     // Handle Ctrl+C gracefully
     process.on('SIGINT', () => {
         clearInterval(timer);
+        // Stop all session watchers
+        for (const watcher of sessionWatchers.values()) {
+            watcher.stop();
+        }
+        sessionWatchers.clear();
         console.log();
         console.log(chalk.dim('Stopped watching.'));
         process.exit(0);

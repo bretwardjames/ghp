@@ -217,6 +217,8 @@ export function getAgentSummaries(): AgentSummary[] {
         port: agent.port,
         branch: agent.branch,
         uptime: formatUptime(agent.startedAt),
+        currentAction: agent.currentAction,
+        waitingForInput: agent.waitingForInput,
     }));
 }
 

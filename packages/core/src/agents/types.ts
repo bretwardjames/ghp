@@ -8,7 +8,7 @@
 /**
  * Current status of an agent
  */
-export type AgentStatus = 'starting' | 'running' | 'stopped' | 'error';
+export type AgentStatus = 'starting' | 'running' | 'waiting' | 'stopped' | 'error';
 
 /**
  * Represents a running Claude agent working on an issue
@@ -46,6 +46,12 @@ export interface AgentInstance {
 
     /** Optional error message if status is 'error' */
     error?: string;
+
+    /** Current action from session watcher */
+    currentAction?: string;
+
+    /** Whether waiting for user input/approval */
+    waitingForInput?: boolean;
 }
 
 /**
@@ -81,6 +87,10 @@ export interface UpdateAgentOptions {
     status?: AgentStatus;
     port?: number;
     error?: string;
+    /** Current action from session watcher */
+    currentAction?: string;
+    /** Whether waiting for user input */
+    waitingForInput?: boolean;
 }
 
 /**
@@ -94,4 +104,8 @@ export interface AgentSummary {
     port?: number;
     branch: string;
     uptime: string; // Human-readable like "2h 15m"
+    /** Current action (from session watcher) */
+    currentAction?: string;
+    /** Whether waiting for user input/approval */
+    waitingForInput?: boolean;
 }

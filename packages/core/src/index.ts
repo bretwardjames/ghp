@@ -203,6 +203,12 @@ export {
     listAgents,
     getAgentSummaries,
     cleanupStaleAgents,
+    // Session watcher
+    SessionWatcher,
+    findSessionFile,
+    parseSessionLine,
+    formatAction,
+    createSessionWatcher,
 } from './agents/index.js';
 
 export type {
@@ -212,6 +218,8 @@ export type {
     AgentSummary,
     RegisterAgentOptions,
     UpdateAgentOptions,
+    SessionEvent,
+    AgentSessionStatus,
 } from './agents/index.js';
 
 // =============================================================================

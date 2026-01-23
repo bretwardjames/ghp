@@ -28,3 +28,17 @@ export {
     getAgentSummaries,
     cleanupStaleAgents,
 } from './registry.js';
+
+// Session watcher
+export {
+    SessionWatcher,
+    findSessionFile,
+    parseSessionLine,
+    formatAction,
+    createSessionWatcher,
+} from './session-watcher.js';
+
+export type {
+    SessionEvent,
+    AgentSessionStatus,
+} from './session-watcher.js';

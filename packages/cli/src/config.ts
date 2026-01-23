@@ -52,6 +52,8 @@ export interface ParallelWorkConfig {
     autoRunClaude?: boolean;
     /** Claude slash command to run (default: 'ghp-start', set to empty string to use fallback prompt) */
     claudeCommand?: string;
+    /** Whether to auto-resume previous Claude sessions when switching to worktree (default: true) */
+    autoResume?: boolean;
 }
 
 /**
@@ -543,6 +545,7 @@ export interface ResolvedParallelWorkConfig {
     openTerminal: boolean;
     autoRunClaude: boolean;
     claudeCommand?: string;
+    autoResume: boolean;
 }
 
 /**
@@ -556,6 +559,7 @@ export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
         openTerminal: parallelWork.openTerminal ?? true,
         autoRunClaude: parallelWork.autoRunClaude ?? true,
         claudeCommand: parallelWork.claudeCommand,
+        autoResume: parallelWork.autoResume ?? true,
     };
 }
 

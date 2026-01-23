@@ -10,6 +10,34 @@ import type { SubagentSpawnDirective } from './types.js';
 const execAsync = promisify(exec);
 
 /**
+ * Convert a directory path to Claude's project directory name format.
+ * Claude encodes paths like /home/user/project as -home-user-project
+ */
+function pathToClaudeProjectName(dirPath: string): string {
+    return dirPath.replace(/\//g, '-');
+}
+
+/**
+ * Check if there are previous Claude sessions for a given directory.
+ * Returns the count of session files found.
+ */
+export async function detectClaudeSessions(worktreePath: string): Promise<number> {
+    const claudeDir = path.join(os.homedir(), '.claude', 'projects');
+    const projectName = pathToClaudeProjectName(worktreePath);
+    const projectDir = path.join(claudeDir, projectName);
+
+    try {
+        const files = await fs.promises.readdir(projectDir);
+        // Count .jsonl files (session transcripts)
+        const sessions = files.filter(f => f.endsWith('.jsonl'));
+        return sessions.length;
+    } catch {
+        // Directory doesn't exist or can't be read
+        return 0;
+    }
+}
+
+/**
  * Terminal emulator configuration
  */
 export interface TerminalConfig {
@@ -100,14 +128,22 @@ export async function detectTerminal(): Promise<{ command: string; args: (dir: s
 }
 
 /**
- * Build the command to run in the new terminal
+ * Build the command to run in the new terminal.
+ * If resumeSession is true, uses `claude --resume` to offer session picker.
  */
 export function buildClaudeCommand(
     issueNumber: number,
     issueTitle: string,
     worktreePath: string,
-    claudeCommand: string | null
+    claudeCommand: string | null,
+    resumeSession: boolean = false
 ): string {
+    if (resumeSession) {
+        // Use --resume to open the interactive session picker
+        // This lets the user choose which previous session to continue
+        return `claude --resume`;
+    }
+
     if (claudeCommand) {
         // Use the configured slash command
         return `claude "/${claudeCommand} ${issueNumber}"`;
@@ -193,22 +229,36 @@ export async function openTerminal(
 }
 
 /**
- * Open a terminal for parallel work on an issue
+ * Open a terminal for parallel work on an issue.
+ * If autoResume is enabled and previous sessions exist, offers to resume.
  */
 export async function openParallelWorkTerminal(
     worktreePath: string,
     issueNumber: number,
     issueTitle: string,
     spawnDirective: SubagentSpawnDirective
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; resumed?: boolean }> {
+    const config = getParallelWorkConfig();
     const claudeCommand = await getClaudeCommand();
-    const command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, claudeCommand);
+
+    // Check if we should try to resume a previous session
+    let shouldResume = false;
+    if (config.autoResume) {
+        const sessionCount = await detectClaudeSessions(worktreePath);
+        if (sessionCount > 0) {
+            shouldResume = true;
+            console.log(chalk.cyan('ℹ'), `Found ${sessionCount} previous Claude session(s) - opening resume picker`);
+        }
+    }
+
+    const command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, claudeCommand, shouldResume);
 
     // Set the spawn context as an environment variable for Claude to potentially use
     const envJson = JSON.stringify(spawnDirective);
     const fullCommand = `export GHP_SPAWN_CONTEXT='${envJson.replace(/'/g, "'\\''")}' && ${command}`;
 
-    return openTerminal(worktreePath, fullCommand);
+    const result = await openTerminal(worktreePath, fullCommand);
+    return { ...result, resumed: shouldResume };
 }
 
 /**

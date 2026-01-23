@@ -25,6 +25,7 @@ export interface TerminalConfig {
 const TERMINALS: Record<string, Array<{ command: string; args: (dir: string, cmd?: string) => string[] }>> = {
     linux: [
         { command: 'ghostty', args: (dir, cmd) => cmd ? ['--working-directory', dir, '-e', cmd] : ['--working-directory', dir] },
+        { command: 'foot', args: (dir, cmd) => cmd ? ['--working-directory', dir, 'bash', '-c', cmd] : ['--working-directory', dir] },
         { command: 'gnome-terminal', args: (dir, cmd) => cmd ? ['--working-directory', dir, '--', 'bash', '-c', cmd] : ['--working-directory', dir] },
         { command: 'konsole', args: (dir, cmd) => cmd ? ['--workdir', dir, '-e', cmd] : ['--workdir', dir] },
         { command: 'xfce4-terminal', args: (dir, cmd) => cmd ? ['--working-directory', dir, '-e', cmd] : ['--working-directory', dir] },

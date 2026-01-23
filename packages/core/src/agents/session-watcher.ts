@@ -270,18 +270,35 @@ export async function checkTmuxForPermission(windowName: string): Promise<Permis
             return null;
         }
 
-        // Try to extract tool name from the output
-        // Format: "Tool use\n\n   toolName(args) (MCP)"
-        // Example: "plugin:serena:serena - List Dir(relative_path: ".", recursive: true) (MCP)"
-        const toolMatch = stdout.match(/Tool use\s*\n\s*\n\s*([^\n(]+)\(/);
-        let toolName = toolMatch ? toolMatch[1].trim() : 'Unknown tool';
+        let toolName = 'Unknown tool';
+        let description: string | undefined;
 
-        // Clean up the tool name (remove MCP suffix indicators)
-        toolName = toolName.replace(/\s*\(MCP\)\s*$/, '').trim();
+        // Try different prompt formats:
 
-        // Try to get args/description from the input
-        const argsMatch = stdout.match(/Tool use\s*\n\s*\n\s*[^\n(]+\(([^)]*)\)/);
-        const description = argsMatch ? argsMatch[1].substring(0, 40) : undefined;
+        // 1. MCP Tool format: "Tool use\n\n   toolName(args) (MCP)"
+        const mcpMatch = stdout.match(/Tool use\s*\n\s*\n\s*([^\n(]+)\(/);
+        if (mcpMatch) {
+            toolName = mcpMatch[1].trim().replace(/\s*\(MCP\)\s*$/, '');
+            const argsMatch = stdout.match(/Tool use\s*\n\s*\n\s*[^\n(]+\(([^)]*)\)/);
+            description = argsMatch ? argsMatch[1].substring(0, 40) : undefined;
+        }
+
+        // 2. Bash command format: "Bash command\n\n   command here"
+        if (toolName === 'Unknown tool') {
+            const bashMatch = stdout.match(/Bash command[^\n]*\n\s*\n\s*([^\n]+)/);
+            if (bashMatch) {
+                toolName = 'Bash';
+                description = bashMatch[1].trim().substring(0, 40);
+            }
+        }
+
+        // 3. Simple tool format: "● ToolName(args)"
+        if (toolName === 'Unknown tool') {
+            const simpleMatch = stdout.match(/●\s*([A-Za-z]+)\s*\(/);
+            if (simpleMatch) {
+                toolName = simpleMatch[1];
+            }
+        }
 
         return { toolName, description };
     } catch {

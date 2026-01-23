@@ -1,14 +1,12 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { parseGitHubUrl, type RepoInfo } from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
-export interface RepoInfo {
-    owner: string;
-    name: string;
-    fullName: string; // owner/name
-}
+// Re-export RepoInfo for consumers
+export type { RepoInfo };
 
 /**
  * Detects the GitHub repository from the current workspace
@@ -34,33 +32,6 @@ export async function detectRepository(): Promise<RepoInfo | null> {
         // Not a git repo or no origin remote
         return null;
     }
-}
-
-/**
- * Parse a GitHub URL (HTTPS or SSH) to extract owner/repo
- */
-function parseGitHubUrl(url: string): RepoInfo | null {
-    // SSH format: git@github.com:owner/repo.git
-    const sshMatch = url.match(/git@github\.com:([^/]+)\/(.+?)(\.git)?$/);
-    if (sshMatch) {
-        return {
-            owner: sshMatch[1],
-            name: sshMatch[2],
-            fullName: `${sshMatch[1]}/${sshMatch[2]}`,
-        };
-    }
-
-    // HTTPS format: https://github.com/owner/repo.git
-    const httpsMatch = url.match(/https?:\/\/github\.com\/([^/]+)\/(.+?)(\.git)?$/);
-    if (httpsMatch) {
-        return {
-            owner: httpsMatch[1],
-            name: httpsMatch[2],
-            fullName: `${httpsMatch[1]}/${httpsMatch[2]}`,
-        };
-    }
-
-    return null;
 }
 
 /**

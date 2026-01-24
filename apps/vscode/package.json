@@ -423,6 +423,12 @@
           "default": true,
           "description": "Automatically run setup command in new worktrees"
         },
+        "ghProjects.worktree.defaultBaseBranch": {
+          "type": "string",
+          "enum": ["ask", "main", "current"],
+          "default": "ask",
+          "description": "Default behavior when creating a new branch for a worktree: 'ask' prompts each time, 'main' always uses main branch (with pull), 'current' uses whatever branch is checked out"
+        },
         "ghProjects.parallelWork.autoRunClaude": {
           "type": "boolean",
           "default": true,

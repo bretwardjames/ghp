@@ -44,6 +44,19 @@ This document describes the complete release workflow for ghp packages.
 | `gh-projects` | VS Code Marketplace + GitHub Releases | VS Code extension |
 | `ghp.nvim` | GitHub Mirror Repo | Neovim plugin |
 
+### VS Code Extension Versioning
+
+The VS Code extension does **not** use `.beta.x` version numbers like npm packages. Instead:
+
+- **Beta releases**: Use the `--pre-release` flag with vsce/ovsx. The version stays at `x.y.z` but is marked as a pre-release in the marketplace.
+- **Stable releases**: Publish without the `--pre-release` flag.
+
+This means the VS Code extension version may drift from npm package versions during beta periods. For example:
+- npm packages: `0.2.0-beta.5`
+- VS Code extension: `0.2.0` (pre-release)
+
+Users opt into pre-release versions via the "Switch to Pre-Release Version" button in VS Code.
+
 ## Prerequisites
 
 Before releasing, ensure you have:
@@ -384,6 +397,23 @@ You can't unpublish from npm easily, but you can:
 ### VS Code extension not showing as pre-release
 
 Make sure you're using `package:beta` or `release:beta` which includes the `--pre-release` flag.
+
+### vsce/ovsx fails with npm errors
+
+If you see errors like `npm ERR! missing:` when running vsce or ovsx, this is because they use `npm list` internally, which doesn't understand pnpm's `workspace:*` dependency syntax.
+
+**Fix**: Use the `--no-dependencies` flag:
+```bash
+# Beta release
+vsce publish --pre-release --no-dependencies
+ovsx publish --pre-release --no-dependencies -p $OVSX_TOKEN
+
+# Stable release
+vsce publish --no-dependencies
+ovsx publish --no-dependencies -p $OVSX_TOKEN
+```
+
+The release scripts already include this flag, but if you're publishing manually, remember to add it.
 
 ---
 

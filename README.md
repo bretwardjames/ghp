@@ -59,8 +59,12 @@ ghp plan                      # View project board
 ghp plan --slice Priority=High # Filter by any field
 ghp plan bugs                 # Use configured shortcuts
 ghp add "Fix login bug"       # Create issue
+ghp add "Title" --parent 42   # Create sub-issue
 ghp move 123 "In Review"      # Change status
 ghp done 123                  # Mark complete
+ghp label 123 bug urgent      # Manage labels
+ghp set-parent 123 --parent 42 # Set parent issue
+ghp progress 42               # Show epic progress
 ```
 
 **Shortcuts** - Define named filter combinations in config:
@@ -84,6 +88,24 @@ ghp worktree remove 123       # Clean up worktree when done
 ```
 
 Each worktree gets automatic setup: copies `.env` files and runs your install command.
+
+### AI-Assisted Features
+
+```bash
+ghp add "Fix login" --ai      # Expand brief title into full issue
+ghp plan-epic "Auth system"   # Break down epic into actionable issues
+ghp pr --ai-description       # Generate PR description from changes
+```
+
+### Agent Management
+
+Manage Claude agents in parallel worktrees:
+
+```bash
+ghp agents list               # List running agents
+ghp agents watch              # Real-time dashboard
+ghp agents stop --all         # Stop all agents
+```
 
 ### MCP Server (AI Assistants)
 

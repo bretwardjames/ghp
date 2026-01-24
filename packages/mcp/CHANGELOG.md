@@ -1,5 +1,29 @@
 # @bretwardjames/ghp-mcp
 
+## 0.1.0-beta.4
+
+### Minor Changes
+
+- Updated to support parent/child relationships and label management from core
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.2.0-beta.5
+
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- adding parallel worktree features
+
+### Patch Changes
+
+- 4544ce7: working our way toward version 2.1
+- Updated dependencies
+- Updated dependencies [4544ce7]
+  - @bretwardjames/ghp-core@0.2.0-beta.4
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

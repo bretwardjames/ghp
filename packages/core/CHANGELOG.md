@@ -1,5 +1,35 @@
 # @bretwardjames/ghp-core
 
+## 0.2.0-beta.5
+
+### Minor Changes
+
+- **Sub-issues API support**
+  - `addSubIssue()` and `removeSubIssue()` mutations
+  - `getIssueRelationships()` to fetch parent and sub-issues
+  - GraphQL client with `sub_issues` feature header
+
+- **Label management APIs**
+  - `addLabelsToIssue()` and `removeLabelsFromIssue()` methods
+  - Label lookup and creation utilities
+
+- **Assignment helpers**
+  - `checkAssignment()` utility to detect current user assignment status
+
+### Patch Changes
+
+- Fix: `getRepoRoot()` now correctly returns main repo path when running in worktrees
+
+## 0.2.0-beta.4
+
+### Minor Changes
+
+- adding parallel worktree features
+
+### Patch Changes
+
+- 4544ce7: working our way toward version 2.1
+
 ## 0.2.0-beta.3
 
 ### Minor Changes

@@ -79,6 +79,12 @@ ghp add "Title" --template bug_report  # Use specific template
 ghp add --list-templates       # List available templates
 ghp add "Title" --status "Backlog"     # Set initial status
 ghp add "Title" --project "My Project" # Specify project
+ghp add "Title" --labels "bug,urgent"  # Apply labels
+ghp add "Title" --assign               # Assign yourself
+ghp add "Title" --assign @user1,@user2 # Assign specific users
+ghp add "Title" --field "Priority=High" # Set project field
+ghp add "Title" --parent 42            # Create as sub-issue
+ghp add "Title" --ai                   # AI-expand brief title
 ghp add "Title" --force-defaults       # Non-interactive mode
 ```
 
@@ -108,6 +114,19 @@ ghp set-field 123 Priority High  # Set any project field
 ghp assign 123                 # Assign yourself
 ghp assign 123 @user1 @user2   # Assign specific users
 ghp assign 123 --remove @user  # Remove assignee
+```
+
+```bash
+ghp label 123 bug urgent       # Add labels
+ghp label 123 bug --remove     # Remove label
+```
+
+### Parent/Child Relationships (Sub-Issues)
+
+```bash
+ghp set-parent 123 --parent 42    # Set parent issue
+ghp set-parent 123 --remove       # Remove parent
+ghp progress 42                   # Show epic progress with sub-issues
 ```
 
 ### Workflow
@@ -177,6 +196,26 @@ ghp switch 456 --parallel      # Open existing issue in worktree
 ghp worktree list              # List all active worktrees
 ghp worktree remove 123        # Remove worktree for issue
 ghp worktree remove 123 --force  # Force remove (uncommitted changes)
+```
+
+### Agent Management
+
+Manage Claude agents running in parallel worktrees:
+
+```bash
+ghp agents list                # List all running agents
+ghp agents stop 123            # Stop agent for specific issue
+ghp agents stop --all          # Stop all agents
+ghp agents watch               # Real-time agent dashboard
+```
+
+### AI-Assisted Features
+
+```bash
+ghp add "Fix login" --ai       # Expand brief title into full issue
+ghp plan-epic "Auth system"    # Break down epic into sub-issues
+ghp plan-epic "Title" -x       # Execute plan (create issues)
+ghp pr --ai-description        # Generate PR description from changes
 ```
 
 ### Configuration

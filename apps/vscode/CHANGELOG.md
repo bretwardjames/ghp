@@ -2,6 +2,17 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.3.2] - 2026-01-23
+
+### Added
+- **Issue relationships in detail panel** - View parent issue and sub-issues directly in the issue detail panel
+- **Epic progress display** - See completion progress for issues with sub-issues
+- **Sub-issue indicators** - Visual indicators showing parent/child relationships in sidebar
+
+### Changed
+- Issue detail panel now shows relationship hierarchy
+- Improved type definitions for issue relationships
+
 ## [0.3.1] - 2026-01-22
 
 ### Added

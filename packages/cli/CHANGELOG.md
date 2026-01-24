@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.2.0-beta.5
+
+### Minor Changes
+
+- **Parent/child issue relationships (sub-issues)**
+  - `ghp set-parent <issue> --parent <parent>` to set parent issue
+  - `ghp set-parent <issue> --remove` to remove parent
+  - `ghp add-issue --parent <issue>` to create sub-issues directly
+  - `ghp progress <issue>` to show epic progress with sub-issue status
+
+- **Label management**
+  - `ghp label <issue> <labels...>` to add labels
+  - `ghp label <issue> <labels...> --remove` to remove labels
+
+- **Enhanced issue creation**
+  - `ghp add-issue --labels <labels>` to apply labels on create
+  - `ghp add-issue --assign [users]` to assign users (empty for self)
+  - `ghp add-issue --field <field=value>` to set project fields
+
+- **Agent management for parallel work**
+  - `ghp agents list` to view running Claude agents
+  - `ghp agents stop [issue]` to stop specific agent
+  - `ghp agents stop --all` to stop all agents
+  - `ghp agents watch` for real-time agent dashboard
+
+- **AI-assisted utilities**
+  - `ghp add-issue --ai` to expand brief title into full issue description
+  - `ghp plan-epic <title>` to break down epics into actionable issues
+  - `ghp pr --ai-description` to generate PR descriptions from changes
+
+### Patch Changes
+
+- Fix: Workspace config (`.ghp/config.json`) now correctly loads from main repo when working in worktrees
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.2.0-beta.5
+
+## 0.2.0-beta.4
+
+### Minor Changes
+
+- adding parallel worktree features
+
+### Patch Changes
+
+- 4544ce7: working our way toward version 2.1
+- Updated dependencies
+- Updated dependencies [4544ce7]
+  - @bretwardjames/ghp-core@0.2.0-beta.4
+
 ## 0.2.0-beta.3
 
 ### Minor Changes
@@ -86,4 +135,4 @@
 
 ### Added
 
-- Initial release with core commands: work, plan, start, done, move, assign, add-issue, open, comment
+- Initial release with core workflow commands

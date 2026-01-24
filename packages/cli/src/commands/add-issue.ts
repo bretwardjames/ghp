@@ -373,7 +373,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         const assignees = (typeof options.assign === 'string' && options.assign.length > 0)
             ? options.assign.split(',').map(u => u.trim()).filter(Boolean)
             : [api.username!]; // No value or empty string means assign to self
-        
+
         if (assignees.length > 0) {
             try {
                 const assigneeList = assignees.join(',');
@@ -389,30 +389,30 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     // Set project fields if specified
     if (options.field && options.field.length > 0) {
         const fields = await api.getProjectFields(project.id);
-        
+
         for (const fieldSpec of options.field) {
             const [fieldName, ...valueParts] = fieldSpec.split('=');
             const value = valueParts.join('='); // Handle values with = in them
-            
+
             if (!fieldName || !value) {
                 console.log(chalk.yellow('Warning:'), `Invalid field format: ${fieldSpec} (use field=value)`);
                 continue;
             }
-            
-            const field = fields.find(f => 
+
+            const field = fields.find(f =>
                 f.name.toLowerCase() === fieldName.toLowerCase()
             );
-            
+
             if (!field) {
                 console.log(chalk.yellow('Warning:'), `Field "${fieldName}" not found`);
                 continue;
             }
-            
+
             // Build value based on field type
             let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string };
-            
+
             if (field.type === 'SingleSelect' && field.options) {
-                const option = field.options.find(o => 
+                const option = field.options.find(o =>
                     o.name.toLowerCase() === value.toLowerCase()
                 );
                 if (!option) {
@@ -430,7 +430,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             } else {
                 fieldValue = { text: value };
             }
-            
+
             const success = await api.setFieldValue(project.id, itemId, field.id, fieldValue);
             if (success) {
                 console.log(chalk.green(`${fieldName}:`), value);

@@ -95,6 +95,9 @@ export interface ProjectItem {
     projectId: string;
     projectTitle: string;
     fields: Record<string, string>;
+    // Parent/child relationships (issues only)
+    parent: RelatedIssue | null;
+    subIssues: RelatedIssue[];
 }
 
 /**

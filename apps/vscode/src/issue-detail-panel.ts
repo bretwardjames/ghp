@@ -30,6 +30,9 @@ interface IssueDetails {
     assignees: string[];
     projectFields: ProjectField[];
     issueType: string | null;
+    // Parent/child relationships
+    parent: { number: number; title: string; state: string } | null;
+    subIssues: Array<{ number: number; title: string; state: string }>;
 }
 
 export class IssueDetailPanel {
@@ -256,6 +259,22 @@ export class IssueDetailPanel {
         const issueData = response.repository.issue;
         const issueType = issueData?.issueType?.name || null;
 
+        // Fetch parent/child relationships for issues
+        let parent: { number: number; title: string; state: string } | null = null;
+        let subIssues: Array<{ number: number; title: string; state: string }> = [];
+
+        if (isIssue && this._item.number) {
+            const relationships = await this._api.getIssueRelationships(
+                owner,
+                repo,
+                this._item.number
+            );
+            if (relationships) {
+                parent = relationships.parent;
+                subIssues = relationships.subIssues;
+            }
+        }
+
         return {
             title: data.title,
             body: data.body || '',
@@ -275,6 +294,8 @@ export class IssueDetailPanel {
             })),
             projectFields,
             issueType,
+            parent,
+            subIssues,
         };
     }
 
@@ -304,6 +325,18 @@ export class IssueDetailPanel {
                 break;
             case 'refresh':
                 await this._loadAndRender();
+                break;
+            case 'setParent':
+                await this._setParent();
+                break;
+            case 'removeParent':
+                await this._removeParent();
+                break;
+            case 'addChild':
+                await this._addChild();
+                break;
+            case 'openIssue':
+                await this._openRelatedIssue(message.number as number);
                 break;
         }
     }
@@ -379,6 +412,140 @@ export class IssueDetailPanel {
             await this._loadAndRender();
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to update description: ${error}`);
+        }
+    }
+
+
+    private async _setParent(): Promise<void> {
+        const [owner, repo] = (this._item.repository || '').split('/');
+        if (!owner || !repo || !this._item.number) {
+            vscode.window.showErrorMessage('Cannot set parent for this item');
+            return;
+        }
+
+        const parentNumberStr = await vscode.window.showInputBox({
+            prompt: `Enter parent issue number for #${this._item.number}`,
+            placeHolder: 'e.g., 42',
+            validateInput: (value) => {
+                const num = parseInt(value, 10);
+                if (isNaN(num) || num <= 0) {
+                    return 'Please enter a valid issue number';
+                }
+                if (num === this._item.number) {
+                    return 'An issue cannot be its own parent';
+                }
+                return null;
+            },
+        });
+
+        if (!parentNumberStr) {
+            return;
+        }
+
+        const parentNumber = parseInt(parentNumberStr, 10);
+
+        try {
+            const success = await this._api.addSubIssue(owner, repo, parentNumber, this._item.number!);
+            if (success) {
+                vscode.window.showInformationMessage(`Linked #${this._item.number} as sub-issue of #${parentNumber}`);
+                await this._loadAndRender();
+            } else {
+                vscode.window.showErrorMessage('Failed to set parent issue');
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to set parent: ${error}`);
+        }
+    }
+
+    private async _removeParent(): Promise<void> {
+        const [owner, repo] = (this._item.repository || '').split('/');
+        if (!owner || !repo || !this._item.number) {
+            vscode.window.showErrorMessage('Cannot remove parent for this item');
+            return;
+        }
+
+        const relationships = await this._api.getIssueRelationships(owner, repo, this._item.number);
+        if (!relationships || !relationships.parent) {
+            vscode.window.showInformationMessage(`Issue #${this._item.number} has no parent`);
+            return;
+        }
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Remove #${this._item.number} from parent #${relationships.parent.number}?`,
+            'Remove',
+            'Cancel'
+        );
+
+        if (confirm === 'Remove') {
+            try {
+                const success = await this._api.removeSubIssue(
+                    owner,
+                    repo,
+                    relationships.parent.number,
+                    this._item.number!
+                );
+                if (success) {
+                    vscode.window.showInformationMessage(
+                        `Removed #${this._item.number} from parent #${relationships.parent.number}`
+                    );
+                    await this._loadAndRender();
+                } else {
+                    vscode.window.showErrorMessage('Failed to remove parent');
+                }
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to remove parent: ${error}`);
+            }
+        }
+    }
+
+    private async _addChild(): Promise<void> {
+        const [owner, repo] = (this._item.repository || '').split('/');
+        if (!owner || !repo || !this._item.number) {
+            vscode.window.showErrorMessage('Cannot add child to this item');
+            return;
+        }
+
+        const childNumberStr = await vscode.window.showInputBox({
+            prompt: `Enter issue number to add as child of #${this._item.number}`,
+            placeHolder: 'e.g., 42',
+            validateInput: (value) => {
+                const num = parseInt(value, 10);
+                if (isNaN(num) || num <= 0) {
+                    return 'Please enter a valid issue number';
+                }
+                if (num === this._item.number) {
+                    return 'An issue cannot be its own child';
+                }
+                return null;
+            },
+        });
+
+        if (!childNumberStr) {
+            return;
+        }
+
+        const childNumber = parseInt(childNumberStr, 10);
+
+        try {
+            const success = await this._api.addSubIssue(owner, repo, this._item.number!, childNumber);
+            if (success) {
+                vscode.window.showInformationMessage(`Added #${childNumber} as sub-issue of #${this._item.number}`);
+                await this._loadAndRender();
+            } else {
+                vscode.window.showErrorMessage('Failed to add child issue');
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to add child: ${error}`);
+        }
+    }
+
+    private async _openRelatedIssue(issueNumber: number): Promise<void> {
+        // Find the issue in the project items and open its detail panel
+        // For now, just open in browser as we don't have direct access to other items
+        const [owner, repo] = (this._item.repository || '').split('/');
+        if (owner && repo) {
+            const url = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
+            vscode.env.openExternal(vscode.Uri.parse(url));
         }
     }
 
@@ -563,6 +730,38 @@ export class IssueDetailPanel {
             })
             .join('');
 
+        // Generate parent/child relationships HTML
+        const parentHtml = details.parent
+            ? `
+                <div class="relationship-item parent">
+                    <span class="relation-icon">↑</span>
+                    <a href="#" onclick="openIssue(${details.parent.number}); return false;">
+                        #${details.parent.number}
+                    </a>
+                    <span class="relation-title">${this._escapeHtml(details.parent.title)}</span>
+                    ${details.parent.state === 'CLOSED' ? '<span class="state-closed">✓</span>' : ''}
+                </div>
+            `
+            : '';
+
+        const subIssuesHtml = details.subIssues.length > 0
+            ? details.subIssues.map(sub => `
+                <div class="relationship-item child">
+                    <span class="relation-icon">↓</span>
+                    <a href="#" onclick="openIssue(${sub.number}); return false;">
+                        #${sub.number}
+                    </a>
+                    <span class="relation-title">${this._escapeHtml(sub.title)}</span>
+                    ${sub.state === 'CLOSED' ? '<span class="state-closed">✓</span>' : ''}
+                </div>
+            `).join('')
+            : '';
+
+        const hasRelationships = details.parent || details.subIssues.length > 0;
+        const completedCount = details.subIssues.filter(s => s.state === 'CLOSED').length;
+        const totalCount = details.subIssues.length;
+        const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
         return `
             <!DOCTYPE html>
             <html>
@@ -644,6 +843,82 @@ export class IssueDetailPanel {
                     .no-assignee {
                         color: var(--vscode-descriptionForeground);
                         font-style: italic;
+                    }
+                    .relationships {
+                        margin-top: 15px;
+                        padding: 15px;
+                        background: var(--vscode-sideBar-background);
+                        border-radius: 4px;
+                    }
+                    .relationships-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 10px;
+                    }
+                    .relationships-title {
+                        font-weight: bold;
+                        font-size: 0.9em;
+                        color: var(--vscode-descriptionForeground);
+                    }
+                    .relationships-actions {
+                        display: flex;
+                        gap: 8px;
+                    }
+                    .relationships-actions button {
+                        padding: 2px 8px;
+                        font-size: 0.8em;
+                        background: var(--vscode-button-secondaryBackground);
+                        color: var(--vscode-button-secondaryForeground);
+                        border: none;
+                        border-radius: 3px;
+                        cursor: pointer;
+                    }
+                    .relationships-actions button:hover {
+                        background: var(--vscode-button-secondaryHoverBackground);
+                    }
+                    .relationship-item {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 4px 0;
+                    }
+                    .relation-icon {
+                        color: var(--vscode-descriptionForeground);
+                        font-size: 0.9em;
+                    }
+                    .relationship-item a {
+                        color: var(--vscode-textLink-foreground);
+                        text-decoration: none;
+                        font-weight: 500;
+                    }
+                    .relationship-item a:hover {
+                        text-decoration: underline;
+                    }
+                    .relation-title {
+                        color: var(--vscode-foreground);
+                        flex: 1;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+                    .state-closed {
+                        color: var(--vscode-testing-iconPassed, #4caf50);
+                    }
+                    .progress-section {
+                        margin-top: 8px;
+                        padding-top: 8px;
+                        border-top: 1px solid var(--vscode-panel-border);
+                    }
+                    .progress-bar {
+                        height: 6px;
+                        background: var(--vscode-progressBar-background, #0e639c);
+                        border-radius: 3px;
+                        margin: 4px 0;
+                    }
+                    .progress-text {
+                        font-size: 0.85em;
+                        color: var(--vscode-descriptionForeground);
                     }
                     .edit-btn {
                         background: none;
@@ -833,6 +1108,36 @@ export class IssueDetailPanel {
                             ${fieldsHtml}
                         </div>
                     ` : ''}
+                    ${this._item.type === 'issue' ? `
+                        <div class="relationships">
+                            <div class="relationships-header">
+                                <span class="relationships-title">RELATIONSHIPS</span>
+                                <div class="relationships-actions">
+                                    ${details.parent ? `<button onclick="removeParent()">Remove Parent</button>` : `<button onclick="setParent()">Set Parent</button>`}
+                                    <button onclick="addChild()">Add Child</button>
+                                </div>
+                            </div>
+                            ${parentHtml ? `
+                                <div class="parent-section">
+                                    <div style="font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-bottom: 4px;">Parent</div>
+                                    ${parentHtml}
+                                </div>
+                            ` : ''}
+                            ${subIssuesHtml ? `
+                                <div class="children-section" ${parentHtml ? 'style="margin-top: 12px;"' : ''}>
+                                    <div style="font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-bottom: 4px;">Sub-issues (${completedCount}/${totalCount})</div>
+                                    ${subIssuesHtml}
+                                    ${totalCount > 0 ? `
+                                        <div class="progress-section">
+                                            <div class="progress-bar" style="width: ${progressPct}%;"></div>
+                                            <div class="progress-text">${progressPct}% complete</div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                            ${!hasRelationships ? '<div style="color: var(--vscode-descriptionForeground); font-style: italic;">No parent or sub-issues</div>' : ''}
+                        </div>
+                    ` : ''}
                 </div>
 
                 <div class="body">
@@ -921,6 +1226,22 @@ export class IssueDetailPanel {
                     function saveDescription() {
                         const newBody = document.getElementById('descriptionInput').value;
                         vscode.postMessage({ type: 'saveDescription', newBody });
+                    }
+
+                    function setParent() {
+                        vscode.postMessage({ type: 'setParent' });
+                    }
+
+                    function removeParent() {
+                        vscode.postMessage({ type: 'removeParent' });
+                    }
+
+                    function addChild() {
+                        vscode.postMessage({ type: 'addChild' });
+                    }
+
+                    function openIssue(number) {
+                        vscode.postMessage({ type: 'openIssue', number });
                     }
                 </script>
             </body>

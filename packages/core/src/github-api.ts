@@ -208,7 +208,8 @@ export class GitHubAPI {
      * Get items from a project
      */
     async getProjectItems(projectId: string, projectTitle: string): Promise<ProjectItem[]> {
-        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+        // Use graphqlWithSubIssues to get parent/child relationships
+        if (!this.graphqlWithSubIssues) throw new Error('Not authenticated');
 
         // First, get the status field to build a status order map
         const statusField = await this.getStatusField(projectId);
@@ -250,11 +251,15 @@ export class GitHubAPI {
                                 nodes: Array<{ name: string; color: string }>;
                             };
                             repository?: { name: string };
+                            parent?: { id: string; number: number; title: string; state: string } | null;
+                            subIssues?: {
+                                nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                            };
                         } | null;
                     }>;
                 };
             };
-        } = await this.graphqlWithAuth(queries.PROJECT_ITEMS_QUERY, { projectId });
+        } = await this.graphqlWithSubIssues(queries.PROJECT_ITEMS_QUERY, { projectId });
 
         return response.node.items.nodes
             .filter(item => item.content)
@@ -301,6 +306,10 @@ export class GitHubAPI {
                     }
                 }
 
+                // Extract parent/child relationships (issues only)
+                const parent = content.parent || null;
+                const subIssues = content.subIssues?.nodes || [];
+
                 return {
                     id: item.id,
                     title: content.title || 'Untitled',
@@ -317,6 +326,8 @@ export class GitHubAPI {
                     projectId,
                     projectTitle,
                     fields,
+                    parent,
+                    subIssues,
                 };
             });
     }

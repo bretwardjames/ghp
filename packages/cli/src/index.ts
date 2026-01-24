@@ -30,6 +30,7 @@ import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.
 import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
+import { progressCommand } from './commands/progress.js';
 
 const program = new Command();
 
@@ -101,6 +102,15 @@ program
     .option('--slice <field=value>', 'Filter by field (repeatable: --slice label=bug --slice Priority=High)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('--view <name>', 'Filter to items in a specific project view')
     .action(planCommand);
+
+program
+    .command('progress')
+    .alias('pg')
+    .description('Show feature progress grouped by epic (parent issues with sub-issues)')
+    .option('-p, --project <project>', 'Filter by project name')
+    .option('-t, --type <type>', 'Filter parent issues by type (e.g., Epic)')
+    .option('-a, --all', 'Show all sub-issues (default: collapse if >10)')
+    .action(progressCommand);
 
 // Workflow commands
 program

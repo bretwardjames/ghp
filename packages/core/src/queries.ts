@@ -91,6 +91,8 @@ export const PROJECT_ITEMS_QUERY = `
                                 assignees(first: 5) { nodes { login } }
                                 labels(first: 10) { nodes { name color } }
                                 repository { name }
+                                parent { id number title state }
+                                subIssues(first: 50) { nodes { id number title state } }
                             }
                             ... on PullRequest {
                                 title

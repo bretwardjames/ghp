@@ -97,12 +97,24 @@ export interface ClaudeConfig {
     maxTokens?: number;
 }
 
+/**
+ * Behavior when an issue is not in any project
+ * - 'auto-add': Automatically add the issue to the first/default project
+ * - 'ask': Prompt the user to add it (default, only works in interactive mode)
+ * - 'fail': Return an error
+ */
+export type IssueNotInProjectBehavior = 'auto-add' | 'ask' | 'fail';
+
 export interface Config {
     // General settings
     mainBranch: string;
     branchPattern: string;
     startWorkingStatus: string;
     doneStatus: string;
+
+    // Issue handling
+    /** What to do when an issue is not in any project (default: 'ask') */
+    issueNotInProject?: IssueNotInProjectBehavior;
 
     // Display settings
     columns?: string;  // comma-separated column names: number,type,title,assignees,status,priority,size,labels,project,repository
@@ -144,6 +156,7 @@ const DEFAULT_CONFIG: Config = {
     branchPattern: '{user}/{number}-{title}',
     startWorkingStatus: 'In Progress',
     doneStatus: 'Done',
+    issueNotInProject: 'ask',
     // Worktree defaults
     worktreePath: '~/.ghp/worktrees',
     worktreeCopyFiles: ['.env', '.env.local'],

@@ -205,7 +205,7 @@ export class GitHubAPI {
     }
 
     /**
-     * Get items from a project
+     * Get items from a project (with pagination to fetch all items)
      */
     async getProjectItems(projectId: string, projectTitle: string): Promise<ProjectItem[]> {
         // Use graphqlWithSubIssues to get parent/child relationships
@@ -220,48 +220,71 @@ export class GitHubAPI {
             });
         }
 
-        const response: {
+        // Type for paginated response
+        type ItemNode = {
+            id: string;
+            fieldValues: {
+                nodes: Array<{
+                    __typename: string;
+                    name?: string;
+                    text?: string;
+                    number?: number;
+                    date?: string;
+                    title?: string;
+                    field?: { name: string };
+                }>;
+            };
+            content: {
+                __typename: string;
+                title?: string;
+                number?: number;
+                url?: string;
+                state?: string;
+                merged?: boolean;
+                issueType?: { name: string } | null;
+                assignees?: {
+                    nodes: Array<{ login: string }>;
+                };
+                labels?: {
+                    nodes: Array<{ name: string; color: string }>;
+                };
+                repository?: { name: string };
+                parent?: { id: string; number: number; title: string; state: string } | null;
+                subIssues?: {
+                    nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                };
+            } | null;
+        };
+
+        type PaginatedResponse = {
             node: {
                 items: {
-                    nodes: Array<{
-                        id: string;
-                        fieldValues: {
-                            nodes: Array<{
-                                __typename: string;
-                                name?: string;
-                                text?: string;
-                                number?: number;
-                                date?: string;
-                                title?: string;
-                                field?: { name: string };
-                            }>;
-                        };
-                        content: {
-                            __typename: string;
-                            title?: string;
-                            number?: number;
-                            url?: string;
-                            state?: string;
-                            merged?: boolean;
-                            issueType?: { name: string } | null;
-                            assignees?: {
-                                nodes: Array<{ login: string }>;
-                            };
-                            labels?: {
-                                nodes: Array<{ name: string; color: string }>;
-                            };
-                            repository?: { name: string };
-                            parent?: { id: string; number: number; title: string; state: string } | null;
-                            subIssues?: {
-                                nodes: Array<{ id: string; number: number; title: string; state: string }>;
-                            };
-                        } | null;
-                    }>;
+                    pageInfo: {
+                        hasNextPage: boolean;
+                        endCursor: string | null;
+                    };
+                    nodes: ItemNode[];
                 };
             };
-        } = await this.graphqlWithSubIssues(queries.PROJECT_ITEMS_QUERY, { projectId });
+        };
 
-        return response.node.items.nodes
+        // Fetch all pages
+        const allNodes: ItemNode[] = [];
+        let cursor: string | null = null;
+        let hasNextPage = true;
+
+        while (hasNextPage) {
+            const response: PaginatedResponse = await this.graphqlWithSubIssues(
+                queries.PROJECT_ITEMS_QUERY,
+                { projectId, cursor }
+            );
+
+            allNodes.push(...response.node.items.nodes);
+            hasNextPage = response.node.items.pageInfo.hasNextPage;
+            cursor = response.node.items.pageInfo.endCursor;
+        }
+
+        return allNodes
             .filter(item => item.content)
             .map(item => {
                 const content = item.content!;
@@ -412,18 +435,115 @@ export class GitHubAPI {
     }
 
     /**
-     * Find an item by issue number across all projects for this repo
+     * Find an item by issue number - direct lookup via issue's projectItems
+     * Much faster than iterating through all project items
      */
     async findItemByNumber(repo: RepoInfo, issueNumber: number): Promise<ProjectItem | null> {
-        const projects = await this.getProjects(repo);
+        if (!this.graphqlWithSubIssues) throw new Error('Not authenticated');
 
-        for (const project of projects) {
-            const items = await this.getProjectItems(project.id, project.title);
-            const item = items.find(i => i.number === issueNumber);
-            if (item) return item;
+        type IssueWithProjectItems = {
+            repository: {
+                issue: {
+                    id: string;
+                    title: string;
+                    number: number;
+                    url: string;
+                    state: string;
+                    issueType: { name: string } | null;
+                    assignees: { nodes: Array<{ login: string }> };
+                    labels: { nodes: Array<{ name: string; color: string }> };
+                    parent: { id: string; number: number; title: string; state: string } | null;
+                    subIssues: { nodes: Array<{ id: string; number: number; title: string; state: string }> };
+                    projectItems: {
+                        nodes: Array<{
+                            id: string;
+                            project: { id: string; title: string; number: number };
+                            fieldValues: {
+                                nodes: Array<{
+                                    __typename: string;
+                                    name?: string;
+                                    text?: string;
+                                    number?: number;
+                                    date?: string;
+                                    title?: string;
+                                    field?: { name: string };
+                                }>;
+                            };
+                        }>;
+                    };
+                } | null;
+            };
+        };
+
+        try {
+            const response: IssueWithProjectItems = await this.graphqlWithSubIssues(
+                queries.ISSUE_WITH_PROJECT_ITEMS_QUERY,
+                { owner: repo.owner, name: repo.name, number: issueNumber }
+            );
+
+            const issue = response.repository.issue;
+            if (!issue) return null;
+
+            // Get the first project item (most issues are in one project)
+            const projectItem = issue.projectItems.nodes[0];
+            if (!projectItem) return null;
+
+            // Extract field values
+            const fields: Record<string, string> = {};
+            for (const fv of projectItem.fieldValues.nodes) {
+                const fieldName = fv.field?.name;
+                if (!fieldName) continue;
+
+                if (fv.__typename === 'ProjectV2ItemFieldSingleSelectValue' && fv.name) {
+                    fields[fieldName] = fv.name;
+                } else if (fv.__typename === 'ProjectV2ItemFieldTextValue' && fv.text) {
+                    fields[fieldName] = fv.text;
+                } else if (fv.__typename === 'ProjectV2ItemFieldNumberValue' && fv.number !== undefined) {
+                    fields[fieldName] = fv.number.toString();
+                } else if (fv.__typename === 'ProjectV2ItemFieldDateValue' && fv.date) {
+                    fields[fieldName] = fv.date;
+                } else if (fv.__typename === 'ProjectV2ItemFieldIterationValue' && fv.title) {
+                    fields[fieldName] = fv.title;
+                }
+            }
+
+            const status = fields['Status'] || null;
+
+            // Get status index from the project's status field
+            let statusIndex = 999;
+            if (status) {
+                const statusField = await this.getStatusField(projectItem.project.id);
+                if (statusField) {
+                    const idx = statusField.options.findIndex(
+                        opt => opt.name.toLowerCase() === status.toLowerCase()
+                    );
+                    if (idx !== -1) statusIndex = idx;
+                }
+            }
+
+            return {
+                id: projectItem.id,
+                title: issue.title,
+                number: issue.number,
+                type: 'issue',
+                issueType: issue.issueType?.name || null,
+                status,
+                statusIndex,
+                state: issue.state === 'OPEN' ? 'open' : 'closed',
+                assignees: issue.assignees.nodes.map(a => a.login),
+                labels: issue.labels.nodes,
+                repository: repo.name,
+                url: issue.url,
+                projectId: projectItem.project.id,
+                projectTitle: projectItem.project.title,
+                fields,
+                parent: issue.parent,
+                subIssues: issue.subIssues.nodes,
+            };
+        } catch (error) {
+            // Issue not found or not in any project
+            return null;
         }
-
-        return null;
     }
 
     /**
@@ -517,7 +637,7 @@ export class GitHubAPI {
     }
 
     /**
-     * Add an issue to a project
+     * Add an issue to a project (by content ID)
      */
     async addToProject(projectId: string, contentId: string): Promise<string | null> {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
@@ -534,6 +654,17 @@ export class GitHubAPI {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Add an issue to a project (by issue number)
+     */
+    async addIssueToProject(repo: RepoInfo, issueNumber: number, projectId: string): Promise<boolean> {
+        const nodeId = await this.getIssueNodeId(repo, issueNumber);
+        if (!nodeId) return false;
+
+        const itemId = await this.addToProject(projectId, nodeId);
+        return itemId !== null;
     }
 
     /**

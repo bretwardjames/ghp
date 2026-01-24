@@ -46,13 +46,17 @@ export const REPOSITORY_ID_QUERY = `
 `;
 
 /**
- * Query to get project items with all field values
+ * Query to get project items with all field values (paginated)
  */
 export const PROJECT_ITEMS_QUERY = `
-    query($projectId: ID!) {
+    query($projectId: ID!, $cursor: String) {
         node(id: $projectId) {
             ... on ProjectV2 {
-                items(first: 100) {
+                items(first: 100, after: $cursor) {
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
                     nodes {
                         id
                         fieldValues(first: 20) {
@@ -490,6 +494,59 @@ export const REMOVE_SUB_ISSUE_MUTATION = `
         removeSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId }) {
             issue { id number title }
             subIssue { id number title }
+        }
+    }
+`;
+
+/**
+ * Query to get issue with its project items (direct lookup, no pagination needed)
+ */
+export const ISSUE_WITH_PROJECT_ITEMS_QUERY = `
+    query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+            issue(number: $number) {
+                id
+                title
+                number
+                url
+                state
+                issueType { name }
+                assignees(first: 5) { nodes { login } }
+                labels(first: 10) { nodes { name color } }
+                parent { id number title state }
+                subIssues(first: 50) { nodes { id number title state } }
+                projectItems(first: 10) {
+                    nodes {
+                        id
+                        project { id title number }
+                        fieldValues(first: 20) {
+                            nodes {
+                                __typename
+                                ... on ProjectV2ItemFieldSingleSelectValue {
+                                    name
+                                    field { ... on ProjectV2SingleSelectField { name } }
+                                }
+                                ... on ProjectV2ItemFieldTextValue {
+                                    text
+                                    field { ... on ProjectV2Field { name } }
+                                }
+                                ... on ProjectV2ItemFieldNumberValue {
+                                    number
+                                    field { ... on ProjectV2Field { name } }
+                                }
+                                ... on ProjectV2ItemFieldDateValue {
+                                    date
+                                    field { ... on ProjectV2Field { name } }
+                                }
+                                ... on ProjectV2ItemFieldIterationValue {
+                                    title
+                                    field { ... on ProjectV2IterationField { name } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 `;

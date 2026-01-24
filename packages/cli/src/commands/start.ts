@@ -176,10 +176,72 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
     // Find the item
     console.log(chalk.dim(`Looking for issue #${issueNumber}...`));
-    const item = await api.findItemByNumber(repo, issueNumber);
+    let item = await api.findItemByNumber(repo, issueNumber);
+
     if (!item) {
-        console.error(chalk.red('Error:'), `Issue #${issueNumber} not found in any project`);
-        process.exit(1);
+        // Issue not in any project - check if issue exists at all
+        const issueDetails = await api.getIssueDetails(repo, issueNumber);
+        if (!issueDetails) {
+            console.error(chalk.red('Error:'), `Issue #${issueNumber} does not exist`);
+            process.exit(1);
+        }
+
+        // Issue exists but not in project - handle based on config
+        const behavior = getConfig('issueNotInProject') || 'ask';
+        const projects = await api.getProjects(repo);
+
+        if (projects.length === 0) {
+            console.error(chalk.red('Error:'), 'No projects found for this repository');
+            process.exit(1);
+        }
+
+        if (behavior === 'fail') {
+            console.error(chalk.red('Error:'), `Issue #${issueNumber} is not in any project`);
+            console.log(chalk.dim('Set issueNotInProject to "auto-add" or "ask" in config to handle this'));
+            process.exit(1);
+        }
+
+        console.log(chalk.yellow(`Issue #${issueNumber} is not in any project.`));
+
+        let selectedProject = projects[0];
+
+        if (behavior === 'ask' && isInteractive()) {
+            if (projects.length > 1) {
+                const projectNames = projects.map(p => p.title);
+                const choiceIdx = await promptSelectWithDefault(
+                    'Add to which project?',
+                    projectNames,
+                    0
+                );
+                selectedProject = projects[choiceIdx];
+            }
+
+            const shouldAdd = await confirmWithDefault(
+                `Add issue #${issueNumber} to "${selectedProject.title}"?`,
+                true
+            );
+            if (!shouldAdd) {
+                console.log(chalk.dim('Aborted.'));
+                process.exit(0);
+            }
+        } else {
+            console.log(chalk.dim(`Auto-adding to "${selectedProject.title}"...`));
+        }
+
+        // Add issue to project
+        const added = await api.addIssueToProject(repo, issueNumber, selectedProject.id);
+        if (!added) {
+            console.error(chalk.red('Error:'), 'Failed to add issue to project');
+            process.exit(1);
+        }
+        console.log(chalk.green('✓'), `Added to "${selectedProject.title}"`);
+
+        // Re-fetch the item now that it's in a project
+        item = await api.findItemByNumber(repo, issueNumber);
+        if (!item) {
+            console.error(chalk.red('Error:'), 'Failed to find item after adding to project');
+            process.exit(1);
+        }
     }
 
     console.log(chalk.green('Found:'), item.title);

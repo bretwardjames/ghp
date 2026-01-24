@@ -15,6 +15,10 @@
     }
   },
 
+  "parallelWork": {
+    "claudeCommand": "start"
+  },
+
   "shortcuts": {
     "bugs": {
       "status": "Backlog",

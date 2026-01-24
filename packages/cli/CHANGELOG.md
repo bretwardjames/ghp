@@ -1,25 +1,37 @@
 # Changelog
 
+## 0.2.0-beta.6
+
+### Patch Changes
+
+- 9db9db9: Fix pagination bug causing projects with >100 items to be incomplete. Add direct issue lookup optimization and issueNotInProject config option.
+- Updated dependencies [9db9db9]
+  - @bretwardjames/ghp-core@0.2.0-beta.6
+
 ## 0.2.0-beta.5
 
 ### Minor Changes
 
 - **Parent/child issue relationships (sub-issues)**
+
   - `ghp set-parent <issue> --parent <parent>` to set parent issue
   - `ghp set-parent <issue> --remove` to remove parent
   - `ghp add-issue --parent <issue>` to create sub-issues directly
   - `ghp progress <issue>` to show epic progress with sub-issue status
 
 - **Label management**
+
   - `ghp label <issue> <labels...>` to add labels
   - `ghp label <issue> <labels...> --remove` to remove labels
 
 - **Enhanced issue creation**
+
   - `ghp add-issue --labels <labels>` to apply labels on create
   - `ghp add-issue --assign [users]` to assign users (empty for self)
   - `ghp add-issue --field <field=value>` to set project fields
 
 - **Agent management for parallel work**
+
   - `ghp agents list` to view running Claude agents
   - `ghp agents stop [issue]` to stop specific agent
   - `ghp agents stop --all` to stop all agents

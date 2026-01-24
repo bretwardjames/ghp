@@ -1,15 +1,23 @@
 # @bretwardjames/ghp-core
 
+## 0.2.0-beta.6
+
+### Patch Changes
+
+- 9db9db9: Fix pagination bug causing projects with >100 items to be incomplete. Add direct issue lookup optimization and issueNotInProject config option.
+
 ## 0.2.0-beta.5
 
 ### Minor Changes
 
 - **Sub-issues API support**
+
   - `addSubIssue()` and `removeSubIssue()` mutations
   - `getIssueRelationships()` to fetch parent and sub-issues
   - GraphQL client with `sub_issues` feature header
 
 - **Label management APIs**
+
   - `addLabelsToIssue()` and `removeLabelsFromIssue()` methods
   - Label lookup and creation utilities
 

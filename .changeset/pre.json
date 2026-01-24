@@ -7,5 +7,7 @@
     "@bretwardjames/ghp-core": "0.1.8",
     "@bretwardjames/ghp-mcp": "0.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "hotfix-pagination"
+  ]
 }

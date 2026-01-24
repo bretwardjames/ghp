@@ -167,10 +167,21 @@ const DEFAULT_CONFIG: Config = {
 };
 
 /**
- * Get the git repository root directory
+ * Get the git repository root directory.
+ * For worktrees, returns the main repository path (where .ghp/config.json lives).
  */
 function getRepoRoot(): string | null {
     try {
+        // Get the common git directory (same for main repo and all worktrees)
+        const gitCommonDir = execSync('git rev-parse --git-common-dir', { encoding: 'utf-8' }).trim();
+
+        // The common dir is typically /path/to/repo/.git
+        // For worktrees it's /path/to/main-repo/.git (not the worktree's .git file)
+        // Remove the /.git suffix to get the repo root
+        if (gitCommonDir.endsWith('/.git')) {
+            return gitCommonDir.slice(0, -5);
+        }
+        // Handle bare repos or unusual setups - fall back to toplevel
         return execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
     } catch {
         return null;

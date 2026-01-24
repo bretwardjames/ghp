@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { getConfig, getParallelWorkConfig } from './config.js';
+import { getConfig, getParallelWorkConfig, type TerminalMode } from './config.js';
 import type { SubagentSpawnDirective } from './types.js';
 
 const execAsync = promisify(exec);
@@ -304,6 +304,58 @@ export async function getClaudeCommand(): Promise<string | null> {
 }
 
 /**
+ * Check if a start command exists (workspace or global)
+ * Returns the command name if found, null otherwise
+ */
+async function findStartCommand(worktreePath: string): Promise<string | null> {
+    const homeDir = os.homedir();
+
+    // Check workspace first, then global
+    const possiblePaths = [
+        path.join(worktreePath, '.claude', 'commands', 'start.md'),
+        path.join(homeDir, '.claude', 'commands', 'start.md'),
+    ];
+
+    for (const p of possiblePaths) {
+        try {
+            await fs.promises.access(p, fs.constants.F_OK);
+            return 'start';
+        } catch {
+            // File doesn't exist, try next
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Build the command to run neovim with coder/claudecode.nvim plugin.
+ * Uses ClaudeCode to open the plugin, then ClaudeCodeSend to send /start command.
+ */
+export async function buildNvimClaudeCommand(
+    worktreePath: string,
+    nvimCommand: string,
+    resumeSession: boolean = false
+): Promise<string> {
+    if (resumeSession) {
+        // For resume, just open Claude without sending a command
+        // User can manually resume from the nvim interface
+        return `${nvimCommand} -c "ClaudeCode"`;
+    }
+
+    // Check if start command exists
+    const startCmd = await findStartCommand(worktreePath);
+
+    if (startCmd) {
+        // Open nvim, toggle Claude, send /start command
+        return `${nvimCommand} -c "ClaudeCode" -c "sleep 500m" -c "ClaudeCodeSend /start"`;
+    }
+
+    // No start command found, just open Claude
+    return `${nvimCommand} -c "ClaudeCode"`;
+}
+
+/**
  * Open a new terminal window at the specified directory and optionally run a command.
  * If running inside tmux and configured to use it, spawns a tmux window/pane instead.
  * @param directory - Working directory for the new terminal
@@ -374,10 +426,18 @@ export async function openParallelWorkTerminal(
     worktreePath: string,
     issueNumber: number,
     issueTitle: string,
-    spawnDirective: SubagentSpawnDirective
+    spawnDirective: SubagentSpawnDirective,
+    modeOverride?: TerminalMode
 ): Promise<{ success: boolean; error?: string; resumed?: boolean }> {
     const config = getParallelWorkConfig();
-    const claudeCommand = await getClaudeCommand();
+    const terminalMode = modeOverride ?? config.terminalMode;
+
+    // Terminal-only mode: just open the terminal, no Claude
+    if (terminalMode === 'terminal') {
+        const windowName = `ghp-${issueNumber}`;
+        const result = await openTerminal(worktreePath, undefined, windowName);
+        return { ...result, resumed: false };
+    }
 
     // Check if we should try to resume a previous session
     let shouldResume = false;
@@ -389,7 +449,15 @@ export async function openParallelWorkTerminal(
         }
     }
 
-    const command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, claudeCommand, shouldResume);
+    // Build the command based on terminal mode
+    let command: string;
+    if (terminalMode === 'nvim-claude') {
+        command = await buildNvimClaudeCommand(worktreePath, config.nvimCommand, shouldResume);
+    } else {
+        // Default: claude mode
+        const claudeCommand = await getClaudeCommand();
+        command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, claudeCommand, shouldResume);
+    }
 
     // Set the spawn context as an environment variable for Claude to potentially use
     const envJson = JSON.stringify(spawnDirective);

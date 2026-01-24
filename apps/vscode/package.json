@@ -3,7 +3,7 @@
   "private": true,
   "displayName": "GitHub Projects",
   "description": "View GitHub Project boards directly in VS Code - mirrors your project views exactly as configured on GitHub",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "bretwardjames",
   "license": "MIT",
   "repository": {
@@ -425,7 +425,11 @@
         },
         "ghProjects.worktree.defaultBaseBranch": {
           "type": "string",
-          "enum": ["ask", "main", "current"],
+          "enum": [
+            "ask",
+            "main",
+            "current"
+          ],
           "default": "ask",
           "description": "Default behavior when creating a new branch for a worktree: 'ask' prompts each time, 'main' always uses main branch (with pull), 'current' uses whatever branch is checked out"
         },

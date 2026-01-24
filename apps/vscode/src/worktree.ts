@@ -10,6 +10,8 @@ import {
     branchExists,
     createBranch,
     checkoutBranch,
+    getCurrentBranch,
+    pullLatest,
     sanitizeForBranchName,
     // Use core worktree functions with validation
     createWorktree as coreCreateWorktree,
@@ -417,6 +419,95 @@ export function getWorktreeConfig(): WorktreeConfig {
 }
 
 /**
+ * Base branch behavior for new worktree branches
+ */
+export type BaseBranchBehavior = 'ask' | 'main' | 'current';
+
+/**
+ * Ask the user which branch to base the new branch on.
+ * Returns the branch name to use as base, or null if cancelled.
+ */
+async function askForBaseBranch(mainBranch: string): Promise<string | null> {
+    const config = vscode.workspace.getConfiguration('ghProjects');
+    const behavior = config.get<BaseBranchBehavior>('worktree.defaultBaseBranch', 'ask');
+
+    const currentBranch = await getCurrentBranch();
+
+    // If configured to always use main or current, skip the prompt
+    if (behavior === 'main') {
+        return mainBranch;
+    }
+    if (behavior === 'current') {
+        return currentBranch;
+    }
+
+    // Ask the user
+    const mainOption: vscode.QuickPickItem = {
+        label: `$(git-branch) ${mainBranch}`,
+        description: '(recommended)',
+        detail: 'Create branch from main with latest changes',
+    };
+
+    const currentOption: vscode.QuickPickItem = {
+        label: `$(git-branch) ${currentBranch}`,
+        description: currentBranch === mainBranch ? '(same as main)' : '(current branch)',
+        detail: `Create branch from your current branch`,
+    };
+
+    // If already on main, just show main option
+    const options = currentBranch === mainBranch
+        ? [mainOption]
+        : [mainOption, currentOption];
+
+    const selected = await vscode.window.showQuickPick(options, {
+        title: 'Base new branch on:',
+        placeHolder: 'Select which branch to base your new feature branch on',
+    });
+
+    if (!selected) {
+        return null; // User cancelled
+    }
+
+    // Extract branch name from the label (remove the icon prefix)
+    return selected.label.replace(/^\$\([^)]+\)\s*/, '');
+}
+
+/**
+ * Prepare the base branch: checkout and pull latest if needed.
+ * Returns true if successful, false if failed.
+ */
+async function prepareBaseBranch(baseBranch: string, mainBranch: string): Promise<boolean> {
+    const currentBranch = await getCurrentBranch();
+
+    // If we need to switch to main, do so and pull
+    if (baseBranch === mainBranch && currentBranch !== mainBranch) {
+        try {
+            await checkoutBranch(mainBranch);
+        } catch (error) {
+            vscode.window.showErrorMessage(
+                `Failed to switch to ${mainBranch}. You may have uncommitted changes.`
+            );
+            return false;
+        }
+    }
+
+    // Pull latest if we're basing on main
+    if (baseBranch === mainBranch) {
+        try {
+            await pullLatest();
+        } catch (error) {
+            // Pull might fail if there are conflicts or no upstream
+            // Show warning but continue - user can handle this
+            vscode.window.showWarningMessage(
+                `Could not pull latest from ${mainBranch}. Continuing with local state.`
+            );
+        }
+    }
+
+    return true;
+}
+
+/**
  * Expand ~ to home directory in a path
  */
 function expandPath(path: string): string {
@@ -539,6 +630,22 @@ export async function executeStartInWorktree(
 
         // Check if this branch exists - if so, just use it without creating
         if (!(await branchExists(branchName))) {
+            const mainBranch = config.get<string>('mainBranch', 'main');
+
+            // Ask user which branch to base on (defaults to main)
+            const baseBranch = await askForBaseBranch(mainBranch);
+            if (!baseBranch) {
+                // User cancelled
+                return { success: false };
+            }
+
+            // Prepare the base branch (checkout and pull if needed)
+            const prepared = await prepareBaseBranch(baseBranch, mainBranch);
+            if (!prepared) {
+                return { success: false };
+            }
+
+            // Now create the new branch from the prepared base
             await createBranch(branchName);
         }
 

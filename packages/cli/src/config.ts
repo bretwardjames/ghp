@@ -71,6 +71,8 @@ export interface McpToolsConfig {
     read?: boolean;
     /** Enable action tools (move, done, start, add-issue, etc.) */
     action?: boolean;
+    /** Enable memory tools (memory_save, memory_search, etc.) */
+    memory?: boolean;
 }
 
 /**

@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@bretwardjames/ghp-core": "workspace:*",
+    "@bretwardjames/ghp-memory": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.22.0"
   },

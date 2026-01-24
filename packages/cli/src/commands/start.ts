@@ -140,6 +140,7 @@ async function checkAssignment(
     if (assignAction === 'take') forceIndex = 0;
     else if (assignAction === 'join') forceIndex = 1;
     else if (assignAction === 'skip') forceIndex = 2;
+    else if (forceDefaults) forceIndex = 2; // --force-defaults uses skip
 
     const choices = [
         'Take (reassign to me)',

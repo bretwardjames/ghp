@@ -71,8 +71,6 @@ export interface McpToolsConfig {
     read?: boolean;
     /** Enable action tools (move, done, start, add-issue, etc.) */
     action?: boolean;
-    /** Enable memory tools (memory_save, memory_search, etc.) */
-    memory?: boolean;
 }
 
 /**
@@ -99,33 +97,6 @@ export interface ClaudeConfig {
     maxTokens?: number;
 }
 
-/**
- * Memory backend configuration
- */
-export interface MemoryConfig {
-    backend?: 'local' | 'mem0' | 'pinecone' | 'weaviate' | 'custom';
-    namespacePrefix?: string;
-    local?: {
-        storagePath?: string;
-    };
-    mem0?: {
-        apiKey?: string;
-    };
-    pinecone?: {
-        apiKey?: string;
-        environment?: string;
-        indexName?: string;
-    };
-    weaviate?: {
-        host?: string;
-        apiKey?: string;
-    };
-    custom?: {
-        modulePath?: string;
-    };
-}
-
-
 export interface Config {
     // General settings
     mainBranch: string;
@@ -147,9 +118,6 @@ export interface Config {
 
     // MCP server configuration
     mcp?: McpConfig;
-
-    // Memory configuration
-    memory?: MemoryConfig;
 
     // Claude AI configuration
     claude?: ClaudeConfig;

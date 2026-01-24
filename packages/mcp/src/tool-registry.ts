@@ -18,11 +18,6 @@ import * as assignTool from './tools/assign.js';
 import * as commentTool from './tools/comment.js';
 import * as setFieldTool from './tools/set-field.js';
 import * as worktreeTool from './tools/worktree.js';
-import * as memorySaveTool from './tools/memory-save.js';
-import * as memorySearchTool from './tools/memory-search.js';
-import * as memoryListTool from './tools/memory-list.js';
-import * as memoryDeleteTool from './tools/memory-delete.js';
-import * as memoryGetTool from './tools/memory-get.js';
 
 // Re-export types
 export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
@@ -50,12 +45,6 @@ const TOOLS: ToolModule[] = [
     commentTool,
     setFieldTool,
     worktreeTool,
-    // Memory tools
-    memorySaveTool,
-    memorySearchTool,
-    memoryListTool,
-    memoryDeleteTool,
-    memoryGetTool,
 ];
 
 /**
@@ -65,7 +54,6 @@ const DEFAULT_MCP_CONFIG: McpConfig = {
     tools: {
         read: true,
         action: true,
-        memory: true,
     },
     disabledTools: [],
 };

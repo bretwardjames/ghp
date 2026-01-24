@@ -58,7 +58,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
 
         // Show category status
         console.log(chalk.bold('Tool Categories:'));
-        const categories = ['read', 'action', 'memory'] as const;
+        const categories = ['read', 'action'] as const;
         for (const cat of categories) {
             const enabled = mcpConfig.tools?.[cat] !== false;
             const status = enabled
@@ -84,8 +84,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
   "mcp": {
     "tools": {
       "read": true,
-      "action": true,
-      "memory": true
+      "action": true
     },
     "disabledTools": ["create_issue"]
   }

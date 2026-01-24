@@ -12,11 +12,6 @@ import { register as registerAssign } from './assign.js';
 import { register as registerComment } from './comment.js';
 import { register as registerSetField } from './set-field.js';
 import { register as registerWorktree } from './worktree.js';
-import { register as registerMemorySave } from './memory-save.js';
-import { register as registerMemorySearch } from './memory-search.js';
-import { register as registerMemoryList } from './memory-list.js';
-import { register as registerMemoryDelete } from './memory-delete.js';
-import { register as registerMemoryGet } from './memory-get.js';
 
 /**
  * @deprecated Use registerEnabledTools from '../tool-registry.js' instead.
@@ -39,11 +34,4 @@ export function registerAllTools(server: McpServer, context: ServerContext): voi
 
     // Worktree tools (parallel work)
     registerWorktree(server, context);
-
-    // Memory tools
-    registerMemorySave(server, context);
-    registerMemorySearch(server, context);
-    registerMemoryList(server, context);
-    registerMemoryDelete(server, context);
-    registerMemoryGet(server, context);
 }

@@ -637,7 +637,7 @@ export class GitHubAPI {
     }
 
     /**
-     * Add an issue to a project
+     * Add an issue to a project (by content ID)
      */
     async addToProject(projectId: string, contentId: string): Promise<string | null> {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
@@ -654,6 +654,17 @@ export class GitHubAPI {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Add an issue to a project (by issue number)
+     */
+    async addIssueToProject(repo: RepoInfo, issueNumber: number, projectId: string): Promise<boolean> {
+        const nodeId = await this.getIssueNodeId(repo, issueNumber);
+        if (!nodeId) return false;
+
+        const itemId = await this.addToProject(projectId, nodeId);
+        return itemId !== null;
     }
 
     /**

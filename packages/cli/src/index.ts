@@ -14,6 +14,7 @@ import { linkBranchCommand } from './commands/link-branch.js';
 import { unlinkBranchCommand } from './commands/unlink-branch.js';
 import { prCommand } from './commands/pr.js';
 import { assignCommand } from './commands/assign.js';
+import { labelCommand } from './commands/label.js';
 import { authCommand } from './commands/auth.js';
 import { configCommand } from './commands/config.js';
 import { addIssueCommand } from './commands/add-issue.js';
@@ -170,6 +171,13 @@ program
     .option('--remove', 'Remove assignment instead of adding')
     .action(assignCommand);
 
+// Labels
+program
+    .command('label <issue> <labels...>')
+    .description('Add or remove labels from an issue')
+    .option('--remove', 'Remove labels instead of adding')
+    .action(labelCommand);
+
 // Issue creation
 program
     .command('add-issue [title]')
@@ -183,6 +191,9 @@ program
     .option('--list-templates', 'List available issue templates')
     .option('--ai', 'Expand brief title into full issue using AI')
     .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
+    .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
+    .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
+    .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     // Non-interactive flags
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')

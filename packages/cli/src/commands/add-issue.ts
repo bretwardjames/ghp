@@ -2,7 +2,8 @@ import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import { getAddIssueDefaults, getClaudeConfig } from '../config.js';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
 import { writeFileSync, readFileSync, unlinkSync, existsSync, readdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -10,6 +11,8 @@ import { promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { generateWithClaude } from '../claude-runner.js';
 import { runFeedbackLoop } from '../ai-feedback.js';
 import { ClaudeClient, claudePrompts } from '@bretwardjames/ghp-core';
+
+const execAsync = promisify(exec);
 
 interface AddIssueOptions {
     body?: string;
@@ -26,6 +29,12 @@ interface AddIssueOptions {
     ai?: boolean;
     /** Parent issue number to link as sub-issue */
     parent?: string;
+    /** Labels to apply (comma-separated) */
+    labels?: string;
+    /** Users to assign (comma-separated, empty for self) */
+    assign?: string;
+    /** Project fields to set (field=value format, can be multiple) */
+    field?: string[];
 }
 
 async function openEditor(initialContent: string): Promise<string> {
@@ -190,15 +199,19 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         }
     }
 
+    // Track AI-suggested labels
+    let aiLabels: string[] | undefined;
+
     // AI expansion: if --ai flag is set, expand the brief title into a full issue
     if (options.ai && title) {
         console.log(chalk.dim('Expanding issue with AI...'));
         console.log();
 
-        const expandedBody = await expandIssueWithAI(title, project.title);
+        const expanded = await expandIssueWithAI(title, project.title);
 
-        if (expandedBody) {
-            body = expandedBody;
+        if (expanded) {
+            body = expanded.body;
+            aiLabels = expanded.labels;
             // Skip template selection since we're using AI
             usingTemplate = false;
         }
@@ -319,6 +332,114 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         }
     }
 
+    // Collect labels to apply (CLI + AI-suggested)
+    const labelsToApply: string[] = [];
+    if (options.labels) {
+        labelsToApply.push(...options.labels.split(',').map(l => l.trim()).filter(Boolean));
+    }
+    if (aiLabels && aiLabels.length > 0) {
+        // Add AI labels that aren't already in the list
+        for (const label of aiLabels) {
+            if (!labelsToApply.includes(label)) {
+                labelsToApply.push(label);
+            }
+        }
+    }
+
+    // Apply labels
+    if (labelsToApply.length > 0) {
+        const appliedLabels: string[] = [];
+        const failedLabels: string[] = [];
+        for (const label of labelsToApply) {
+            const success = await api.addLabelToIssue(repo, issue.number, label);
+            if (success) {
+                appliedLabels.push(label);
+            } else {
+                failedLabels.push(label);
+            }
+        }
+        if (appliedLabels.length > 0) {
+            console.log(chalk.green('Labels:'), appliedLabels.join(', '));
+        }
+        if (failedLabels.length > 0) {
+            console.log(chalk.yellow('Warning:'), `Labels not found: ${failedLabels.join(', ')}`);
+        }
+    }
+
+    // Assign users if specified
+    if (options.assign !== undefined) {
+        // --assign with no value gives true, --assign "" gives empty string
+        // Both should mean "assign to self"
+        const assignees = (typeof options.assign === 'string' && options.assign.length > 0)
+            ? options.assign.split(',').map(u => u.trim()).filter(Boolean)
+            : [api.username!]; // No value or empty string means assign to self
+        
+        if (assignees.length > 0) {
+            try {
+                const assigneeList = assignees.join(',');
+                await execAsync(`gh issue edit ${issue.number} --add-assignee "${assigneeList}"`);
+                console.log(chalk.green('Assigned:'), assignees.join(', '));
+            } catch (error: unknown) {
+                const err = error as { stderr?: string };
+                console.log(chalk.yellow('Warning:'), `Failed to assign: ${err.stderr || 'unknown error'}`);
+            }
+        }
+    }
+
+    // Set project fields if specified
+    if (options.field && options.field.length > 0) {
+        const fields = await api.getProjectFields(project.id);
+        
+        for (const fieldSpec of options.field) {
+            const [fieldName, ...valueParts] = fieldSpec.split('=');
+            const value = valueParts.join('='); // Handle values with = in them
+            
+            if (!fieldName || !value) {
+                console.log(chalk.yellow('Warning:'), `Invalid field format: ${fieldSpec} (use field=value)`);
+                continue;
+            }
+            
+            const field = fields.find(f => 
+                f.name.toLowerCase() === fieldName.toLowerCase()
+            );
+            
+            if (!field) {
+                console.log(chalk.yellow('Warning:'), `Field "${fieldName}" not found`);
+                continue;
+            }
+            
+            // Build value based on field type
+            let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string };
+            
+            if (field.type === 'SingleSelect' && field.options) {
+                const option = field.options.find(o => 
+                    o.name.toLowerCase() === value.toLowerCase()
+                );
+                if (!option) {
+                    console.log(chalk.yellow('Warning:'), `Option "${value}" not found for field "${fieldName}"`);
+                    continue;
+                }
+                fieldValue = { singleSelectOptionId: option.id };
+            } else if (field.type === 'Number') {
+                const num = parseFloat(value);
+                if (isNaN(num)) {
+                    console.log(chalk.yellow('Warning:'), `Invalid number "${value}" for field "${fieldName}"`);
+                    continue;
+                }
+                fieldValue = { number: num };
+            } else {
+                fieldValue = { text: value };
+            }
+            
+            const success = await api.setFieldValue(project.id, itemId, field.id, fieldValue);
+            if (success) {
+                console.log(chalk.green(`${fieldName}:`), value);
+            } else {
+                console.log(chalk.yellow('Warning:'), `Failed to set field "${fieldName}"`);
+            }
+        }
+    }
+
     console.log();
     console.log(chalk.dim(`Start working: ${chalk.cyan(`ghp start ${issue.number}`)}`));
 }
@@ -329,7 +450,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
 async function expandIssueWithAI(
     brief: string,
     projectName: string
-): Promise<string | null> {
+): Promise<{ body: string; labels?: string[] } | null> {
     const systemPrompt = claudePrompts.EXPAND_ISSUE_PROMPT;
     const userPrompt = claudePrompts.buildExpandIssueUserPrompt({
         brief,
@@ -350,10 +471,14 @@ async function expandIssueWithAI(
 
     // Parse the AI response - it might be JSON or markdown
     let expandedBody: string;
+    let aiLabels: string[] | undefined;
     try {
         const parsed = JSON.parse(initialContent);
-        // If JSON, extract just the body
+        // If JSON, extract body and labels
         expandedBody = parsed.body || initialContent;
+        if (Array.isArray(parsed.labels) && parsed.labels.length > 0) {
+            aiLabels = parsed.labels;
+        }
     } catch {
         // Not JSON, use as-is
         expandedBody = initialContent;
@@ -381,6 +506,10 @@ async function expandIssueWithAI(
             if (regenerated) {
                 try {
                     const parsed = JSON.parse(regenerated);
+                    // Update labels if new ones were suggested
+                    if (Array.isArray(parsed.labels) && parsed.labels.length > 0) {
+                        aiLabels = parsed.labels;
+                    }
                     return parsed.body || regenerated;
                 } catch {
                     return regenerated;
@@ -391,5 +520,5 @@ async function expandIssueWithAI(
         },
     });
 
-    return result.content;
+    return { body: result.content, labels: aiLabels };
 }

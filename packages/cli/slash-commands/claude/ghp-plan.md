@@ -41,6 +41,14 @@ Present this breakdown to the user and ask for feedback before creating anything
 
 Once the user approves the plan, create issues using MCP tools:
 
+### Step 0: Get Project Board Context
+Before creating issues, call `get_project_board` to:
+- See available projects
+- Check existing issues (avoid duplicates)
+- Verify valid status options for your project
+
+This ensures you create issues in the right project and understand the board structure.
+
 ### Step 1: Create the Epic
 Use `create_issue` to create the parent epic first:
 ```
@@ -69,10 +77,15 @@ Include `**Parent:** #<epic-number>` in the body to indicate the relationship.
 
 ### Step 3: Set Blocking Relationships
 For issues that depend on others, use `update_issue` to add blocking notes:
+
+**IMPORTANT:** The `update_issue` tool REPLACES the entire body, not appends. You must:
+1. First fetch the existing issue body using `gh issue view` or get the context
+2. Then call `update_issue` with the FULL new body (existing content + new blocking note)
+
 ```
 update_issue(
   issue: "<blocked-issue-number>",
-  body: "<existing body>\n\n**Blocked by:** #<blocking-issue-number>"
+  body: "<full existing body>\n\n**Blocked by:** #<blocking-issue-number>"
 )
 ```
 

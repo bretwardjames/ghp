@@ -198,6 +198,48 @@ ghp worktree remove 123        # Remove worktree for issue
 ghp worktree remove 123 --force  # Force remove (uncommitted changes)
 ```
 
+### Branch Dashboard
+
+View comprehensive branch changes with extensible hook system:
+
+```bash
+ghp dashboard                  # Full dashboard (commits, files, stats, hooks)
+ghp dashboard --diff           # Show full unified diff
+ghp dashboard --commits        # Commit history only
+ghp dashboard --files          # Changed files only
+ghp dashboard --stats          # Diff statistics only
+ghp dashboard --json           # JSON output for scripts/tools
+ghp dashboard --base main      # Compare against specific base branch
+```
+
+**Dashboard Hooks** - Integrate external tools (AI context, test results, etc.):
+
+```bash
+ghp dashboard hooks list                # List registered hooks
+ghp dashboard hooks add <name>          # Register a new hook
+  --command <cmd>                       # Command to execute
+  --category <cat>                      # Category for grouping (optional)
+  --display-name <name>                 # Display name (optional)
+  --timeout <ms>                        # Timeout in milliseconds (default: 5000)
+ghp dashboard hooks remove <name>       # Remove a hook
+ghp dashboard hooks enable <name>       # Enable a hook
+ghp dashboard hooks disable <name>      # Disable a hook
+ghp dashboard hooks show <name>         # Show hook details
+```
+
+Hook commands receive `--branch` and `--repo` arguments and return JSON:
+```json
+{
+  "success": true,
+  "data": {
+    "title": "Section Title",
+    "items": [{ "label": "Item", "value": "Description" }]
+  }
+}
+```
+
+See [docs/hooks/README.md](../../docs/hooks/README.md) for the full hook API.
+
 ### Agent Management
 
 Manage Claude agents running in parallel worktrees:

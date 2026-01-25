@@ -113,6 +113,8 @@ git push -u origin feature/my-feature
 gh pr create
 ```
 
+> **IMPORTANT**: Always create a changeset before merging your PR. If multiple PRs are merged without changesets, their changes won't appear in the CHANGELOG and users won't know what's new. If you forget, you can create a changeset after the fact (before the next release) describing all the changes that were missed.
+
 ### What Happens on PR Merge
 
 **If `AUTO_BETA=true`** (see [CI/CD Configuration](#cicd-configuration)):
@@ -373,6 +375,27 @@ You need to create a changeset before the version can bump:
 ```bash
 pnpm changeset
 ```
+
+### Forgot to create changesets for merged PRs
+
+If PRs were merged without changesets, create a catch-up changeset before releasing:
+
+```bash
+# 1. Create a changeset covering all the missed changes
+pnpm changeset
+# Select affected packages
+# Write a comprehensive description of ALL the merged changes
+
+# 2. Commit the changeset
+git add .changeset
+git commit -m "chore: add changeset for merged features"
+
+# 3. Now run version and release as normal
+pnpm run version
+pnpm release:beta
+```
+
+This ensures all changes appear in the CHANGELOG even if changesets weren't created during development.
 
 ### Beta release didn't trigger
 

@@ -97,6 +97,28 @@ ghp plan-epic "Auth system"   # Break down epic into actionable issues
 ghp pr --ai-description       # Generate PR description from changes
 ```
 
+### Branch Dashboard
+
+View comprehensive branch changes with optional external hook integration:
+
+```bash
+ghp dashboard                 # Full dashboard (commits, files, stats)
+ghp dashboard --diff          # Show full unified diff
+ghp dashboard --commits       # Commit history only
+ghp dashboard --files         # Changed files only
+ghp dashboard --json          # JSON output for scripts/tools
+```
+
+**Dashboard Hooks** - Integrate external tools (AI context, test results, etc.):
+
+```bash
+ghp dashboard hooks list      # List registered hooks
+ghp dashboard hooks add <name> --command <cmd>  # Register hook
+ghp dashboard hooks enable/disable <name>       # Toggle hooks
+```
+
+See [docs/hooks/README.md](docs/hooks/README.md) for the full hook API.
+
 ### Agent Management
 
 Manage Claude agents in parallel worktrees:

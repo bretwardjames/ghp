@@ -15,12 +15,19 @@ import { DashboardPanel } from './dashboard-panel';
 import { executePROpened } from './pr-workflow';
 import { BranchLinker } from './branch-linker';
 import { executeSyncSettings } from './settings-sync';
+import {
+    ApiKeyManager,
+    executeGenerateCommitMessage,
+    executeExplainCode,
+    executeSuggestIssue,
+} from './ai';
 
 let api: GitHubAPI;
 let boardProvider: ProjectBoardProvider;
 let statusBar: StatusBarManager;
 let branchLinker: BranchLinker;
 let currentRepo: RepoInfo | null = null;
+let apiKeyManager: ApiKeyManager;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('GitHub Projects extension is now active');
@@ -29,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
     api = new GitHubAPI();
     boardProvider = new ProjectBoardProvider(api);
     statusBar = new StatusBarManager();
+    apiKeyManager = new ApiKeyManager(context.secrets);
 
     // BranchLinker now needs API and a way to get repo info
     branchLinker = new BranchLinker(api, () => currentRepo);
@@ -973,6 +981,35 @@ function registerCommands(context: vscode.ExtensionContext) {
                 await DashboardPanel.currentPanel.refresh();
             } else {
                 await DashboardPanel.show();
+            }
+        }),
+
+        // AI-powered commands
+        vscode.commands.registerCommand('ghProjects.generateCommitMessage', async () => {
+            await executeGenerateCommitMessage(apiKeyManager);
+        }),
+
+        vscode.commands.registerCommand('ghProjects.explainCode', async () => {
+            await executeExplainCode(apiKeyManager);
+        }),
+
+        vscode.commands.registerCommand('ghProjects.suggestIssue', async () => {
+            await executeSuggestIssue(apiKeyManager);
+        }),
+
+        vscode.commands.registerCommand('ghProjects.setApiKey', async () => {
+            await apiKeyManager.promptForApiKey();
+        }),
+
+        vscode.commands.registerCommand('ghProjects.clearApiKey', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'Are you sure you want to remove your Anthropic API key?',
+                'Yes',
+                'No'
+            );
+            if (confirm === 'Yes') {
+                await apiKeyManager.deleteApiKey();
+                vscode.window.showInformationMessage('Anthropic API key removed');
             }
         })
     );

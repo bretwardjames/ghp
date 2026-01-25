@@ -45,6 +45,8 @@ import type {
     PlanEpicResult,
     ExpandIssueOptions,
     ExpandedIssue,
+    StreamOptions,
+    StreamEvent,
 } from './types.js';
 import { buildPRDescriptionSystemPrompt } from './prompts/pr-description.js';
 import { PLAN_EPIC_SYSTEM_PROMPT, buildPlanEpicUserPrompt } from './prompts/plan-epic.js';
@@ -226,6 +228,151 @@ export class ClaudeClient {
         }
 
         return { text, toolCalls, usage, stopReason };
+    }
+
+    /**
+     * Stream a response from Claude using an async iterator.
+     * This provides fine-grained control over streaming events.
+     *
+     * @example Basic streaming:
+     * ```typescript
+     * for await (const event of claude.stream({
+     *   messages: [{ role: 'user', content: 'Hello!' }],
+     * })) {
+     *   if (event.type === 'text') {
+     *     process.stdout.write(event.text);
+     *   } else if (event.type === 'message_complete') {
+     *     console.log('\nUsage:', event.usage);
+     *   }
+     * }
+     * ```
+     *
+     * @example With tool use:
+     * ```typescript
+     * for await (const event of claude.stream({
+     *   messages: [{ role: 'user', content: 'What is 2+2?' }],
+     *   tools: [calculatorTool],
+     * })) {
+     *   if (event.type === 'tool_use_complete') {
+     *     console.log(`Tool ${event.name} called with:`, event.input);
+     *   }
+     * }
+     * ```
+     */
+    async *stream(options: StreamOptions): AsyncGenerator<StreamEvent, void, unknown> {
+        const client = await this.ensureClient();
+        const maxTokens = options.maxTokens || this.config.maxTokens;
+
+        // Convert our message format to Anthropic's format
+        const messages = options.messages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+        }));
+
+        try {
+            const stream = await client.messages.stream({
+                model: this.config.model,
+                max_tokens: maxTokens,
+                system: options.system,
+                messages,
+                tools: options.tools as Anthropic.Tool[],
+            });
+
+            let text = '';
+            const toolCalls: Array<{
+                id: string;
+                name: string;
+                input: Record<string, unknown>;
+                partialJson: string;
+            }> = [];
+            let currentToolIndex = -1;
+
+            for await (const event of stream) {
+                if (event.type === 'content_block_start') {
+                    const block = event.content_block;
+                    if (block.type === 'tool_use') {
+                        currentToolIndex = event.index;
+                        toolCalls[currentToolIndex] = {
+                            id: block.id,
+                            name: block.name,
+                            input: {},
+                            partialJson: '',
+                        };
+                        yield {
+                            type: 'tool_use_start',
+                            toolUseId: block.id,
+                            name: block.name,
+                        };
+                    }
+                } else if (event.type === 'content_block_delta') {
+                    const delta = event.delta;
+                    if ('text' in delta && delta.text) {
+                        text += delta.text;
+                        yield {
+                            type: 'text',
+                            text: delta.text,
+                        };
+                    } else if ('partial_json' in delta && delta.partial_json) {
+                        // Tool input delta
+                        const toolCall = toolCalls[event.index];
+                        if (toolCall) {
+                            toolCall.partialJson += delta.partial_json;
+                            yield {
+                                type: 'tool_input_delta',
+                                toolUseId: toolCall.id,
+                                partialJson: delta.partial_json,
+                            };
+                        }
+                    }
+                } else if (event.type === 'content_block_stop') {
+                    // Check if this was a tool use block
+                    const toolCall = toolCalls[event.index];
+                    if (toolCall && toolCall.partialJson) {
+                        try {
+                            toolCall.input = JSON.parse(toolCall.partialJson);
+                        } catch {
+                            toolCall.input = {};
+                        }
+                        yield {
+                            type: 'tool_use_complete',
+                            toolUseId: toolCall.id,
+                            name: toolCall.name,
+                            input: toolCall.input,
+                        };
+                    }
+                }
+            }
+
+            // Get final message for usage and stop reason
+            const finalMessage = await stream.finalMessage();
+            const usage: TokenUsage = {
+                input_tokens: finalMessage.usage.input_tokens,
+                output_tokens: finalMessage.usage.output_tokens,
+                total_tokens: finalMessage.usage.input_tokens + finalMessage.usage.output_tokens,
+            };
+
+            // Extract any tool uses that weren't captured in streaming
+            const finalToolCalls = finalMessage.content
+                .filter((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use')
+                .map(block => ({
+                    id: block.id,
+                    name: block.name,
+                    input: block.input as Record<string, unknown>,
+                }));
+
+            yield {
+                type: 'message_complete',
+                text,
+                toolCalls: finalToolCalls,
+                usage,
+                stopReason: finalMessage.stop_reason as ClaudeResult['stopReason'],
+            };
+        } catch (error) {
+            yield {
+                type: 'error',
+                error: error instanceof Error ? error : new Error(String(error)),
+            };
+        }
     }
 
     /**

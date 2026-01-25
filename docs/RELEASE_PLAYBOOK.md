@@ -417,9 +417,33 @@ You can't unpublish from npm easily, but you can:
 1. Create a new changeset with a fix
 2. Release another beta (the higher version wins)
 
+### VS Code Extension Manual Release
+
+The VS Code extension is **not** managed by changesets - you must bump its version manually.
+
+```bash
+# 1. Bump version in apps/vscode/package.json
+# 2. Update apps/vscode/CHANGELOG.md
+
+# 3. cd into the extension directory
+cd apps/vscode
+
+# 4. Package and publish (beta)
+vsce package --no-dependencies --pre-release
+vsce publish --pre-release --no-dependencies
+ovsx publish gh-projects-X.Y.Z.vsix --pre-release --no-dependencies
+
+# 5. Commit version bump
+git add package.json CHANGELOG.md
+git commit -m "chore(vscode): bump to vX.Y.Z"
+git push
+```
+
+For stable releases, omit `--pre-release`.
+
 ### VS Code extension not showing as pre-release
 
-Make sure you're using `package:beta` or `release:beta` which includes the `--pre-release` flag.
+Make sure you're using `--pre-release` flag when publishing.
 
 ### vsce/ovsx fails with npm errors
 

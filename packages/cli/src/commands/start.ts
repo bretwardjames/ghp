@@ -28,7 +28,10 @@ import { registerAgent, updateAgent, extractIssueNumberFromBranch, getAgentByIss
 const execAsync = promisify(exec);
 
 /** Assignment action for non-interactive mode */
-export type AssignAction = 'reassign' | 'add' | 'skip';
+export type AssignAction = 'take' | 'join' | 'skip';
+
+/** Result of checkAssignment - indicates what action was taken */
+export type AssignmentResult = 'auto-assigned' | 'took' | 'joined' | 'skipped' | 'already-assigned';
 
 /** Branch action for non-interactive mode */
 export type BranchAction = 'create' | 'link' | 'skip';
@@ -100,6 +103,100 @@ async function handleUncommittedChanges(force?: boolean, forceDefaults?: boolean
         }
     }
     return true;
+}
+
+/**
+ * Check if the current user is assigned to an issue and handle assignment appropriately.
+ * 
+ * - If the issue is unassigned → auto-assign to current user
+ * - If the issue is assigned to others → prompt to "take" (replace) or "join" (add self)
+ * - If the current user is already assigned → do nothing
+ * 
+ * @param repo - Repository info
+ * @param issueNumber - Issue number
+ * @param currentAssignees - Current assignees on the issue
+ * @param assignAction - Non-interactive flag to force a specific action
+ * @param forceDefaults - If true, use default behavior without prompting
+ * @returns The action that was taken
+ */
+async function checkAssignment(
+    repo: RepoInfo,
+    issueNumber: number,
+    currentAssignees: string[],
+    assignAction?: AssignAction,
+    forceDefaults?: boolean
+): Promise<AssignmentResult> {
+    const currentUser = api.username!;
+    
+    // Check if current user is already assigned
+    const isAssigned = currentAssignees.some(
+        (a) => a.toLowerCase() === currentUser.toLowerCase()
+    );
+
+    if (isAssigned) {
+        return 'already-assigned';
+    }
+
+    // Case 1: Issue is completely unassigned → auto-assign
+    if (currentAssignees.length === 0) {
+        console.log(chalk.dim('Issue is unassigned. Assigning to you...'));
+        const success = await api.updateAssignees(repo, issueNumber, [currentUser]);
+        if (success) {
+            console.log(chalk.green('✓'), `Assigned to ${currentUser}`);
+            return 'auto-assigned';
+        } else {
+            console.log(chalk.yellow('⚠'), 'Could not auto-assign issue');
+            return 'skipped';
+        }
+    }
+
+    // Case 2: Issue is assigned to someone else → prompt for take/join
+    console.log(chalk.yellow('This issue is assigned to:'), currentAssignees.join(', '));
+
+    // Map --assign flag to choice index
+    let forceIndex: number | undefined;
+    if (assignAction === 'take') forceIndex = 0;
+    else if (assignAction === 'join') forceIndex = 1;
+    else if (assignAction === 'skip') forceIndex = 2;
+    else if (forceDefaults) forceIndex = 2; // --force-defaults uses skip
+
+    const choices = [
+        'Take (reassign to me)',
+        'Join (add me as co-assignee)',
+        'Skip (leave as is)',
+    ];
+    const choiceIdx = await promptSelectWithDefault(
+        'What would you like to do?',
+        choices,
+        2, // default: skip for non-interactive
+        forceIndex
+    );
+
+    if (choiceIdx === 0) {
+        // Take: reassign to current user only
+        const success = await api.updateAssignees(repo, issueNumber, [currentUser]);
+        if (success) {
+            console.log(chalk.green('✓'), `Reassigned to ${currentUser}`);
+            return 'took';
+        } else {
+            console.log(chalk.yellow('⚠'), 'Could not reassign issue');
+            return 'skipped';
+        }
+    } else if (choiceIdx === 1) {
+        // Join: add current user to existing assignees
+        const newAssignees = [...currentAssignees, currentUser];
+        const success = await api.updateAssignees(repo, issueNumber, newAssignees);
+        if (success) {
+            console.log(chalk.green('✓'), `Added ${currentUser} as co-assignee`);
+            return 'joined';
+        } else {
+            console.log(chalk.yellow('⚠'), 'Could not add assignee');
+            return 'skipped';
+        }
+    }
+
+    // Skip
+    return 'skipped';
 }
 
 /**
@@ -266,45 +363,9 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     console.log(chalk.dim(`Project: ${item.projectTitle} | Status: ${item.status || 'None'}`));
     console.log();
 
-    // Check if current user is assigned
-    const isAssigned = item.assignees.some(
-        (a) => a.toLowerCase() === api.username?.toLowerCase()
-    );
-
-    if (!isAssigned) {
-        console.log(chalk.yellow('You are not assigned to this issue.'));
-
-        // Map --assign flag to choice index
-        let forceIndex: number | undefined;
-        if (options.assign === 'reassign') forceIndex = 0;
-        else if (options.assign === 'add') forceIndex = 1;
-        else if (options.assign === 'skip') forceIndex = 2;
-
-        const choices = ['Reassign to me', 'Add me', 'Leave as is'];
-        const choiceIdx = await promptSelectWithDefault(
-            'What would you like to do?',
-            choices,
-            2, // default: skip (leave as is) for non-interactive
-            forceIndex
-        );
-
-        if (choiceIdx === 0) {
-            // Reassign to me
-            const success = await api.updateAssignees(repo, issueNumber, [api.username!]);
-            if (success) {
-                console.log(chalk.green('✓'), `Reassigned to ${api.username}`);
-            }
-        } else if (choiceIdx === 1) {
-            // Add me
-            const newAssignees = [...item.assignees, api.username!];
-            const success = await api.updateAssignees(repo, issueNumber, newAssignees);
-            if (success) {
-                console.log(chalk.green('✓'), `Added ${api.username} as assignee`);
-            }
-        }
-        // Leave as is - do nothing
-        console.log();
-    }
+    // Check and handle assignment
+    await checkAssignment(repo, issueNumber, item.assignees, options.assign, options.forceDefaults);
+    console.log();
 
     // Check if issue has linked branch
     const linkedBranch = await getBranchForIssue(repo, issueNumber);

@@ -128,7 +128,7 @@ program
     .option('--claude', 'Use claude CLI directly (overrides config)')
     .option('--terminal-only', 'Just open terminal, no Claude (overrides config)')
     // Non-interactive flags
-    .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
+    .option('--assign <action>', 'Handle assignment: take, join, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
     .option('--from-main', 'Always switch to main before creating branch')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')

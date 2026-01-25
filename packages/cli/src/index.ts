@@ -123,6 +123,10 @@ program
     .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
+    // Terminal mode overrides (for use with --parallel)
+    .option('--nvim', 'Use nvim with claudecode.nvim plugin (overrides config)')
+    .option('--claude', 'Use claude CLI directly (overrides config)')
+    .option('--terminal-only', 'Just open terminal, no Claude (overrides config)')
     // Non-interactive flags
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
@@ -151,6 +155,10 @@ program
     .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
+    // Terminal mode overrides (for use with --parallel)
+    .option('--nvim', 'Use nvim with claudecode.nvim plugin (overrides config)')
+    .option('--claude', 'Use claude CLI directly (overrides config)')
+    .option('--terminal-only', 'Just open terminal, no Claude (overrides config)')
     .action(switchCommand);
 
 program

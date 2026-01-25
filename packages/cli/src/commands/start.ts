@@ -16,7 +16,7 @@ import {
     getWorktreeForBranch,
     type RepoInfo,
 } from '../git-utils.js';
-import { getConfig, getParallelWorkConfig } from '../config.js';
+import { getConfig, getParallelWorkConfig, type TerminalMode } from '../config.js';
 import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
@@ -52,6 +52,24 @@ interface StartOptions {
     worktreePath?: string;
     /** Whether to open a terminal (default: true with --parallel, set to false with --no-open) */
     open?: boolean;
+    // Terminal mode overrides
+    /** Use nvim with claudecode.nvim plugin */
+    nvim?: boolean;
+    /** Use claude CLI directly */
+    claude?: boolean;
+    /** Just open terminal, no Claude */
+    terminalOnly?: boolean;
+}
+
+/**
+ * Get terminal mode override from CLI options.
+ * Returns undefined if no override specified (use config default).
+ */
+function getTerminalModeOverride(options: StartOptions): TerminalMode | undefined {
+    if (options.nvim) return 'nvim-claude';
+    if (options.claude) return 'claude';
+    if (options.terminalOnly) return 'terminal';
+    return undefined;
 }
 
 /**
@@ -673,11 +691,13 @@ Use the GHP tools available via MCP to:
             }
 
             console.log(chalk.dim('Opening terminal...'));
+            const modeOverride = getTerminalModeOverride(options);
             const result = await openParallelWorkTerminal(
                 worktreePath,
                 issueNumber,
                 item.title,
-                directive
+                directive,
+                modeOverride
             );
 
             if (result.success) {

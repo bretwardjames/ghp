@@ -43,6 +43,14 @@ export interface WorkDefaults {
     hideDone?: boolean;
 }
 
+/**
+ * Terminal mode for parallel work
+ * - 'claude': Run claude CLI directly in terminal (default)
+ * - 'nvim-claude': Open nvim with coder/claudecode.nvim plugin
+ * - 'terminal': Just open terminal, no Claude
+ */
+export type TerminalMode = 'claude' | 'nvim-claude' | 'terminal';
+
 export interface ParallelWorkConfig {
     /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'tmux') */
     terminal?: string;
@@ -54,6 +62,10 @@ export interface ParallelWorkConfig {
     claudeCommand?: string;
     /** Whether to auto-resume previous Claude sessions when switching to worktree (default: true) */
     autoResume?: boolean;
+    /** Terminal mode: 'claude' (default), 'nvim-claude', or 'terminal' */
+    terminalMode?: TerminalMode;
+    /** Neovim command to use (default: 'nvim') */
+    nvimCommand?: string;
     /** Tmux-specific configuration (used when terminal is 'tmux' or auto-detected inside tmux) */
     tmux?: {
         /** Whether to spawn a new window or split the current window into a pane */
@@ -597,6 +609,8 @@ export interface ResolvedParallelWorkConfig {
     autoRunClaude: boolean;
     claudeCommand?: string;
     autoResume: boolean;
+    terminalMode: TerminalMode;
+    nvimCommand: string;
 }
 
 /**
@@ -611,6 +625,8 @@ export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
         autoRunClaude: parallelWork.autoRunClaude ?? true,
         claudeCommand: parallelWork.claudeCommand,
         autoResume: parallelWork.autoResume ?? true,
+        terminalMode: parallelWork.terminalMode ?? 'claude',
+        nvimCommand: parallelWork.nvimCommand ?? 'nvim',
     };
 }
 

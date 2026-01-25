@@ -10,7 +10,7 @@ import { getBranchForIssue } from '../branch-linker.js';
 import { applyActiveLabel } from '../active-label.js';
 import { promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
-import { getConfig, getParallelWorkConfig } from '../config.js';
+import { getConfig, getParallelWorkConfig, type TerminalMode } from '../config.js';
 import { openParallelWorkTerminal } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
 
@@ -21,6 +21,23 @@ interface SwitchOptions {
     worktreePath?: string;
     /** Whether to open a terminal (default: true with --parallel, set to false with --no-open) */
     open?: boolean;
+    // Terminal mode overrides
+    /** Use nvim with claudecode.nvim plugin */
+    nvim?: boolean;
+    /** Use claude CLI directly */
+    claude?: boolean;
+    /** Just open terminal, no Claude */
+    terminalOnly?: boolean;
+}
+
+/**
+ * Get terminal mode override from CLI options.
+ */
+function getTerminalModeOverride(options: SwitchOptions): TerminalMode | undefined {
+    if (options.nvim) return 'nvim-claude';
+    if (options.claude) return 'claude';
+    if (options.terminalOnly) return 'terminal';
+    return undefined;
 }
 
 export async function switchCommand(issue: string, options: SwitchOptions = {}): Promise<void> {
@@ -199,11 +216,13 @@ Use the GHP tools available via MCP to:
 
         if (shouldOpenTerminal) {
             console.log(chalk.dim('Opening terminal...'));
+            const modeOverride = getTerminalModeOverride(options);
             const result = await openParallelWorkTerminal(
                 worktreePath,
                 issueNumber,
                 issueTitle,
-                directive
+                directive,
+                modeOverride
             );
 
             if (result.success) {

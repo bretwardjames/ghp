@@ -2,6 +2,20 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.3.4] - 2026-01-25
+
+### Added
+- **Branch Dashboard Panel** - Comprehensive view of branch changes in a dedicated webview
+  - "Open Dashboard" command (`ghProjects.openDashboard`) - view current branch changes
+  - "Refresh Dashboard" command (`ghProjects.refreshDashboard`) - refresh data
+  - Three tabs: Files Changed, Commits, and Full Diff
+  - External Changes section for dashboard hook results
+  - File icons and status indicators (added, modified, deleted)
+  - Commit history with authors and relative timestamps
+
+### Changed
+- Added dashboard icon and commands to command palette
+
 ## [0.3.2] - 2026-01-23
 
 ### Added

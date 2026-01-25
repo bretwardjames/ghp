@@ -103,3 +103,19 @@ vim.api.nvim_create_user_command("GhpTelescopeIssues", function()
   ensure_setup()
   require("ghp.commands").pick_issues()
 end, {})
+
+-- Dashboard commands
+vim.api.nvim_create_user_command("GhpDashboard", function()
+  ensure_setup()
+  require("ghp.commands").dashboard()
+end, { desc = "Show branch dashboard in split" })
+
+vim.api.nvim_create_user_command("GhpDashboardFloat", function()
+  ensure_setup()
+  require("ghp.commands").dashboard_float()
+end, { desc = "Show branch dashboard in floating window" })
+
+vim.api.nvim_create_user_command("GhpDashboardRefresh", function()
+  ensure_setup()
+  require("ghp.commands").dashboard_refresh()
+end, { desc = "Refresh current dashboard" })

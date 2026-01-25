@@ -33,6 +33,7 @@ export interface DashboardOptions {
     files?: boolean;
     base?: string;
     maxDiffLines?: number;
+    json?: boolean;
 }
 
 /**
@@ -263,6 +264,40 @@ export async function dashboardCommand(options: DashboardOptions = {}): Promise<
     // Clear the "Gathering..." line (only in TTY)
     if (process.stdout.isTTY) {
         process.stdout.write('\x1b[1A\x1b[2K');
+    }
+
+    // JSON output mode
+    if (options.json) {
+        const jsonOutput = {
+            branch: data.branch,
+            baseBranch: data.baseBranch,
+            stats: {
+                filesChanged: data.stats.filesChanged,
+                insertions: data.stats.insertions,
+                deletions: data.stats.deletions,
+            },
+            files: data.stats.files.map((f) => ({
+                path: f.path,
+                status: f.status,
+                insertions: f.insertions,
+                deletions: f.deletions,
+            })),
+            commits: data.commits.map((c) => ({
+                hash: c.shortHash,
+                subject: c.subject,
+                author: c.author,
+                date: c.date,
+            })),
+            hooks: hookResults.map((r) => ({
+                name: r.hook.displayName || r.hook.name,
+                category: r.hook.category || 'other',
+                success: r.success,
+                data: r.data,
+                error: r.error,
+            })),
+        };
+        console.log(JSON.stringify(jsonOutput, null, 2));
+        return;
     }
 
     renderDashboard(data, options);

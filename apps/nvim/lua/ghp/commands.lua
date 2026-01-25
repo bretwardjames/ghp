@@ -179,6 +179,21 @@ M.telescope_plan = M.pick_plan
 M.telescope_work = M.pick_work
 M.telescope_issues = M.pick_issues
 
+-- Dashboard functions
+function M.dashboard(opts)
+  opts = opts or {}
+  require("ghp.dashboard").show_split(opts)
+end
+
+function M.dashboard_float(opts)
+  opts = opts or {}
+  require("ghp.dashboard").show_float(opts)
+end
+
+function M.dashboard_refresh()
+  require("ghp.dashboard").refresh()
+end
+
 function M.setup()
   -- Register user commands
   vim.api.nvim_create_user_command("GhpPlan", function(opts)
@@ -242,6 +257,19 @@ function M.setup()
   vim.api.nvim_create_user_command("GhpTelescopeIssues", function()
     M.telescope_issues()
   end, {})
+
+  -- Dashboard commands
+  vim.api.nvim_create_user_command("GhpDashboard", function()
+    M.dashboard()
+  end, { desc = "Show branch dashboard in split" })
+
+  vim.api.nvim_create_user_command("GhpDashboardFloat", function()
+    M.dashboard_float()
+  end, { desc = "Show branch dashboard in floating window" })
+
+  vim.api.nvim_create_user_command("GhpDashboardRefresh", function()
+    M.dashboard_refresh()
+  end, { desc = "Refresh current dashboard" })
 end
 
 return M

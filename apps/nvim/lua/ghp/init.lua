@@ -19,6 +19,7 @@ M.config = {
     work = " ",
     issue = " ",
     pr = " ",
+    dashboard = " ",
   },
 }
 

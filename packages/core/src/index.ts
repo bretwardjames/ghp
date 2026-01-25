@@ -139,8 +139,19 @@ export type {
     ClaudeClientOptions,
     ResolvedClaudeConfig,
 
-    // Streaming
+    // Streaming (callback-based)
     StreamCallbacks,
+
+    // Streaming (async iterator)
+    StreamOptions,
+    StreamEvent,
+    StreamEventBase,
+    StreamTextEvent,
+    StreamToolUseStartEvent,
+    StreamToolInputDeltaEvent,
+    StreamToolUseCompleteEvent,
+    StreamMessageCompleteEvent,
+    StreamErrorEvent,
 
     // Tools
     ClaudeTool,

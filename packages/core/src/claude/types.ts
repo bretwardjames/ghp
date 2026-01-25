@@ -154,6 +154,101 @@ export interface ClaudeResult {
 }
 
 // =============================================================================
+// Streaming Types (Async Iterator API)
+// =============================================================================
+
+/**
+ * Base type for all stream events
+ */
+export interface StreamEventBase {
+    type: string;
+}
+
+/**
+ * Text token received during streaming
+ */
+export interface StreamTextEvent extends StreamEventBase {
+    type: 'text';
+    text: string;
+}
+
+/**
+ * Tool use started
+ */
+export interface StreamToolUseStartEvent extends StreamEventBase {
+    type: 'tool_use_start';
+    toolUseId: string;
+    name: string;
+}
+
+/**
+ * Tool input delta (partial JSON input)
+ */
+export interface StreamToolInputDeltaEvent extends StreamEventBase {
+    type: 'tool_input_delta';
+    toolUseId: string;
+    partialJson: string;
+}
+
+/**
+ * Tool use completed (full input available)
+ */
+export interface StreamToolUseCompleteEvent extends StreamEventBase {
+    type: 'tool_use_complete';
+    toolUseId: string;
+    name: string;
+    input: Record<string, unknown>;
+}
+
+/**
+ * Message streaming completed
+ */
+export interface StreamMessageCompleteEvent extends StreamEventBase {
+    type: 'message_complete';
+    text: string;
+    toolCalls: Array<{
+        id: string;
+        name: string;
+        input: Record<string, unknown>;
+    }>;
+    usage: TokenUsage;
+    stopReason: ClaudeResult['stopReason'];
+}
+
+/**
+ * Error during streaming
+ */
+export interface StreamErrorEvent extends StreamEventBase {
+    type: 'error';
+    error: Error;
+}
+
+/**
+ * Union of all stream event types
+ */
+export type StreamEvent =
+    | StreamTextEvent
+    | StreamToolUseStartEvent
+    | StreamToolInputDeltaEvent
+    | StreamToolUseCompleteEvent
+    | StreamMessageCompleteEvent
+    | StreamErrorEvent;
+
+/**
+ * Options for the stream() method
+ */
+export interface StreamOptions {
+    /** System prompt */
+    system?: string;
+    /** Messages in the conversation */
+    messages: Message[];
+    /** Tools available to Claude */
+    tools?: ClaudeTool[];
+    /** Maximum tokens to generate */
+    maxTokens?: number;
+}
+
+// =============================================================================
 // High-Level API Types
 // =============================================================================
 

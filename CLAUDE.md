@@ -1,18 +1,20 @@
 # Claude Code Guidelines for GHP
 
-## CLI Usage
+## GHP CLI Reference
 
-**Always use `ghp` instead of `gh` for GitHub operations.** This project builds the `ghp` CLI, so we should dogfood it:
+**Always use `ghp` instead of `gh` for GitHub operations.** This project builds the `ghp` CLI, so we should dogfood it.
+
+**At the start of each session, read the Serena memory `ghp-cli-reference.md` for the full command reference.**
 
 ```bash
-# Good
-ghp issue list
-ghp issue view 123
-ghp issue create --title "..."
-ghp plan
+# Good - use ghp commands
+ghp add "Issue title"      # Create issue (not gh issue create)
+ghp open 123               # View issue (not gh issue view)
+ghp plan                   # View board
+ghp start 123              # Start working on issue
 
-# Bad - don't use gh directly
-gh issue list
+# Bad - don't use gh directly for project operations
+gh issue create --title "..."
 gh issue view 123
 ```
 

@@ -97,6 +97,8 @@ export const PROJECT_ITEMS_QUERY = `
                                 repository { name }
                                 parent { id number title state }
                                 subIssues(first: 50) { nodes { id number title state } }
+                                blockedBy(first: 20) { nodes { id number title state } }
+                                blocking(first: 20) { nodes { id number title state } }
                             }
                             ... on PullRequest {
                                 title
@@ -515,6 +517,8 @@ export const ISSUE_WITH_PROJECT_ITEMS_QUERY = `
                 labels(first: 10) { nodes { name color } }
                 parent { id number title state }
                 subIssues(first: 50) { nodes { id number title state } }
+                blockedBy(first: 20) { nodes { id number title state } }
+                blocking(first: 20) { nodes { id number title state } }
                 projectItems(first: 10) {
                     nodes {
                         id
@@ -563,6 +567,12 @@ export const ISSUE_RELATIONSHIPS_QUERY = `
                 title
                 parent { id number title state }
                 subIssues(first: 50) {
+                    nodes { id number title state }
+                }
+                blockedBy(first: 20) {
+                    nodes { id number title state }
+                }
+                blocking(first: 20) {
                     nodes { id number title state }
                 }
             }

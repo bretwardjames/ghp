@@ -149,6 +149,15 @@ export function register(server: McpServer, context: ServerContext): void {
                             assignees: item.assignees,
                             labels: item.labels.map((l) => l.name),
                             url: item.url,
+                            // Include blocking relationships
+                            blockedBy: item.blockedBy?.filter(b => b.state === 'OPEN').map(b => ({
+                                number: b.number,
+                                title: b.title,
+                            })) || [],
+                            blocking: item.blocking?.filter(b => b.state === 'OPEN').map(b => ({
+                                number: b.number,
+                                title: b.title,
+                            })) || [],
                         })),
                     })),
                 };

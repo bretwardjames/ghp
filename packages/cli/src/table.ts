@@ -12,7 +12,8 @@ export type ColumnName =
     | 'labels'
     | 'project'
     | 'repository'
-    | 'branch';
+    | 'branch'
+    | 'blocks';
 
 interface ColumnDef {
     header: string;
@@ -88,6 +89,25 @@ const COLUMN_DEFS: Record<ColumnName, ColumnDef> = {
         color: (v) => chalk.cyan(v),
         minWidth: 2,
         maxWidth: 2,
+    },
+    blocks: {
+        header: 'Blocks',
+        getValue: (item) => {
+            const parts: string[] = [];
+            // Show what this issue is blocked by (open issues only)
+            const openBlockers = item.blockedBy?.filter(b => b.state === 'OPEN') || [];
+            if (openBlockers.length > 0) {
+                parts.push(`⛔ ${openBlockers.map(b => '#' + b.number).join(',')}`);
+            }
+            // Show what this issue is blocking (open issues only)
+            const openBlocking = item.blocking?.filter(b => b.state === 'OPEN') || [];
+            if (openBlocking.length > 0) {
+                parts.push(`→ ${openBlocking.map(b => '#' + b.number).join(',')}`);
+            }
+            return parts.join(' ');
+        },
+        color: (v) => v.startsWith('⛔') ? chalk.red(v) : chalk.yellow(v),
+        minWidth: 6,
     },
 };
 

@@ -253,6 +253,12 @@ export class GitHubAPI {
                 subIssues?: {
                     nodes: Array<{ id: string; number: number; title: string; state: string }>;
                 };
+                blockedBy?: {
+                    nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                };
+                blocking?: {
+                    nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                };
             } | null;
         };
 
@@ -333,6 +339,10 @@ export class GitHubAPI {
                 const parent = content.parent || null;
                 const subIssues = content.subIssues?.nodes || [];
 
+                // Extract blocking relationships (issues only)
+                const blockedBy = content.blockedBy?.nodes || [];
+                const blocking = content.blocking?.nodes || [];
+
                 return {
                     id: item.id,
                     title: content.title || 'Untitled',
@@ -351,6 +361,8 @@ export class GitHubAPI {
                     fields,
                     parent,
                     subIssues,
+                    blockedBy,
+                    blocking,
                 };
             });
     }
@@ -454,6 +466,8 @@ export class GitHubAPI {
                     labels: { nodes: Array<{ name: string; color: string }> };
                     parent: { id: string; number: number; title: string; state: string } | null;
                     subIssues: { nodes: Array<{ id: string; number: number; title: string; state: string }> };
+                    blockedBy: { nodes: Array<{ id: string; number: number; title: string; state: string }> };
+                    blocking: { nodes: Array<{ id: string; number: number; title: string; state: string }> };
                     projectItems: {
                         nodes: Array<{
                             id: string;
@@ -539,6 +553,8 @@ export class GitHubAPI {
                 fields,
                 parent: issue.parent,
                 subIssues: issue.subIssues.nodes,
+                blockedBy: issue.blockedBy.nodes,
+                blocking: issue.blocking.nodes,
             };
         } catch (error) {
             // Issue not found or not in any project
@@ -1253,7 +1269,7 @@ export class GitHubAPI {
     }
 
     /**
-     * Get issue relationships (parent and sub-issues)
+     * Get issue relationships (parent, sub-issues, and blocking relationships)
      */
     async getIssueRelationships(repo: RepoInfo, issueNumber: number): Promise<IssueRelationships | null> {
         if (!this.graphqlWithSubIssues) throw new Error('Not authenticated');
@@ -1267,6 +1283,12 @@ export class GitHubAPI {
                         title: string;
                         parent: { id: string; number: number; title: string; state: string } | null;
                         subIssues: {
+                            nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                        };
+                        blockedBy: {
+                            nodes: Array<{ id: string; number: number; title: string; state: string }>;
+                        };
+                        blocking: {
                             nodes: Array<{ id: string; number: number; title: string; state: string }>;
                         };
                     } | null;
@@ -1286,6 +1308,8 @@ export class GitHubAPI {
                 title: issue.title,
                 parent: issue.parent,
                 subIssues: issue.subIssues.nodes,
+                blockedBy: issue.blockedBy.nodes,
+                blocking: issue.blocking.nodes,
             };
         } catch {
             return null;

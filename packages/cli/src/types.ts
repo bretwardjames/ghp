@@ -12,6 +12,8 @@ export type {
     IssueDetails,
     Collaborator,
     IssueReference,
+    BlockingIssue,
+    BlockingRelationships,
 } from '@bretwardjames/ghp-core';
 
 /**

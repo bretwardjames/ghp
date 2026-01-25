@@ -221,6 +221,34 @@
         "title": "Refresh Branch Dashboard",
         "icon": "$(refresh)",
         "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.generateCommitMessage",
+        "title": "Generate Commit Message",
+        "icon": "$(sparkle)",
+        "category": "GHP AI"
+      },
+      {
+        "command": "ghProjects.explainCode",
+        "title": "Explain Selected Code",
+        "icon": "$(comment-discussion)",
+        "category": "GHP AI"
+      },
+      {
+        "command": "ghProjects.suggestIssue",
+        "title": "Suggest Issue from Code",
+        "icon": "$(lightbulb)",
+        "category": "GHP AI"
+      },
+      {
+        "command": "ghProjects.setApiKey",
+        "title": "Set Anthropic API Key",
+        "category": "GHP AI"
+      },
+      {
+        "command": "ghProjects.clearApiKey",
+        "title": "Clear Anthropic API Key",
+        "category": "GHP AI"
       }
     ],
     "menus": {
@@ -316,6 +344,32 @@
           "command": "ghProjects.hideView",
           "when": "viewItem == view",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ghProjects.explainCode",
+          "when": "editorHasSelection",
+          "group": "ghp@1"
+        },
+        {
+          "command": "ghProjects.suggestIssue",
+          "when": "editorTextFocus",
+          "group": "ghp@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ghProjects.generateCommitMessage",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "ghProjects.explainCode",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "ghProjects.suggestIssue",
+          "when": "editorTextFocus"
         }
       ]
     },

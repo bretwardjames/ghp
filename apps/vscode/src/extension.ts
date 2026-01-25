@@ -11,6 +11,7 @@ import { executeStartInWorktree, getWorktreeForIssue, openWorktreeInNewWindow, c
 import { removeWorktree } from './git-utils';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';
+import { DashboardPanel } from './dashboard-panel';
 import { executePROpened } from './pr-workflow';
 import { BranchLinker } from './branch-linker';
 import { executeSyncSettings } from './settings-sync';
@@ -959,6 +960,19 @@ function registerCommands(context: vscode.ExtensionContext) {
                 }
             } catch (error) {
                 vscode.window.showErrorMessage(`Failed to write config: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }),
+
+        // Dashboard commands
+        vscode.commands.registerCommand('ghProjects.openDashboard', async () => {
+            await DashboardPanel.show();
+        }),
+
+        vscode.commands.registerCommand('ghProjects.refreshDashboard', async () => {
+            if (DashboardPanel.currentPanel) {
+                await DashboardPanel.currentPanel.refresh();
+            } else {
+                await DashboardPanel.show();
             }
         })
     );

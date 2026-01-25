@@ -209,6 +209,18 @@
         "title": "Add Child Issue...",
         "icon": "$(add)",
         "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.openDashboard",
+        "title": "Open Branch Dashboard",
+        "icon": "$(dashboard)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.refreshDashboard",
+        "title": "Refresh Branch Dashboard",
+        "icon": "$(refresh)",
+        "category": "GitHub Projects"
       }
     ],
     "menus": {
@@ -224,14 +236,19 @@
           "group": "navigation@2"
         },
         {
-          "command": "ghProjects.refresh",
+          "command": "ghProjects.openDashboard",
           "when": "view == ghProjects.board",
           "group": "navigation@3"
         },
         {
-          "command": "ghProjects.configureProject",
+          "command": "ghProjects.refresh",
           "when": "view == ghProjects.board",
           "group": "navigation@4"
+        },
+        {
+          "command": "ghProjects.configureProject",
+          "when": "view == ghProjects.board",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [

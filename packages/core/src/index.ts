@@ -279,7 +279,7 @@ export type {
 // =============================================================================
 
 export {
-    getCurrentBranch as getDashboardCurrentBranch,
+    getCurrentBranch as getDashboardCurrentBranch, // Alias for backward compat
     getDefaultBaseBranch,
     getCommitHistory,
     getDiffStats,

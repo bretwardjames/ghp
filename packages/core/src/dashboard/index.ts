@@ -10,8 +10,19 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import {
+    getCurrentBranch as gitGetCurrentBranch,
+    getDefaultBranch as gitGetDefaultBranch,
+} from '../git-utils.js';
 
 const execAsync = promisify(exec);
+
+// Debug logging helper
+const debug = (message: string, error?: unknown) => {
+    if (process.env.DEBUG || process.env.GHP_DEBUG) {
+        console.error(`[dashboard] ${message}`, error || '');
+    }
+};
 
 export interface DiffStats {
     filesChanged: number;
@@ -50,34 +61,37 @@ export interface DashboardOptions {
 }
 
 /**
- * Get the current git branch name
+ * Validate branch name to prevent command injection.
+ * Valid branch names contain only alphanumeric, dash, underscore, dot, and forward slash.
  */
-export async function getCurrentBranch(): Promise<string | null> {
-    try {
-        const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD');
-        return stdout.trim();
-    } catch {
-        return null;
-    }
+function isValidBranchName(name: string): boolean {
+    return /^[\w\-\.\/]+$/.test(name) && name.length > 0 && name.length < 256;
 }
 
 /**
- * Get the default base branch (main or master)
+ * Sanitize and validate branch name, throwing if invalid.
+ */
+function validateBranchName(name: string): string {
+    if (!isValidBranchName(name)) {
+        throw new Error(`Invalid branch name: ${name}`);
+    }
+    return name;
+}
+
+/**
+ * Get the current git branch name.
+ * Re-exports from git-utils for convenience.
+ */
+export async function getCurrentBranch(): Promise<string | null> {
+    return gitGetCurrentBranch();
+}
+
+/**
+ * Get the default base branch (main or master).
+ * Re-exports from git-utils for convenience.
  */
 export async function getDefaultBaseBranch(): Promise<string> {
-    try {
-        // Check if 'main' exists
-        await execAsync('git rev-parse --verify main');
-        return 'main';
-    } catch {
-        try {
-            // Fall back to 'master'
-            await execAsync('git rev-parse --verify master');
-            return 'master';
-        } catch {
-            return 'main'; // Default even if neither exists
-        }
-    }
+    return gitGetDefaultBranch();
 }
 
 /**
@@ -85,10 +99,11 @@ export async function getDefaultBaseBranch(): Promise<string> {
  */
 export async function getCommitHistory(baseBranch: string): Promise<Commit[]> {
     try {
+        const safeBranch = validateBranchName(baseBranch);
         // Format: hash|short|subject|author|date
         const format = '%H|%h|%s|%an|%ai';
         const { stdout } = await execAsync(
-            `git log ${baseBranch}..HEAD --format="${format}"`
+            `git log ${safeBranch}..HEAD --format="${format}"`
         );
 
         if (!stdout.trim()) {
@@ -103,7 +118,8 @@ export async function getCommitHistory(baseBranch: string): Promise<Commit[]> {
                 const [hash, shortHash, subject, author, date] = line.split('|');
                 return { hash, shortHash, subject, author, date };
             });
-    } catch {
+    } catch (error) {
+        debug('Failed to get commit history', error);
         return [];
     }
 }
@@ -122,7 +138,7 @@ function parseDiffStat(statOutput: string): DiffStats {
         // Format: " path/to/file.ts | 10 ++++----"
         const match = line.match(/^\s*(.+?)\s+\|\s+(\d+)\s*([+-]*)/);
         if (match) {
-            const [, path, changes, indicators] = match;
+            const [, path, , indicators] = match;
             const insertions = (indicators.match(/\+/g) || []).length;
             const deletions = (indicators.match(/-/g) || []).length;
 
@@ -170,8 +186,9 @@ function parseDiffStat(statOutput: string): DiffStats {
 async function getFileStatuses(baseBranch: string): Promise<Map<string, FileChange['status']>> {
     const statusMap = new Map<string, FileChange['status']>();
     try {
+        const safeBranch = validateBranchName(baseBranch);
         const { stdout } = await execAsync(
-            `git diff --name-status ${baseBranch}...HEAD`
+            `git diff --name-status ${safeBranch}...HEAD`
         );
 
         for (const line of stdout.trim().split('\n').filter(Boolean)) {
@@ -192,8 +209,8 @@ async function getFileStatuses(baseBranch: string): Promise<Map<string, FileChan
             }
             statusMap.set(path, status);
         }
-    } catch {
-        // Ignore errors
+    } catch (error) {
+        debug('Failed to get file statuses', error);
     }
     return statusMap;
 }
@@ -203,8 +220,9 @@ async function getFileStatuses(baseBranch: string): Promise<Map<string, FileChan
  */
 export async function getDiffStats(baseBranch: string): Promise<DiffStats> {
     try {
+        const safeBranch = validateBranchName(baseBranch);
         const [statOutput, fileStatuses] = await Promise.all([
-            execAsync(`git diff --stat ${baseBranch}...HEAD`),
+            execAsync(`git diff --stat ${safeBranch}...HEAD`),
             getFileStatuses(baseBranch),
         ]);
 
@@ -219,7 +237,8 @@ export async function getDiffStats(baseBranch: string): Promise<DiffStats> {
         }
 
         return stats;
-    } catch {
+    } catch (error) {
+        debug('Failed to get diff stats', error);
         return {
             filesChanged: 0,
             insertions: 0,
@@ -237,7 +256,8 @@ export async function getFullDiff(
     maxLines?: number
 ): Promise<string> {
     try {
-        const { stdout } = await execAsync(`git diff ${baseBranch}...HEAD`);
+        const safeBranch = validateBranchName(baseBranch);
+        const { stdout } = await execAsync(`git diff ${safeBranch}...HEAD`);
 
         if (maxLines && stdout.split('\n').length > maxLines) {
             const lines = stdout.split('\n').slice(0, maxLines);
@@ -245,7 +265,8 @@ export async function getFullDiff(
         }
 
         return stdout;
-    } catch {
+    } catch (error) {
+        debug('Failed to get full diff', error);
         return '';
     }
 }
@@ -255,9 +276,10 @@ export async function getFullDiff(
  */
 export async function getChangedFiles(baseBranch: string): Promise<FileChange[]> {
     try {
+        const safeBranch = validateBranchName(baseBranch);
         // --name-status gives us: A/M/D/R followed by path
         const { stdout } = await execAsync(
-            `git diff --name-status ${baseBranch}...HEAD`
+            `git diff --name-status ${safeBranch}...HEAD`
         );
 
         if (!stdout.trim()) {
@@ -295,7 +317,8 @@ export async function getChangedFiles(baseBranch: string): Promise<FileChange[]>
                     status,
                 };
             });
-    } catch {
+    } catch (error) {
+        debug('Failed to get changed files', error);
         return [];
     }
 }

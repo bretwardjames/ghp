@@ -32,7 +32,7 @@ export interface DashboardOptions {
 /**
  * Format a commit for display
  */
-function formatCommit(commit: Commit, index: number): string {
+function formatCommit(commit: Commit): string {
     const hashColor = chalk.yellow(commit.shortHash);
     const subject = commit.subject;
     return `  ${hashColor} ${subject}`;
@@ -113,8 +113,8 @@ function renderDashboard(data: BranchDashboardData, options: DashboardOptions): 
     if ((showAll || options.commits) && data.commits.length > 0) {
         console.log(chalk.bold(`Commits (${data.commits.length})`));
         console.log(chalk.dim('─'.repeat(50)));
-        for (let i = 0; i < data.commits.length; i++) {
-            console.log(formatCommit(data.commits[i], i));
+        for (const commit of data.commits) {
+            console.log(formatCommit(commit));
         }
         console.log();
     }
@@ -181,8 +181,10 @@ export async function dashboardCommand(options: DashboardOptions = {}): Promise<
         process.exit(1);
     }
 
-    // Clear the "Gathering..." line
-    process.stdout.write('\x1b[1A\x1b[2K');
+    // Clear the "Gathering..." line (only in TTY)
+    if (process.stdout.isTTY) {
+        process.stdout.write('\x1b[1A\x1b[2K');
+    }
 
     renderDashboard(data, options);
 }

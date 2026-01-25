@@ -266,6 +266,40 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     console.log(chalk.dim(`Project: ${item.projectTitle} | Status: ${item.status || 'None'}`));
     console.log();
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Check if issue is blocked by other issues
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (item.blockedBy && item.blockedBy.length > 0) {
+        // Filter to only show OPEN blocking issues
+        const openBlockers = item.blockedBy.filter(b => b.state === 'OPEN');
+
+        if (openBlockers.length > 0) {
+            console.log(chalk.yellow('⚠️  This issue is blocked by:'));
+            for (const blocker of openBlockers) {
+                const stateColor = blocker.state === 'OPEN' ? chalk.red : chalk.green;
+                console.log(`   ${stateColor('#' + blocker.number)} ${blocker.title}`);
+            }
+            console.log();
+
+            // In non-interactive mode with forceDefaults, proceed anyway
+            if (!options.forceDefaults && !options.force) {
+                const shouldContinue = await confirmWithDefault(
+                    'Continue working on this blocked issue?',
+                    false, // default is to abort
+                    options.forceDefaults
+                );
+
+                if (!shouldContinue) {
+                    console.log('Aborted.');
+                    process.exit(0);
+                }
+            } else {
+                console.log(chalk.dim('[--force-defaults] Proceeding despite blocking issues'));
+            }
+            console.log();
+        }
+    }
+
     // Check if current user is assigned
     const isAssigned = item.assignees.some(
         (a) => a.toLowerCase() === api.username?.toLowerCase()

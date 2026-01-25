@@ -272,6 +272,10 @@ export type {
     // Issue Relationships (Parent/Child)
     RelatedIssue,
     IssueRelationships,
+
+    // Blocking Relationships
+    BlockingIssue,
+    BlockingRelationships,
 } from './types.js';
 
 // =============================================================================

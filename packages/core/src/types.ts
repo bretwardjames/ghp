@@ -98,6 +98,9 @@ export interface ProjectItem {
     // Parent/child relationships (issues only)
     parent: RelatedIssue | null;
     subIssues: RelatedIssue[];
+    // Blocking relationships (issues only)
+    blockedBy: BlockingIssue[];
+    blocking: BlockingIssue[];
 }
 
 /**
@@ -401,7 +404,7 @@ export interface RelatedIssue {
 }
 
 /**
- * Issue relationships including parent and sub-issues
+ * Issue relationships including parent, sub-issues, and blocking relationships
  */
 export interface IssueRelationships {
     id: string;
@@ -409,4 +412,32 @@ export interface IssueRelationships {
     title: string;
     parent: RelatedIssue | null;
     subIssues: RelatedIssue[];
+    /** Issues that are blocking this issue (this issue is blocked by these) */
+    blockedBy: BlockingIssue[];
+    /** Issues that this issue is blocking (these are blocked by this issue) */
+    blocking: BlockingIssue[];
+}
+
+// =============================================================================
+// Blocking Relationships
+// =============================================================================
+
+/**
+ * A blocking issue reference (issue that blocks or is blocked by another)
+ */
+export interface BlockingIssue {
+    id: string;
+    number: number;
+    title: string;
+    state: string;
+}
+
+/**
+ * Blocking relationships for an issue
+ */
+export interface BlockingRelationships {
+    /** Issues that are blocking this issue (this issue is blocked by these) */
+    blockedBy: BlockingIssue[];
+    /** Issues that this issue is blocking (these are blocked by this issue) */
+    blocking: BlockingIssue[];
 }

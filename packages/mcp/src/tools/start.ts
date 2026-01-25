@@ -70,12 +70,18 @@ export function register(server: McpServer, context: ServerContext): void {
                     };
                 }
 
+                // Check for blocking issues
+                const openBlockers = item.blockedBy?.filter(b => b.state === 'OPEN') || [];
+                const blockingWarning = openBlockers.length > 0
+                    ? `\n\nWARNING: This issue is blocked by: ${openBlockers.map(b => `#${b.number} (${b.title})`).join(', ')}`
+                    : '';
+
                 if (!updateStatus) {
                     return {
                         content: [
                             {
                                 type: 'text',
-                                text: `Started work on issue #${issue} "${item.title}" (status not updated).`,
+                                text: `Started work on issue #${issue} "${item.title}" (status not updated).${blockingWarning}`,
                             },
                         ],
                     };
@@ -128,7 +134,7 @@ export function register(server: McpServer, context: ServerContext): void {
                         content: [
                             {
                                 type: 'text',
-                                text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".`,
+                                text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${blockingWarning}`,
                             },
                         ],
                     };

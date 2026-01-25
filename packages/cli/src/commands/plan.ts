@@ -610,10 +610,19 @@ async function displayBoardView(
                 if (i < statusItems.length) {
                     const item = statusItems[i];
                     const num = item.number ? `#${item.number}` : '';
-                    const text = `${num} ${item.title}`.substring(0, colWidth - 1);
-                    const color = item.assignees.includes(api.username || '')
+
+                    // Add blocking indicator
+                    const openBlockers = item.blockedBy?.filter(b => b.state === 'OPEN') || [];
+                    const blockedIndicator = openBlockers.length > 0 ? '⛔ ' : '';
+
+                    const text = `${blockedIndicator}${num} ${item.title}`.substring(0, colWidth - 1);
+                    let color = item.assignees.includes(api.username || '')
                         ? chalk.cyan
                         : chalk.white;
+                    // Highlight blocked items in red
+                    if (openBlockers.length > 0) {
+                        color = chalk.red;
+                    }
                     return color(text.padEnd(colWidth));
                 }
                 return ' '.repeat(colWidth);

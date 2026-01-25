@@ -78,13 +78,27 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
         process.exit(1);
     }
 
+    // Validate timeout if provided
+    let timeout = 5000;
+    if (options.timeout) {
+        timeout = parseInt(options.timeout, 10);
+        if (isNaN(timeout) || timeout <= 0) {
+            console.error(chalk.red('Error:'), 'Timeout must be a positive number');
+            process.exit(1);
+        }
+    }
+
+    // Security warning
+    console.log(chalk.yellow('Note:'), 'Hooks execute shell commands. Only add commands from trusted sources.');
+    console.log();
+
     try {
         const hook = addHook({
             name,
             displayName: options.displayName || name,
             command: options.command,
             category: options.category || 'other',
-            timeout: options.timeout ? parseInt(options.timeout, 10) : 5000,
+            timeout,
         });
 
         console.log(chalk.green('✓'), `Added hook "${hook.name}"`);

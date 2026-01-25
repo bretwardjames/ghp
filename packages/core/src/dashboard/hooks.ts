@@ -127,11 +127,26 @@ export function loadHooksConfig(): HooksConfig {
 
 /**
  * Save hooks configuration to disk
+ * Uses restricted permissions (0o600) since config contains executable commands
  */
 export function saveHooksConfig(config: HooksConfig): void {
     ensureConfigDir();
     const configPath = getHooksConfigPath();
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    // Ensure restricted permissions (user read/write only)
+    try {
+        fs.chmodSync(configPath, 0o600);
+    } catch {
+        // Ignore chmod errors (e.g., on Windows)
+    }
+}
+
+/**
+ * Validate hook name: alphanumeric, dash, underscore only
+ * Prevents issues when hook names are used in commands or file paths
+ */
+function isValidHookName(name: string): boolean {
+    return /^[\w\-]+$/.test(name) && name.length > 0 && name.length < 64;
 }
 
 /**
@@ -149,10 +164,10 @@ function normalizeHook(hook: Partial<DashboardHook>): DashboardHook {
 }
 
 /**
- * Validate that a hook has required fields
+ * Validate that a hook has required fields and valid name
  */
 function isValidHook(hook: DashboardHook): boolean {
-    return Boolean(hook.name && hook.command);
+    return Boolean(isValidHookName(hook.name) && hook.command);
 }
 
 // =============================================================================
@@ -195,8 +210,12 @@ export function addHook(hook: Omit<DashboardHook, 'enabled'> & { enabled?: boole
 
     const normalizedHook = normalizeHook(hook);
 
-    if (!isValidHook(normalizedHook)) {
-        throw new Error('Hook must have a name and command');
+    if (!isValidHookName(normalizedHook.name)) {
+        throw new Error('Hook name must contain only letters, numbers, dashes, and underscores');
+    }
+
+    if (!normalizedHook.command) {
+        throw new Error('Hook must have a command');
     }
 
     config.hooks.push(normalizedHook);

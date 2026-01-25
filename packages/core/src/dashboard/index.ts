@@ -165,12 +165,60 @@ function parseDiffStat(statOutput: string): DiffStats {
 }
 
 /**
+ * Get file statuses (added, modified, deleted, renamed)
+ */
+async function getFileStatuses(baseBranch: string): Promise<Map<string, FileChange['status']>> {
+    const statusMap = new Map<string, FileChange['status']>();
+    try {
+        const { stdout } = await execAsync(
+            `git diff --name-status ${baseBranch}...HEAD`
+        );
+
+        for (const line of stdout.trim().split('\n').filter(Boolean)) {
+            const [statusChar, ...pathParts] = line.split('\t');
+            const path = pathParts.join('\t');
+
+            let status: FileChange['status'] = 'modified';
+            switch (statusChar.charAt(0)) {
+                case 'A':
+                    status = 'added';
+                    break;
+                case 'D':
+                    status = 'deleted';
+                    break;
+                case 'R':
+                    status = 'renamed';
+                    break;
+            }
+            statusMap.set(path, status);
+        }
+    } catch {
+        // Ignore errors
+    }
+    return statusMap;
+}
+
+/**
  * Get diff statistics between base branch and HEAD
  */
 export async function getDiffStats(baseBranch: string): Promise<DiffStats> {
     try {
-        const { stdout } = await execAsync(`git diff --stat ${baseBranch}...HEAD`);
-        return parseDiffStat(stdout);
+        const [statOutput, fileStatuses] = await Promise.all([
+            execAsync(`git diff --stat ${baseBranch}...HEAD`),
+            getFileStatuses(baseBranch),
+        ]);
+
+        const stats = parseDiffStat(statOutput.stdout);
+
+        // Merge file statuses into stats
+        for (const file of stats.files) {
+            const status = fileStatuses.get(file.path);
+            if (status) {
+                file.status = status;
+            }
+        }
+
+        return stats;
     } catch {
         return {
             filesChanged: 0,

@@ -30,6 +30,14 @@ function M.setup(keymaps)
   if keymaps.pr then
     vim.keymap.set("n", keymaps.pr, commands.pr, { desc = "GHP: PR status" })
   end
+
+  if keymaps.dashboard then
+    vim.keymap.set("n", keymaps.dashboard, commands.dashboard, { desc = "GHP: Branch dashboard" })
+  end
+
+  if keymaps.dashboard_float then
+    vim.keymap.set("n", keymaps.dashboard_float, commands.dashboard_float, { desc = "GHP: Branch dashboard (float)" })
+  end
 end
 
 return M

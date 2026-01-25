@@ -132,6 +132,7 @@ const dashboardCmd = program
     .option('--files', 'Show only changed files')
     .option('--base <branch>', 'Base branch to compare against (default: main)')
     .option('--max-diff-lines <n>', 'Maximum diff lines to show (default: 500)', parseInt)
+    .option('--json', 'Output as JSON (for programmatic use)')
     .action(dashboardCommand);
 
 // Dashboard hooks subcommands

@@ -286,6 +286,10 @@ export {
     getFullDiff,
     getChangedFiles,
     gatherDashboardData,
+    // Hook execution
+    getGitHubRepo,
+    executeHook,
+    executeAllHooks,
 } from './dashboard/index.js';
 
 export type {
@@ -294,6 +298,7 @@ export type {
     Commit,
     BranchDashboardData,
     DashboardOptions,
+    HookExecutionResult,
 } from './dashboard/index.js';
 
 // Dashboard Hooks

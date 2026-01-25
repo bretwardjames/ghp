@@ -6,6 +6,7 @@
  * - Diff statistics (files changed, insertions, deletions)
  * - Changed files list
  * - Full diff (optional)
+ * - External hook results (grouped by category)
  */
 
 import chalk from 'chalk';
@@ -13,10 +14,15 @@ import {
     gatherDashboardData,
     getDashboardCurrentBranch as getCurrentBranch,
     getDefaultBaseBranch,
+    getEnabledHooks,
+    getGitHubRepo,
+    executeAllHooks,
     type BranchDashboardData,
     type Commit,
     type DiffStats,
     type FileChange,
+    type HookExecutionResult,
+    type HookItem,
 } from '@bretwardjames/ghp-core';
 import { getConfig } from '../config.js';
 
@@ -150,9 +156,72 @@ function renderDashboard(data: BranchDashboardData, options: DashboardOptions): 
         }
         console.log();
     }
+}
 
-    // Placeholder for external hooks (future feature)
-    // This section will be populated by the hook system in #148/#149
+/**
+ * Format a hook item for display
+ */
+function formatHookItem(item: HookItem): string {
+    const parts = [`  - ${item.title}`];
+
+    if (item.summary) {
+        parts.push(chalk.dim(` - ${item.summary}`));
+    }
+
+    if (item.timestamp) {
+        parts.push(chalk.dim(` (${item.timestamp})`));
+    }
+
+    return parts.join('');
+}
+
+/**
+ * Render hook execution results grouped by category
+ */
+function renderHookResults(results: HookExecutionResult[]): void {
+    if (results.length === 0) {
+        return;
+    }
+
+    // Group results by category
+    const byCategory = new Map<string, HookExecutionResult[]>();
+    for (const result of results) {
+        const category = result.hook.category || 'other';
+        if (!byCategory.has(category)) {
+            byCategory.set(category, []);
+        }
+        byCategory.get(category)!.push(result);
+    }
+
+    // Render each category
+    for (const [category, categoryResults] of byCategory) {
+        // Category header
+        const categoryTitle = category.charAt(0).toUpperCase() + category.slice(1);
+        console.log(chalk.bold.magenta(`${categoryTitle}`));
+        console.log(chalk.dim('─'.repeat(50)));
+
+        for (const result of categoryResults) {
+            const hookName = result.hook.displayName || result.hook.name;
+
+            if (result.success && result.data) {
+                // Successful hook - show title and items
+                console.log(chalk.bold(`${hookName}: ${result.data.title}`));
+
+                if (result.data.items.length === 0) {
+                    console.log(chalk.dim('  (no items)'));
+                } else {
+                    for (const item of result.data.items) {
+                        console.log(formatHookItem(item));
+                    }
+                }
+            } else {
+                // Failed hook - show dim error message (don't fail entire dashboard)
+                console.log(chalk.dim(`${hookName}: ${result.error || 'Unknown error'}`));
+            }
+        }
+
+        console.log();
+    }
 }
 
 /**
@@ -170,11 +239,21 @@ export async function dashboardCommand(options: DashboardOptions = {}): Promise<
 
     console.log(chalk.dim('Gathering branch data...'));
 
-    const data = await gatherDashboardData({
-        baseBranch,
-        includeDiff: options.diff,
-        maxDiffLines: options.maxDiffLines || 500,
-    });
+    // Get enabled hooks and repo info
+    const enabledHooks = getEnabledHooks();
+    const repo = await getGitHubRepo() || 'unknown/unknown';
+
+    // Execute dashboard data gathering and hooks in parallel
+    const [data, hookResults] = await Promise.all([
+        gatherDashboardData({
+            baseBranch,
+            includeDiff: options.diff,
+            maxDiffLines: options.maxDiffLines || 500,
+        }),
+        enabledHooks.length > 0
+            ? executeAllHooks(enabledHooks, branch, repo)
+            : Promise.resolve([]),
+    ]);
 
     if (!data) {
         console.error(chalk.red('Error:'), 'Failed to gather dashboard data');
@@ -187,4 +266,7 @@ export async function dashboardCommand(options: DashboardOptions = {}): Promise<
     }
 
     renderDashboard(data, options);
+
+    // Render hook results after main dashboard content
+    renderHookResults(hookResults);
 }

@@ -6,6 +6,7 @@
  * - Diff statistics
  * - Changed files
  * - Full diff (optional)
+ * - Hook execution for external content providers
  */
 
 import { exec } from 'child_process';
@@ -14,6 +15,7 @@ import {
     getCurrentBranch as gitGetCurrentBranch,
     getDefaultBranch as gitGetDefaultBranch,
 } from '../git-utils.js';
+import type { DashboardHook, HookItem, HookResponse } from './hooks.js';
 
 const execAsync = promisify(exec);
 
@@ -353,4 +355,160 @@ export async function gatherDashboardData(
     }
 
     return data;
+}
+
+// =============================================================================
+// Hook Execution
+// =============================================================================
+
+/**
+ * Result of executing a dashboard hook
+ */
+export interface HookExecutionResult {
+    /** The hook that was executed */
+    hook: DashboardHook;
+    /** Whether execution succeeded */
+    success: boolean;
+    /** Data returned by the hook (if successful) */
+    data?: { title: string; items: HookItem[] };
+    /** Error message (if failed) */
+    error?: string;
+    /** Execution duration in milliseconds */
+    duration: number;
+}
+
+/**
+ * Shell escape a string to prevent command injection.
+ * Uses single quotes with escaped single quotes inside.
+ */
+function shellEscape(str: string): string {
+    // Replace single quotes with '\'' (end quote, escaped quote, start quote)
+    return `'${str.replace(/'/g, "'\\''")}'`;
+}
+
+/**
+ * Get the GitHub repository identifier (owner/repo) from git remote.
+ */
+export async function getGitHubRepo(): Promise<string | null> {
+    try {
+        const { stdout } = await execAsync('git remote get-url origin');
+        const url = stdout.trim();
+
+        // Handle SSH URLs: git@github.com:owner/repo.git
+        const sshMatch = url.match(/git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+        if (sshMatch) {
+            return sshMatch[1];
+        }
+
+        // Handle HTTPS URLs: https://github.com/owner/repo.git
+        const httpsMatch = url.match(/https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+        if (httpsMatch) {
+            return httpsMatch[1];
+        }
+
+        return null;
+    } catch (error) {
+        debug('Failed to get GitHub repo', error);
+        return null;
+    }
+}
+
+/**
+ * Execute a single dashboard hook
+ */
+export async function executeHook(
+    hook: DashboardHook,
+    branch: string,
+    repo: string
+): Promise<HookExecutionResult> {
+    const startTime = Date.now();
+    const timeout = hook.timeout ?? 5000;
+
+    try {
+        // Build command with shell-escaped arguments
+        const command = `${hook.command} --branch ${shellEscape(branch)} --repo ${shellEscape(repo)}`;
+
+        debug(`Executing hook "${hook.name}": ${command}`);
+
+        const { stdout } = await execAsync(command, { timeout });
+
+        // Parse JSON output
+        let response: HookResponse;
+        try {
+            response = JSON.parse(stdout) as HookResponse;
+        } catch (parseError) {
+            return {
+                hook,
+                success: false,
+                error: `Invalid JSON output: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+                duration: Date.now() - startTime,
+            };
+        }
+
+        // Validate response has success boolean
+        if (typeof response.success !== 'boolean') {
+            return {
+                hook,
+                success: false,
+                error: 'Hook response missing "success" boolean field',
+                duration: Date.now() - startTime,
+            };
+        }
+
+        // Return failed hook response
+        if (!response.success) {
+            return {
+                hook,
+                success: false,
+                error: response.error || 'Hook reported failure without error message',
+                duration: Date.now() - startTime,
+            };
+        }
+
+        // Validate successful response has data
+        if (!response.data || !response.data.title || !Array.isArray(response.data.items)) {
+            return {
+                hook,
+                success: false,
+                error: 'Hook succeeded but returned invalid data structure',
+                duration: Date.now() - startTime,
+            };
+        }
+
+        return {
+            hook,
+            success: true,
+            data: response.data,
+            duration: Date.now() - startTime,
+        };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isTimeout = errorMessage.includes('ETIMEDOUT') || errorMessage.includes('timed out');
+
+        return {
+            hook,
+            success: false,
+            error: isTimeout ? `Hook timed out after ${timeout}ms` : errorMessage,
+            duration: Date.now() - startTime,
+        };
+    }
+}
+
+/**
+ * Execute all provided hooks in parallel
+ */
+export async function executeAllHooks(
+    hooks: DashboardHook[],
+    branch: string,
+    repo: string
+): Promise<HookExecutionResult[]> {
+    if (hooks.length === 0) {
+        return [];
+    }
+
+    debug(`Executing ${hooks.length} hooks in parallel`);
+
+    return Promise.all(
+        hooks.map((hook) => executeHook(hook, branch, repo))
+    );
 }

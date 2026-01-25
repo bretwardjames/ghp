@@ -335,19 +335,14 @@ async function findStartCommand(worktreePath: string): Promise<string | null> {
 export async function buildNvimClaudeCommand(
     worktreePath: string,
     nvimCommand: string,
-    resumeSession: boolean = false
+    _resumeSession: boolean = false
 ): Promise<string> {
-    if (resumeSession) {
-        // For resume, just open Claude without sending a command
-        // User can manually resume from the nvim interface
-        return `${nvimCommand} -c "ClaudeCode"`;
-    }
-
     // Check if start command exists
     const startCmd = await findStartCommand(worktreePath);
 
     if (startCmd) {
         // Open nvim, toggle Claude, send /start command
+        // /start auto-detects issue from branch and handles both new and resume cases
         return `${nvimCommand} -c "ClaudeCode" -c "sleep 500m" -c "ClaudeCodeSend /start"`;
     }
 

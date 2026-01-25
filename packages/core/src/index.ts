@@ -273,3 +273,25 @@ export type {
     RelatedIssue,
     IssueRelationships,
 } from './types.js';
+
+// =============================================================================
+// Dashboard (branch overview)
+// =============================================================================
+
+export {
+    getCurrentBranch as getDashboardCurrentBranch, // Alias for backward compat
+    getDefaultBaseBranch,
+    getCommitHistory,
+    getDiffStats,
+    getFullDiff,
+    getChangedFiles,
+    gatherDashboardData,
+} from './dashboard/index.js';
+
+export type {
+    DiffStats,
+    FileChange,
+    Commit,
+    BranchDashboardData,
+    DashboardOptions,
+} from './dashboard/index.js';

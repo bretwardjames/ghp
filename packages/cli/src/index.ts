@@ -31,6 +31,7 @@ import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { progressCommand } from './commands/progress.js';
+import { dashboardCommand } from './commands/dashboard.js';
 
 const program = new Command();
 
@@ -111,6 +112,18 @@ program
     .option('-t, --type <type>', 'Filter parent issues by type (e.g., Epic)')
     .option('-a, --all', 'Show all sub-issues (default: collapse if >10)')
     .action(progressCommand);
+
+program
+    .command('dashboard')
+    .alias('db')
+    .description('Show comprehensive view of branch changes (commits, files, diff)')
+    .option('--diff', 'Include full diff output')
+    .option('--stats', 'Show only diff statistics')
+    .option('--commits', 'Show only commit history')
+    .option('--files', 'Show only changed files')
+    .option('--base <branch>', 'Base branch to compare against (default: main)')
+    .option('--max-diff-lines <n>', 'Maximum diff lines to show (default: 500)', parseInt)
+    .action(dashboardCommand);
 
 // Workflow commands
 program

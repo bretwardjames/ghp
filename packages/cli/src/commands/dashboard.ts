@@ -1,0 +1,188 @@
+/**
+ * Dashboard command - Show comprehensive view of branch changes
+ *
+ * Displays:
+ * - Commit history since branching from main
+ * - Diff statistics (files changed, insertions, deletions)
+ * - Changed files list
+ * - Full diff (optional)
+ */
+
+import chalk from 'chalk';
+import {
+    gatherDashboardData,
+    getDashboardCurrentBranch as getCurrentBranch,
+    getDefaultBaseBranch,
+    type BranchDashboardData,
+    type Commit,
+    type DiffStats,
+    type FileChange,
+} from '@bretwardjames/ghp-core';
+import { getConfig } from '../config.js';
+
+export interface DashboardOptions {
+    diff?: boolean;
+    stats?: boolean;
+    commits?: boolean;
+    files?: boolean;
+    base?: string;
+    maxDiffLines?: number;
+}
+
+/**
+ * Format a commit for display
+ */
+function formatCommit(commit: Commit, index: number): string {
+    const hashColor = chalk.yellow(commit.shortHash);
+    const subject = commit.subject;
+    return `  ${hashColor} ${subject}`;
+}
+
+/**
+ * Format diff stats header
+ */
+function formatStatsHeader(stats: DiffStats): string {
+    const parts = [];
+
+    if (stats.filesChanged > 0) {
+        parts.push(chalk.cyan(`${stats.filesChanged} file${stats.filesChanged !== 1 ? 's' : ''} changed`));
+    }
+
+    if (stats.insertions > 0) {
+        parts.push(chalk.green(`+${stats.insertions}`));
+    }
+
+    if (stats.deletions > 0) {
+        parts.push(chalk.red(`-${stats.deletions}`));
+    }
+
+    return parts.join(', ');
+}
+
+/**
+ * Format a file change for display
+ */
+function formatFileChange(file: FileChange): string {
+    let statusIcon: string;
+    let color: typeof chalk;
+
+    switch (file.status) {
+        case 'added':
+            statusIcon = '+';
+            color = chalk.green;
+            break;
+        case 'deleted':
+            statusIcon = '-';
+            color = chalk.red;
+            break;
+        case 'renamed':
+            statusIcon = '→';
+            color = chalk.blue;
+            break;
+        default:
+            statusIcon = '~';
+            color = chalk.yellow;
+    }
+
+    return `  ${color(statusIcon)} ${file.path}`;
+}
+
+/**
+ * Render the dashboard to the terminal
+ */
+function renderDashboard(data: BranchDashboardData, options: DashboardOptions): void {
+    const showAll = !options.diff && !options.stats && !options.commits && !options.files;
+
+    // Header
+    console.log();
+    console.log(chalk.bold.cyan('Branch Dashboard'));
+    console.log(chalk.dim(`${data.branch} ← ${data.baseBranch}`));
+    console.log();
+
+    // Stats summary
+    if (showAll || options.stats) {
+        if (data.stats.filesChanged === 0) {
+            console.log(chalk.dim('No changes from base branch'));
+        } else {
+            console.log(formatStatsHeader(data.stats));
+        }
+        console.log();
+    }
+
+    // Commits
+    if ((showAll || options.commits) && data.commits.length > 0) {
+        console.log(chalk.bold(`Commits (${data.commits.length})`));
+        console.log(chalk.dim('─'.repeat(50)));
+        for (let i = 0; i < data.commits.length; i++) {
+            console.log(formatCommit(data.commits[i], i));
+        }
+        console.log();
+    }
+
+    // Changed files
+    if ((showAll || options.files) && data.stats.files.length > 0) {
+        console.log(chalk.bold('Changed Files'));
+        console.log(chalk.dim('─'.repeat(50)));
+        for (const file of data.stats.files) {
+            console.log(formatFileChange(file));
+        }
+        console.log();
+    }
+
+    // Full diff (only if explicitly requested)
+    if (options.diff && data.diff) {
+        console.log(chalk.bold('Diff'));
+        console.log(chalk.dim('─'.repeat(50)));
+        // Basic syntax highlighting for diff
+        const lines = data.diff.split('\n');
+        for (const line of lines) {
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+                console.log(chalk.green(line));
+            } else if (line.startsWith('-') && !line.startsWith('---')) {
+                console.log(chalk.red(line));
+            } else if (line.startsWith('@@')) {
+                console.log(chalk.cyan(line));
+            } else if (line.startsWith('diff ') || line.startsWith('index ')) {
+                console.log(chalk.dim(line));
+            } else {
+                console.log(line);
+            }
+        }
+        console.log();
+    }
+
+    // Placeholder for external hooks (future feature)
+    // This section will be populated by the hook system in #148/#149
+}
+
+/**
+ * Main dashboard command
+ */
+export async function dashboardCommand(options: DashboardOptions = {}): Promise<void> {
+    const branch = await getCurrentBranch();
+    if (!branch) {
+        console.error(chalk.red('Error:'), 'Not in a git repository');
+        process.exit(1);
+    }
+
+    // Get base branch from options, config, or detect
+    const baseBranch = options.base || getConfig('mainBranch') || await getDefaultBaseBranch();
+
+    console.log(chalk.dim('Gathering branch data...'));
+
+    const data = await gatherDashboardData({
+        baseBranch,
+        includeDiff: options.diff,
+        maxDiffLines: options.maxDiffLines || 500,
+    });
+
+    if (!data) {
+        console.error(chalk.red('Error:'), 'Failed to gather dashboard data');
+        process.exit(1);
+    }
+
+    // Clear the "Gathering..." line
+    process.stdout.write('\x1b[1A\x1b[2K');
+
+    renderDashboard(data, options);
+}

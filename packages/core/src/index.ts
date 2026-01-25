@@ -295,3 +295,26 @@ export type {
     BranchDashboardData,
     DashboardOptions,
 } from './dashboard/index.js';
+
+// Dashboard Hooks
+export {
+    getHooksConfigPath,
+    loadHooksConfig,
+    saveHooksConfig,
+    getHooks,
+    getEnabledHooks,
+    getHook,
+    addHook,
+    updateHook,
+    removeHook,
+    enableHook,
+    disableHook,
+    getHooksByCategory,
+} from './dashboard/hooks.js';
+
+export type {
+    DashboardHook,
+    HooksConfig,
+    HookItem,
+    HookResponse,
+} from './dashboard/hooks.js';

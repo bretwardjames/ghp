@@ -32,6 +32,14 @@ import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { progressCommand } from './commands/progress.js';
 import { dashboardCommand } from './commands/dashboard.js';
+import {
+    hooksListCommand,
+    hooksAddCommand,
+    hooksRemoveCommand,
+    hooksEnableCommand,
+    hooksDisableCommand,
+    hooksShowCommand,
+} from './commands/dashboard-hooks.js';
 
 const program = new Command();
 
@@ -113,7 +121,8 @@ program
     .option('-a, --all', 'Show all sub-issues (default: collapse if >10)')
     .action(progressCommand);
 
-program
+// Dashboard with hooks subcommands
+const dashboardCmd = program
     .command('dashboard')
     .alias('db')
     .description('Show comprehensive view of branch changes (commits, files, diff)')
@@ -124,6 +133,47 @@ program
     .option('--base <branch>', 'Base branch to compare against (default: main)')
     .option('--max-diff-lines <n>', 'Maximum diff lines to show (default: 500)', parseInt)
     .action(dashboardCommand);
+
+// Dashboard hooks subcommands
+const hooksCmd = dashboardCmd
+    .command('hooks')
+    .description('Manage dashboard hooks (external content providers)');
+
+hooksCmd
+    .command('list')
+    .alias('ls')
+    .description('List all registered hooks')
+    .action(hooksListCommand);
+
+hooksCmd
+    .command('add <name>')
+    .description('Add a new hook')
+    .option('-c, --command <cmd>', 'Command to execute (required)')
+    .option('-d, --display-name <name>', 'Human-readable display name')
+    .option('--category <category>', 'Category for grouping (default: other)')
+    .option('-t, --timeout <ms>', 'Timeout in milliseconds (default: 5000)')
+    .action(hooksAddCommand);
+
+hooksCmd
+    .command('remove <name>')
+    .alias('rm')
+    .description('Remove a hook')
+    .action(hooksRemoveCommand);
+
+hooksCmd
+    .command('enable <name>')
+    .description('Enable a hook')
+    .action(hooksEnableCommand);
+
+hooksCmd
+    .command('disable <name>')
+    .description('Disable a hook')
+    .action(hooksDisableCommand);
+
+hooksCmd
+    .command('show <name>')
+    .description('Show details of a hook')
+    .action(hooksShowCommand);
 
 // Workflow commands
 program

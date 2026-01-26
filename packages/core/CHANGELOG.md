@@ -1,5 +1,13 @@
 # @bretwardjames/ghp-core
 
+## 0.2.0-beta.9
+
+### Patch Changes
+
+- feat(cli): add stop command, auto-apply epic label, fix progress display
+  feat(vscode): show issue number before title in sidebar
+  fix(progress): count CLOSED sub-issues as completed
+
 ## 0.2.0-beta.8
 
 ### Patch Changes

@@ -8,6 +8,7 @@
     "@bretwardjames/ghp-mcp": "0.0.0"
   },
   "changesets": [
+    "beta-9-release",
     "dashboard-feature",
     "hotfix-pagination",
     "json-output-beta8"

@@ -1269,6 +1269,68 @@ export class GitHubAPI {
     }
 
     /**
+     * Add a blocking relationship (blockingIssue blocks blockedIssue)
+     * @param repo Repository info
+     * @param blockedIssue Issue number that is blocked
+     * @param blockingIssue Issue number that blocks the other
+     * @returns true if successful
+     */
+    async addBlockedBy(repo: RepoInfo, blockedIssue: number, blockingIssue: number): Promise<boolean> {
+        if (!this.graphqlWithSubIssues) throw new Error('Not authenticated');
+
+        try {
+            const [blockedId, blockingId] = await Promise.all([
+                this.getIssueNodeId(repo, blockedIssue),
+                this.getIssueNodeId(repo, blockingIssue),
+            ]);
+
+            if (!blockedId || !blockingId) {
+                return false;
+            }
+
+            await this.graphqlWithSubIssues(queries.ADD_BLOCKED_BY_MUTATION, {
+                issueId: blockedId,
+                blockingIssueId: blockingId,
+            });
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Remove a blocking relationship
+     * @param repo Repository info
+     * @param blockedIssue Issue number that was blocked
+     * @param blockingIssue Issue number that was blocking
+     * @returns true if successful
+     */
+    async removeBlockedBy(repo: RepoInfo, blockedIssue: number, blockingIssue: number): Promise<boolean> {
+        if (!this.graphqlWithSubIssues) throw new Error('Not authenticated');
+
+        try {
+            const [blockedId, blockingId] = await Promise.all([
+                this.getIssueNodeId(repo, blockedIssue),
+                this.getIssueNodeId(repo, blockingIssue),
+            ]);
+
+            if (!blockedId || !blockingId) {
+                return false;
+            }
+
+            await this.graphqlWithSubIssues(queries.REMOVE_BLOCKED_BY_MUTATION, {
+                issueId: blockedId,
+                blockingIssueId: blockingId,
+            });
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Get issue relationships (parent, sub-issues, and blocking relationships)
      */
     async getIssueRelationships(repo: RepoInfo, issueNumber: number): Promise<IssueRelationships | null> {

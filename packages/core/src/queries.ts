@@ -501,6 +501,28 @@ export const REMOVE_SUB_ISSUE_MUTATION = `
 `;
 
 /**
+ * Mutation to add a blocking relationship (blockingIssue blocks blockedIssue)
+ */
+export const ADD_BLOCKED_BY_MUTATION = `
+    mutation($issueId: ID!, $blockingIssueId: ID!) {
+        addBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
+            issue { number }
+        }
+    }
+`;
+
+/**
+ * Mutation to remove a blocking relationship
+ */
+export const REMOVE_BLOCKED_BY_MUTATION = `
+    mutation($issueId: ID!, $blockingIssueId: ID!) {
+        removeBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
+            issue { number }
+        }
+    }
+`;
+
+/**
  * Query to get issue with its project items (direct lookup, no pagination needed)
  */
 export const ISSUE_WITH_PROJECT_ITEMS_QUERY = `

@@ -560,19 +560,19 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         // Check if this item is the "currently working on" item
         const isActive = this.isActiveItem(item);
 
-        const treeItem = new vscode.TreeItem(item.title, vscode.TreeItemCollapsibleState.None);
+        // Show issue number before title for visibility
+        const label = item.number ? `#${item.number} ${item.title}` : item.title;
+        const treeItem = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
 
         // Check for linked branch (only for issues with a number)
         const linkedBranch = item.number
             ? (await this.branchLinker?.getBranchForIssue(item.number)) || null
             : null;
 
-        // Description: repo#number + branch indicator + active badge
+        // Description: repo (for cross-repo items) + branch indicator + active badge
         let description = '';
-        if (item.repository && item.number) {
-            description = `${item.repository}#${item.number}`;
-        } else if (item.number) {
-            description = `#${item.number}`;
+        if (item.repository) {
+            description = item.repository;
         }
 
         // Add branch indicator with git-branch icon

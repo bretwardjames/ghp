@@ -110,6 +110,7 @@ program
     .option('--sort <fields>', 'Sort by fields (comma-separated, prefix with - for ascending, e.g., "status,-title")')
     .option('--slice <field=value>', 'Filter by field (repeatable: --slice label=bug --slice Priority=High)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('--view <name>', 'Filter to items in a specific project view')
+    .option('--hide-done', 'Hide completed items (Done, Closed, Completed)')
     .action(planCommand);
 
 program

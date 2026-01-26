@@ -16,6 +16,7 @@ interface PlanOptions {
     all?: boolean;
     view?: string;
     group?: string;
+    hideDone?: boolean;
 }
 
 /**
@@ -106,7 +107,12 @@ function applyViewFilter(items: ProjectItem[], filterExpr: string, username: str
 export async function planCommand(shortcut?: string, command?: any): Promise<void> {
     // Commander passes (shortcut, options) for optional positional args
     // The options object is passed directly, not as command.opts()
-    const cliOpts: PlanOptions = command?.opts?.() || command || {};
+    const rawCliOpts: PlanOptions = command?.opts?.() || command || {};
+
+    // Filter out undefined CLI options so they don't override defaults
+    const cliOpts = Object.fromEntries(
+        Object.entries(rawCliOpts).filter(([_, v]) => v !== undefined)
+    ) as PlanOptions;
 
     let options: PlanOptions;
     let shortcutName: string | undefined = shortcut;
@@ -249,6 +255,13 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
             : [options.status.toLowerCase()];
         filteredItems = filteredItems.filter(item =>
             item.status && statusList.includes(item.status.toLowerCase())
+        );
+    }
+
+    // --hide-done: filter out completed items
+    if (options.hideDone) {
+        filteredItems = filteredItems.filter(item =>
+            !['Done', 'Closed', 'Completed'].includes(item.status || '')
         );
     }
 

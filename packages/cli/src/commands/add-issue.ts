@@ -35,6 +35,14 @@ interface AddIssueOptions {
     assign?: string;
     /** Project fields to set (field=value format, can be multiple) */
     field?: string[];
+    /** Object type being created: 'issue' (default) or 'epic' */
+    objectType?: 'issue' | 'epic';
+    /** Execute AI plan (create sub-issues) - for epic with --ai */
+    execute?: boolean;
+    /** Additional context for AI planning - for epic with --ai */
+    context?: string;
+    /** Dry run mode - show what would be created without creating */
+    dryRun?: boolean;
 }
 
 async function openEditor(initialContent: string): Promise<string> {
@@ -148,6 +156,19 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             process.exit(1);
         }
         project = found;
+    }
+
+    // Epic + AI: delegate to planEpicCommand for full breakdown workflow
+    if (options.ai && options.objectType === 'epic') {
+        console.log(chalk.dim('Using AI to plan epic breakdown...'));
+        const { planEpicCommand } = await import('./plan-epic.js');
+        await planEpicCommand(title, {
+            project: options.project,
+            execute: options.execute,
+            context: options.context,
+            dryRun: options.dryRun,
+        });
+        return;
     }
 
     // Handle template and editor
@@ -332,8 +353,11 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         }
     }
 
-    // Collect labels to apply (CLI + AI-suggested)
+    // Collect labels to apply (CLI + AI-suggested + epic type)
     const labelsToApply: string[] = [];
+    if (options.objectType === 'epic') {
+        labelsToApply.push('epic');
+    }
     if (options.labels) {
         labelsToApply.push(...options.labels.split(',').map(l => l.trim()).filter(Boolean));
     }

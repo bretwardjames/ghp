@@ -87,9 +87,22 @@ function installPackage(packageName: string, version: string): boolean {
 }
 
 export async function updateCommand(options: UpdateOptions): Promise<void> {
+    // Validate conflicting flags
+    if (options.beta && options.stable) {
+        console.error(chalk.red('Error:'), 'Cannot specify both --beta and --stable');
+        process.exit(1);
+    }
+
     console.log(chalk.bold('Checking for updates...\n'));
 
     const packages = getPackageInfo();
+
+    // Check if we could reach npm registry
+    const hasNetworkIssue = packages.every(p => p.latest === 'unknown' && !p.latestBeta);
+    if (hasNetworkIssue) {
+        console.error(chalk.red('Error:'), 'Could not fetch package versions. Check your network connection.');
+        process.exit(1);
+    }
 
     // Determine if we should use beta based on CLI version
     const cliInfo = packages.find(p => p.name === '@bretwardjames/ghp-cli');
@@ -156,7 +169,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
         return;
     } else {
         // Ask user which packages to update
-        const options_list = [
+        const optionsList = [
             'Update all packages',
             ...updatesAvailable.map(({ pkg, targetVersion }) =>
                 `Update ${pkg.displayName} only (${pkg.installed || 'not installed'} → ${targetVersion})`
@@ -166,11 +179,11 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
 
         const choice = await promptSelectWithDefault(
             'Which packages do you want to update?',
-            options_list,
+            optionsList,
             0
         );
 
-        if (choice === options_list.length - 1) {
+        if (choice === optionsList.length - 1) {
             // Cancel
             console.log(chalk.dim('Update cancelled.'));
             return;
@@ -217,5 +230,6 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
         console.log(chalk.green(`Successfully updated ${successCount} package(s)!`));
     } else {
         console.log(chalk.yellow(`Updated ${successCount} package(s), ${failCount} failed.`));
+        process.exit(1);
     }
 }

@@ -66,6 +66,19 @@ pnpm publish --tag beta --access public
 - Use "Relates to #XX" not "Closes #XX" unless the PR actually closes the issue
 - Co-author line: `Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>`
 
+## Issue Workflow
+
+Issues follow this status progression:
+
+| Event | Status |
+|-------|--------|
+| PR created | In Review |
+| PR merged | Ready for Beta |
+| Beta released with feature | In Beta |
+| Stable release with feature | Done |
+
+**Do not mark issues as Done until the feature ships in a stable release.**
+
 ## Versioning
 
 - npm packages use changesets: `pnpm changeset`, `pnpm changeset version`, `pnpm changeset publish`

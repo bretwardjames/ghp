@@ -9,6 +9,7 @@ import { workCommand } from './commands/work.js';
 import { planCommand } from './commands/plan.js';
 import { startCommand } from './commands/start.js';
 import { doneCommand } from './commands/done.js';
+import { stopCommand } from './commands/stop.js';
 import { moveCommand } from './commands/move.js';
 import { switchCommand } from './commands/switch.js';
 import { linkBranchCommand } from './commands/link-branch.js';
@@ -212,6 +213,13 @@ program
     .alias('d')
     .description('Mark an issue as done')
     .action(doneCommand);
+
+program
+    .command('stop <issue>')
+    .description('Stop working on an issue (removes active label without changing status)')
+    .option('--unlink', 'Remove the branch link from the issue')
+    .option('--worktree', 'Remove the worktree for this issue')
+    .action(stopCommand);
 
 program
     .command('move <issue> <status>')

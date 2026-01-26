@@ -73,14 +73,35 @@ function formatAgentRow(agent: AgentSummary, showAction: boolean = false): strin
 /**
  * List all registered agents
  */
-export async function agentsListCommand(): Promise<void> {
+export async function agentsListCommand(options: AgentsListOptions = {}): Promise<void> {
     const summaries = getAgentSummaries();
 
     if (summaries.length === 0) {
-        console.log(chalk.dim('No agents running.'));
-        console.log();
-        console.log('Start an agent with:');
-        console.log(chalk.cyan('  ghp start <issue> --parallel'));
+        if (options.json) {
+            console.log('[]');
+        } else {
+            console.log(chalk.dim('No agents running.'));
+            console.log();
+            console.log('Start an agent with:');
+            console.log(chalk.cyan('  ghp start <issue> --parallel'));
+        }
+        return;
+    }
+
+    // JSON output
+    if (options.json) {
+        const jsonOutput = summaries.map(agent => ({
+            id: agent.id,
+            issueNumber: agent.issueNumber,
+            issueTitle: agent.issueTitle,
+            status: agent.waitingForInput ? 'waiting' : agent.status,
+            waitingForInput: agent.waitingForInput,
+            uptime: agent.uptime,
+            port: agent.port,
+            branch: agent.branch,
+            currentAction: agent.currentAction,
+        }));
+        console.log(JSON.stringify(jsonOutput, null, 2));
         return;
     }
 
@@ -105,6 +126,10 @@ export async function agentsListCommand(): Promise<void> {
     console.log(chalk.dim('─'.repeat(80)));
     console.log(chalk.dim(`${summaries.length} agent(s)`));
     console.log();
+}
+
+interface AgentsListOptions {
+    json?: boolean;
 }
 
 interface AgentsStopOptions {

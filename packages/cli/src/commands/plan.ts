@@ -17,6 +17,7 @@ interface PlanOptions {
     view?: string;
     group?: string;
     hideDone?: boolean;
+    json?: boolean;
 }
 
 /**
@@ -107,12 +108,7 @@ function applyViewFilter(items: ProjectItem[], filterExpr: string, username: str
 export async function planCommand(shortcut?: string, command?: any): Promise<void> {
     // Commander passes (shortcut, options) for optional positional args
     // The options object is passed directly, not as command.opts()
-    const rawCliOpts: PlanOptions = command?.opts?.() || command || {};
-
-    // Filter out undefined CLI options so they don't override defaults
-    const cliOpts = Object.fromEntries(
-        Object.entries(rawCliOpts).filter(([_, v]) => v !== undefined)
-    ) as PlanOptions;
+    const cliOpts: PlanOptions = command?.opts?.() || command || {};
 
     let options: PlanOptions;
     let shortcutName: string | undefined = shortcut;
@@ -348,6 +344,25 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
             }
             return 0;
         });
+    }
+
+    // JSON output
+    if (options.json) {
+        const jsonOutput = filteredItems.map(item => ({
+            number: item.number,
+            title: item.title,
+            type: item.type,
+            issueType: item.issueType,
+            status: item.status,
+            state: item.state,
+            assignees: item.assignees,
+            labels: item.labels,
+            repository: item.repository,
+            url: item.url,
+            fields: item.fields,
+        }));
+        console.log(JSON.stringify(jsonOutput, null, 2));
+        return;
     }
 
     // Determine if we need status column (when items have mixed statuses)

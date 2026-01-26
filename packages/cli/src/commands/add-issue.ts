@@ -161,13 +161,19 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     // Epic + AI: delegate to planEpicCommand for full breakdown workflow
     if (options.ai && options.objectType === 'epic') {
         console.log(chalk.dim('Using AI to plan epic breakdown...'));
-        const { planEpicCommand } = await import('./plan-epic.js');
-        await planEpicCommand(title, {
-            project: options.project,
-            execute: options.execute,
-            context: options.context,
-            dryRun: options.dryRun,
-        });
+        try {
+            const { planEpicCommand } = await import('./plan-epic.js');
+            await planEpicCommand(title, {
+                project: options.project,
+                execute: options.execute,
+                context: options.context,
+                dryRun: options.dryRun,
+            });
+        } catch (error) {
+            console.error(chalk.red('Error:'), 'Failed to run epic planning');
+            console.error(chalk.dim(error instanceof Error ? error.message : String(error)));
+            process.exit(1);
+        }
         return;
     }
 

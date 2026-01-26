@@ -80,7 +80,7 @@ program
     .option('--dry-run', 'Show what would be created without creating')
     .option('-c, --context <context>', 'Additional context for planning')
     .action((title, options) => {
-        console.log(chalk.yellow('Deprecation warning:'), 'plan-epic is deprecated. Use "ghp add epic --ai" instead.');
+        console.warn(chalk.yellow('Deprecation warning:'), 'plan-epic is deprecated. Use "ghp add epic --ai" instead.');
         return planEpicCommand(title, options);
     });
 
@@ -330,8 +330,16 @@ addCmd
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .action((title, options) => {
+        // Handle --list-templates without title
+        if (options.listTemplates) {
+            return addIssueCommand(title, { ...options, objectType: 'issue' });
+        }
         // If title is provided and not a subcommand, treat as issue creation
         if (title && title !== 'issue' && title !== 'epic') {
+            return addIssueCommand(title, { ...options, objectType: 'issue' });
+        }
+        // No title provided - let addIssueCommand handle the error
+        if (!title) {
             return addIssueCommand(title, { ...options, objectType: 'issue' });
         }
     });

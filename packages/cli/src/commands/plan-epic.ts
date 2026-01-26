@@ -40,6 +40,9 @@ function createToolHandlers(
                 return { error: 'Failed to create issue' };
             }
 
+            // Add epic label to the parent issue
+            await api.addLabelToIssue(repo, issue.number, "epic");
+
             // Add to project
             const itemId = await api.addToProject(projectId, issue.id);
             if (itemId) {

@@ -34,6 +34,7 @@ import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { progressCommand } from './commands/progress.js';
 import { dashboardCommand } from './commands/dashboard.js';
+import { updateCommand } from './commands/update.js';
 import {
     hooksListCommand,
     hooksAddCommand,
@@ -471,5 +472,15 @@ agentsCmd
     .description('Watch agents with auto-refresh (simple dashboard)')
     .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
     .action(agentsWatchCommand);
+
+// Self-update
+program
+    .command('update')
+    .description('Update ghp packages to latest version')
+    .option('-y, --yes', 'Skip prompts and update all packages')
+    .option('--beta', 'Force update to beta versions')
+    .option('--stable', 'Force update to stable versions')
+    .option('--check', 'Check for updates without installing')
+    .action(updateCommand);
 
 program.parse();

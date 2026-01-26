@@ -47,6 +47,7 @@ ghp work --sort -priority      # Sort (prefix - for descending)
 ghp work --slice type=Bug      # Filter by field value
 ghp work --list                # Simple list format
 ghp work --flat                # Flat table format
+ghp work --json                # JSON output for scripts/AI tools
 ```
 
 ```bash
@@ -59,7 +60,9 @@ ghp plan --view "Sprint 1"     # Filter by project view
 ghp plan --group status        # Group by field
 ghp plan --sort priority       # Sort by field
 ghp plan --all                 # Include done items
+ghp plan --hide-done           # Exclude completed items
 ghp plan --list                # Simple list format
+ghp plan --json                # JSON output for scripts/AI tools
 ghp plan bugs                  # Use configured shortcut
 ```
 
@@ -194,6 +197,7 @@ Work on multiple issues simultaneously:
 ghp start 123 --parallel       # Create worktree for issue
 ghp switch 456 --parallel      # Open existing issue in worktree
 ghp worktree list              # List all active worktrees
+ghp worktree list --json       # JSON output for scripts/AI tools
 ghp worktree remove 123        # Remove worktree for issue
 ghp worktree remove 123 --force  # Force remove (uncommitted changes)
 ```
@@ -246,6 +250,7 @@ Manage Claude agents running in parallel worktrees:
 
 ```bash
 ghp agents list                # List all running agents
+ghp agents list --json         # JSON output for scripts/AI tools
 ghp agents stop 123            # Stop agent for specific issue
 ghp agents stop --all          # Stop all agents
 ghp agents watch               # Real-time agent dashboard

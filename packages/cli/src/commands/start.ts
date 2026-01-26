@@ -52,6 +52,8 @@ interface StartOptions {
     worktreePath?: string;
     /** Whether to open a terminal (default: true with --parallel, set to false with --no-open) */
     open?: boolean;
+    /** Whether to open the admin pane (ghp agents watch) in parallel mode */
+    admin?: boolean;
     // Terminal mode overrides
     /** Use nvim with claudecode.nvim plugin */
     nvim?: boolean;
@@ -750,10 +752,12 @@ Use the GHP tools available via MCP to:
                 updateAgent(agent.id, { status: 'running' });
                 console.log(chalk.dim(`Agent registered: ${agent.id.substring(0, 8)}...`));
 
-                // Open admin pane (ghp agents watch) if not already open
-                const adminResult = await openAdminPane();
-                if (adminResult.success && !adminResult.alreadyOpen) {
-                    console.log(chalk.dim('Opened admin pane (ghp-admin window)'));
+                // Open admin pane (ghp agents watch) if --admin flag is set
+                if (options.admin) {
+                    const adminResult = await openAdminPane();
+                    if (adminResult.success && !adminResult.alreadyOpen) {
+                        console.log(chalk.dim('Opened admin pane (ghp-admin window)'));
+                    }
                 }
             } else {
                 console.log(chalk.yellow('⚠'), 'Could not open terminal:', result.error);

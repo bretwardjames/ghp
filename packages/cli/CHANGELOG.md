@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0-beta.10
+
+### Minor Changes
+
+- feat(cli): add ghp update command for self-updating packages
+
 ## 0.2.0-beta.9
 
 ### Minor Changes

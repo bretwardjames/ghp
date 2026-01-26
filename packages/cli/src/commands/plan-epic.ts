@@ -122,21 +122,14 @@ function createToolHandlers(
             const blockedIssue = input.blocked_issue as number;
             const blockingIssue = input.blocking_issue as number;
 
-            // Add a comment or update the issue body to indicate the dependency
-            const blockedDetails = await api.getIssueDetails(repo, blockedIssue);
-            if (!blockedDetails) {
-                return { error: `Could not find issue #${blockedIssue}` };
+            // Use native GitHub API to create blocking relationship
+            const success = await api.addBlockedBy(repo, blockedIssue, blockingIssue);
+            if (!success) {
+                return { error: `Failed to add blocking relationship` };
             }
 
-            const blockNote = `\n\n**Blocked by:** #${blockingIssue}`;
-            const updatedBody = (blockedDetails.body ?? '') + blockNote;
-            const success = await api.updateIssueBody(repo, blockedIssue, updatedBody);
-
-            if (success) {
-                console.log(chalk.dim(`  #${blockedIssue} blocked by #${blockingIssue}`));
-            }
-
-            return { success, blockedIssue, blockingIssue };
+            console.log(chalk.dim(`  #${blockedIssue} blocked by #${blockingIssue}`));
+            return { success: true, message: `#${blockingIssue} now blocks #${blockedIssue}` };
         },
 
         add_to_project: async (input) => {

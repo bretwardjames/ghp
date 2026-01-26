@@ -140,6 +140,15 @@ cd packages/core
 pnpm publish --tag beta --access public
 ```
 
+For VS Code extension, use `vsce` and `ovsx` directly (not `npx`):
+
+```bash
+cd apps/vscode
+pnpm run package                    # Creates .vsix file
+vsce publish --no-dependencies      # VS Code Marketplace
+ovsx publish gh-projects-X.Y.Z.vsix # Open VSX
+```
+
 ## Commit Messages
 
 - Use "Relates to #XX" not "Closes #XX" unless the PR actually closes the issue

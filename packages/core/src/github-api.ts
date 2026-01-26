@@ -1289,7 +1289,7 @@ export class GitHubAPI {
             }
 
             await this.graphqlWithSubIssues(queries.ADD_BLOCKED_BY_MUTATION, {
-                blockedIssueId: blockedId,
+                issueId: blockedId,
                 blockingIssueId: blockingId,
             });
 
@@ -1320,7 +1320,7 @@ export class GitHubAPI {
             }
 
             await this.graphqlWithSubIssues(queries.REMOVE_BLOCKED_BY_MUTATION, {
-                blockedIssueId: blockedId,
+                issueId: blockedId,
                 blockingIssueId: blockingId,
             });
 

@@ -504,9 +504,9 @@ export const REMOVE_SUB_ISSUE_MUTATION = `
  * Mutation to add a blocking relationship (blockingIssue blocks blockedIssue)
  */
 export const ADD_BLOCKED_BY_MUTATION = `
-    mutation($blockedIssueId: ID!, $blockingIssueId: ID!) {
-        addBlockedBy(input: {blockedIssueId: $blockedIssueId, blockingIssueId: $blockingIssueId}) {
-            blockedIssue { number }
+    mutation($issueId: ID!, $blockingIssueId: ID!) {
+        addBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
+            issue { number }
         }
     }
 `;
@@ -515,9 +515,9 @@ export const ADD_BLOCKED_BY_MUTATION = `
  * Mutation to remove a blocking relationship
  */
 export const REMOVE_BLOCKED_BY_MUTATION = `
-    mutation($blockedIssueId: ID!, $blockingIssueId: ID!) {
-        removeBlockedBy(input: {blockedIssueId: $blockedIssueId, blockingIssueId: $blockingIssueId}) {
-            blockedIssue { number }
+    mutation($issueId: ID!, $blockingIssueId: ID!) {
+        removeBlockedBy(input: {issueId: $issueId, blockingIssueId: $blockingIssueId}) {
+            issue { number }
         }
     }
 `;

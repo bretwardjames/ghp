@@ -75,20 +75,25 @@ ghp slice --list-fields        # List all available fields
 ### Issue Management
 
 ```bash
-ghp add "Issue title"          # Create issue
-ghp add "Title" --body "desc"  # With description
-ghp add "Title" -e             # Open editor for body
-ghp add "Title" --template bug_report  # Use specific template
-ghp add --list-templates       # List available templates
-ghp add "Title" --status "Backlog"     # Set initial status
-ghp add "Title" --project "My Project" # Specify project
-ghp add "Title" --labels "bug,urgent"  # Apply labels
-ghp add "Title" --assign               # Assign yourself
-ghp add "Title" --assign @user1,@user2 # Assign specific users
-ghp add "Title" --field "Priority=High" # Set project field
-ghp add "Title" --parent 42            # Create as sub-issue
-ghp add "Title" --ai                   # AI-expand brief title
-ghp add "Title" --force-defaults       # Non-interactive mode
+# Create issues
+ghp add "Issue title"                   # Create issue (shorthand)
+ghp add issue "Issue title"             # Create issue (explicit)
+ghp add issue "Title" --body "desc"     # With description
+ghp add issue "Title" -e                # Open editor for body
+ghp add issue "Title" --template bug    # Use specific template
+ghp add issue "Title" --ai              # AI-expand brief title
+ghp add issue "Title" --status "Backlog"     # Set initial status
+ghp add issue "Title" --labels "bug,urgent"  # Apply labels
+ghp add issue "Title" --assign          # Assign yourself
+ghp add issue "Title" --parent 42       # Create as sub-issue
+
+# Create epics
+ghp add epic "Epic title"               # Create epic (issue with epic label)
+ghp add epic "Auth system" --ai         # AI breakdown into sub-issues
+ghp add epic "Title" --ai -x            # Execute AI plan (create issues)
+ghp add epic "Title" --ai -c "context"  # Provide additional context
+
+ghp add --list-templates                # List available templates
 ```
 
 ```bash
@@ -259,11 +264,13 @@ ghp agents watch               # Real-time agent dashboard
 ### AI-Assisted Features
 
 ```bash
-ghp add "Fix login" --ai       # Expand brief title into full issue
-ghp plan-epic "Auth system"    # Break down epic into sub-issues
-ghp plan-epic "Title" -x       # Execute plan (create issues)
-ghp pr --ai-description        # Generate PR description from changes
+ghp add issue "Fix login" --ai    # Expand brief title into full issue
+ghp add epic "Auth system" --ai   # Break down epic into sub-issues
+ghp add epic "Title" --ai -x      # Execute plan (create issues)
+ghp pr --ai-description           # Generate PR description from changes
 ```
+
+> **Note:** `ghp plan-epic` is deprecated. Use `ghp add epic --ai` instead.
 
 ### Configuration
 

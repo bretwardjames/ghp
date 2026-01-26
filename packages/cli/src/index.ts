@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import chalk from 'chalk';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
@@ -69,16 +70,19 @@ program
     .option('--enable-tool <name>', 'Remove a tool from mcp.disabledTools')
     .action(configCommand);
 
-// AI-powered commands
+// AI-powered commands (deprecated - use `ghp add epic --ai` instead)
 program
     .command('plan-epic <title>')
     .alias('pe')
-    .description('Use AI to break down an epic into actionable issues')
+    .description('[DEPRECATED] Use "ghp add epic --ai" instead')
     .option('-p, --project <project>', 'Target project')
     .option('-x, --execute', 'Execute plan (create issues)')
     .option('--dry-run', 'Show what would be created without creating')
     .option('-c, --context <context>', 'Additional context for planning')
-    .action(planEpicCommand);
+    .action((title, options) => {
+        console.warn(chalk.yellow('Deprecation warning:'), 'plan-epic is deprecated. Use "ghp add epic --ai" instead.');
+        return planEpicCommand(title, options);
+    });
 
 // Main views
 program
@@ -263,11 +267,15 @@ program
     .option('--remove', 'Remove labels instead of adding')
     .action(labelCommand);
 
-// Issue creation
-program
-    .command('add-issue [title]')
-    .alias('add')
-    .description('Create a new issue and add to project')
+// Issue/Epic creation - restructured with subcommands
+const addCmd = program
+    .command('add')
+    .description('Create items (issues, epics) and add to project');
+
+// `ghp add issue [title]` - explicit issue creation
+addCmd
+    .command('issue [title]')
+    .description('Create a new issue')
     .option('-b, --body <body>', 'Issue body/description')
     .option('-p, --project <project>', 'Project to add to (defaults to first)')
     .option('-s, --status <status>', 'Initial status')
@@ -279,10 +287,62 @@ program
     .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
     .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
     .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
-    // Non-interactive flags
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
-    .action(addIssueCommand);
+    .action((title, options) => addIssueCommand(title, { ...options, objectType: 'issue' }));
+
+// `ghp add epic [title]` - create epic (issue with epic label)
+addCmd
+    .command('epic [title]')
+    .description('Create an epic (issue with epic label)')
+    .option('-b, --body <body>', 'Epic body/description')
+    .option('-p, --project <project>', 'Project to add to (defaults to first)')
+    .option('-s, --status <status>', 'Initial status')
+    .option('-e, --edit', 'Open $EDITOR to write epic body')
+    .option('-t, --template <name>', 'Use an issue template from .github/ISSUE_TEMPLATE/')
+    .option('--list-templates', 'List available issue templates')
+    .option('--ai', 'Use AI to break down epic into sub-issues')
+    .option('-x, --execute', 'Execute AI plan (create sub-issues)')
+    .option('-c, --context <context>', 'Additional context for AI planning')
+    .option('--dry-run', 'Show what would be created without creating')
+    .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
+    .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
+    .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
+    .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
+    .option('--no-template', 'Skip template selection (blank issue)')
+    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
+    .action((title, options) => addIssueCommand(title, { ...options, objectType: 'epic' }));
+
+// Backwards compatibility: `ghp add "title"` without subcommand = `ghp add issue "title"`
+addCmd
+    .argument('[title]', 'Issue title (for backwards compatibility)')
+    .option('-b, --body <body>', 'Issue body/description')
+    .option('-p, --project <project>', 'Project to add to (defaults to first)')
+    .option('-s, --status <status>', 'Initial status')
+    .option('-e, --edit', 'Open $EDITOR to write issue body')
+    .option('-t, --template <name>', 'Use an issue template from .github/ISSUE_TEMPLATE/')
+    .option('--list-templates', 'List available issue templates')
+    .option('--ai', 'Expand brief title into full issue using AI')
+    .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
+    .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
+    .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
+    .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
+    .option('--no-template', 'Skip template selection (blank issue)')
+    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
+    .action((title, options) => {
+        // Handle --list-templates without title
+        if (options.listTemplates) {
+            return addIssueCommand(title, { ...options, objectType: 'issue' });
+        }
+        // If title is provided and not a subcommand, treat as issue creation
+        if (title && title !== 'issue' && title !== 'epic') {
+            return addIssueCommand(title, { ...options, objectType: 'issue' });
+        }
+        // No title provided - let addIssueCommand handle the error
+        if (!title) {
+            return addIssueCommand(title, { ...options, objectType: 'issue' });
+        }
+    });
 
 // Parent/child relationships
 program

@@ -9,6 +9,7 @@
   },
   "changesets": [
     "dashboard-feature",
-    "hotfix-pagination"
+    "hotfix-pagination",
+    "json-output-beta8"
   ]
 }

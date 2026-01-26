@@ -41,7 +41,11 @@ function createToolHandlers(
             }
 
             // Add epic label to the parent issue
-            await api.addLabelToIssue(repo, issue.number, "epic");
+            try {
+                await api.addLabelToIssue(repo, issue.number, "epic");
+            } catch {
+                console.log(chalk.yellow('  Warning:'), `Could not add epic label to #${issue.number}`);
+            }
 
             // Add to project
             const itemId = await api.addToProject(projectId, issue.id);

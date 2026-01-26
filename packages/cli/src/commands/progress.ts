@@ -16,6 +16,7 @@ interface EpicProgress {
         title: string;
         state: string;
         inProject: boolean;
+        isCompleted: boolean;
     }>;
     completed: number;
     total: number;
@@ -123,16 +124,33 @@ export async function progressCommand(options: ProgressOptions): Promise<void> {
     // Build set of issue numbers in project for "in project" tagging
     const itemNumbers = new Set(allItems.filter(i => i.number).map(i => i.number!));
 
+    // Build map of issue numbers to their project status for completion detection
+    const itemStatusMap = new Map(
+        allItems.filter(i => i.number).map(i => [i.number!, i.status])
+    );
+
+    // Statuses that indicate completion (issue shipped or closed)
+    const completedStatuses = new Set(['done', 'in beta', 'ready for beta']);
+
     // Build epics list
     const epics: EpicProgress[] = epicItems.map(item => {
-        const subIssues = item.subIssues.map(sub => ({
-            number: sub.number,
-            title: sub.title,
-            state: sub.state,
-            inProject: itemNumbers.has(sub.number),
-        }));
+        const subIssues = item.subIssues.map(sub => {
+            const inProject = itemNumbers.has(sub.number);
+            // Completed if GitHub state is CLOSED OR project status indicates completion
+            const status = itemStatusMap.get(sub.number);
+            const isCompleted = sub.state === 'CLOSED' ||
+                (status != null && completedStatuses.has(status.toLowerCase()));
 
-        const completed = subIssues.filter(s => s.state === 'CLOSED').length;
+            return {
+                number: sub.number,
+                title: sub.title,
+                state: sub.state,
+                inProject,
+                isCompleted,
+            };
+        });
+
+        const completed = subIssues.filter(s => s.isCompleted).length;
 
         return {
             issue: item,
@@ -180,14 +198,14 @@ export async function progressCommand(options: ProgressOptions): Promise<void> {
         
         if (showDetails) {
             for (const sub of subIssues) {
-                const icon = sub.state === 'CLOSED' 
-                    ? chalk.green('✓') 
+                const icon = sub.isCompleted
+                    ? chalk.green('✓')
                     : chalk.dim('○');
-                const title = sub.state === 'CLOSED'
+                const title = sub.isCompleted
                     ? chalk.dim(sub.title)
                     : sub.title;
                 const inProjectTag = sub.inProject ? '' : chalk.dim(' (not in project)');
-                
+
                 console.log(`    ${icon} #${sub.number} ${title}${inProjectTag}`);
             }
         } else {

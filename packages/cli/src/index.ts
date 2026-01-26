@@ -94,6 +94,7 @@ program
     .option('--sort <fields>', 'Sort by fields (comma-separated, prefix with - for ascending)')
     .option('--slice <field=value>', 'Filter by field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('-F, --filter <field=value>', 'Filter by field (repeatable, e.g., --filter state=open)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
+    .option('--json', 'Output as JSON (for programmatic use)')
     .action(workCommand);
 
 program
@@ -110,6 +111,8 @@ program
     .option('--sort <fields>', 'Sort by fields (comma-separated, prefix with - for ascending, e.g., "status,-title")')
     .option('--slice <field=value>', 'Filter by field (repeatable: --slice label=bug --slice Priority=High)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('--view <name>', 'Filter to items in a specific project view')
+    .option('--hide-done', 'Hide completed items (Done, Closed, Completed)')
+    .option('--json', 'Output as JSON (for programmatic use)')
     .action(planCommand);
 
 program
@@ -369,6 +372,7 @@ worktreeCmd
     .command('list')
     .alias('ls')
     .description('List all worktrees')
+    .option('--json', 'Output as JSON (for programmatic use)')
     .action(worktreeListCommand);
 
 // Agent management
@@ -381,6 +385,7 @@ agentsCmd
     .command('list')
     .alias('ls')
     .description('List all running agents')
+    .option('--json', 'Output as JSON (for programmatic use)')
     .action(agentsListCommand);
 
 agentsCmd

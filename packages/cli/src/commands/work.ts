@@ -19,6 +19,7 @@ interface WorkOptions {
     slice?: string[];
     filter?: string[];
     project?: string;
+    json?: boolean;
 }
 
 export async function workCommand(cliOptions: WorkOptions): Promise<void> {
@@ -54,8 +55,10 @@ export async function workCommand(cliOptions: WorkOptions): Promise<void> {
         process.exit(1);
     }
 
-    console.log(chalk.bold('My Work'), chalk.dim(`(${repo.fullName})`));
-    console.log();
+    if (!options.json) {
+        console.log(chalk.bold('My Work'), chalk.dim(`(${repo.fullName})`));
+        console.log();
+    }
 
     // Get projects
     const projects = await api.getProjects(repo);
@@ -169,6 +172,10 @@ export async function workCommand(cliOptions: WorkOptions): Promise<void> {
     }
 
     if (filteredItems.length === 0) {
+        if (options.json) {
+            console.log('[]');
+            return;
+        }
         if (options.all) {
             console.log(chalk.yellow('No items found.'));
         } else {
@@ -217,6 +224,26 @@ export async function workCommand(cliOptions: WorkOptions): Promise<void> {
 
     // Populate branch link info for display
     await populateBranchLinks(repo, filteredItems);
+
+    // JSON output
+    if (options.json) {
+        const jsonOutput = filteredItems.map(item => ({
+            number: item.number,
+            title: item.title,
+            type: item.type,
+            issueType: item.issueType,
+            status: item.status,
+            state: item.state,
+            assignees: item.assignees,
+            labels: item.labels,
+            repository: item.repository,
+            url: item.url,
+            fields: item.fields,
+            branch: item.fields.linkedBranch || null,
+        }));
+        console.log(JSON.stringify(jsonOutput, null, 2));
+        return;
+    }
 
     // Flat table output
     if (options.flat) {

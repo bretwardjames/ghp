@@ -16,6 +16,10 @@ interface WorktreeRemoveOptions {
     force?: boolean;
 }
 
+interface WorktreeListOptions {
+    json?: boolean;
+}
+
 /**
  * Remove worktree for an issue
  */
@@ -91,7 +95,7 @@ export async function worktreeRemoveCommand(
 /**
  * List all worktrees
  */
-export async function worktreeListCommand(): Promise<void> {
+export async function worktreeListCommand(options: WorktreeListOptions = {}): Promise<void> {
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {
@@ -105,7 +109,33 @@ export async function worktreeListCommand(): Promise<void> {
     const worktrees = await listWorktrees();
 
     if (worktrees.length === 0) {
-        console.log(chalk.yellow('No worktrees found'));
+        if (options.json) {
+            console.log('[]');
+        } else {
+            console.log(chalk.yellow('No worktrees found'));
+        }
+        return;
+    }
+
+    // JSON output
+    if (options.json) {
+        const jsonOutput = worktrees.map(wt => {
+            // Extract issue number from branch name
+            let issueNumber: number | null = null;
+            if (wt.branch) {
+                const match = wt.branch.match(/\/(\d+)[-_]/);
+                if (match) {
+                    issueNumber = parseInt(match[1], 10);
+                }
+            }
+            return {
+                path: wt.path,
+                branch: wt.branch || null,
+                issueNumber,
+                isMain: wt.isMain,
+            };
+        });
+        console.log(JSON.stringify(jsonOutput, null, 2));
         return;
     }
 

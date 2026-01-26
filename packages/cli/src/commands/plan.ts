@@ -16,6 +16,8 @@ interface PlanOptions {
     all?: boolean;
     view?: string;
     group?: string;
+    hideDone?: boolean;
+    json?: boolean;
 }
 
 /**
@@ -252,6 +254,13 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
         );
     }
 
+    // --hide-done: filter out completed items
+    if (options.hideDone) {
+        filteredItems = filteredItems.filter(item =>
+            !['Done', 'Closed', 'Completed'].includes(item.status || '')
+        );
+    }
+
     // --slice: filter by field=value pairs
     if (options.slice && options.slice.length > 0) {
         for (const slice of options.slice) {
@@ -335,6 +344,25 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
             }
             return 0;
         });
+    }
+
+    // JSON output
+    if (options.json) {
+        const jsonOutput = filteredItems.map(item => ({
+            number: item.number,
+            title: item.title,
+            type: item.type,
+            issueType: item.issueType,
+            status: item.status,
+            state: item.state,
+            assignees: item.assignees,
+            labels: item.labels,
+            repository: item.repository,
+            url: item.url,
+            fields: item.fields,
+        }));
+        console.log(JSON.stringify(jsonOutput, null, 2));
+        return;
     }
 
     // Determine if we need status column (when items have mixed statuses)

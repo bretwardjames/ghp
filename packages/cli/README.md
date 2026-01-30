@@ -167,6 +167,13 @@ ghp done 123                   # Mark issue as done
 Removes active label and offers to clean up worktree if one exists.
 
 ```bash
+ghp stop 123                   # Stop working on issue (keep in current status)
+ghp stop                       # Stop working on current branch's issue
+```
+
+Removes active label without changing status. Useful when switching tasks.
+
+```bash
 ghp pr                         # Show PR status for current branch
 ghp pr 123                     # Show PR for specific issue
 ghp pr --create                # Create PR for current branch
@@ -289,6 +296,18 @@ ghp mcp                        # Show MCP configuration
 ghp mcp --config               # Show config JSON
 ghp mcp --install              # Auto-configure Claude Desktop
 ```
+
+### Self-Update
+
+```bash
+ghp update                     # Update ghp packages to latest version
+ghp update --check             # Check for updates without installing
+ghp update --yes               # Skip prompts, update all packages
+ghp update --beta              # Force update to beta versions
+ghp update --stable            # Force update to stable versions
+```
+
+Auto-detects your current release channel (beta/stable) and updates accordingly.
 
 ## Configuration
 

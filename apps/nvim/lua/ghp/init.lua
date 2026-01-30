@@ -31,6 +31,10 @@ M.config = {
     auto_claude = true,
     -- Claude command to run (default: "claude")
     claude_cmd = "claude", -- e.g., "claude --model opus" or a different CLI
+    -- Layout when auto_claude is enabled: "panes" or "windows"
+    -- "panes": nvim and claude side-by-side in same tmux window (default)
+    -- "windows": nvim and claude in separate tmux windows
+    layout = "panes",
   },
   -- Statusline settings (see ghp.statusline for all options)
   statusline = {

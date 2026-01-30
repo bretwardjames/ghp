@@ -93,6 +93,10 @@ require("ghp").setup({
     auto_claude = true,
     -- Claude command to run
     claude_cmd = "claude", -- e.g., "claude --model opus"
+    -- Layout when auto_claude is enabled:
+    -- "panes": nvim and claude side-by-side in same tmux window (default)
+    -- "windows": nvim and claude in separate tmux windows
+    layout = "panes",
     -- Custom terminal command (for terminal mode)
     terminal_cmd = nil, -- e.g., "alacritty --working-directory {path} -e nvim"
   },

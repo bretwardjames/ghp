@@ -226,6 +226,8 @@ local function open_nvim_in_worktree(path, issue_number)
   local mode = config.open_mode or "auto"
   local auto_claude = config.auto_claude ~= false -- default: true
   local claude_cmd = config.claude_cmd or "claude"
+  -- Layout: "panes" (side-by-side in same window) or "windows" (separate tmux windows)
+  local layout = config.layout or "panes"
 
   -- Auto-detect mode
   if mode == "auto" then
@@ -234,22 +236,54 @@ local function open_nvim_in_worktree(path, issue_number)
 
   if mode == "tmux" then
     if is_tmux() then
-      -- Build the command to run in the new window
-      local run_cmd = "nvim"
-      if auto_claude then
-        -- Start nvim, then run claude in a split (user can configure claude_cmd)
-        run_cmd = string.format("%s; exec $SHELL", vim.fn.shellescape(claude_cmd))
-      end
-
-      -- Open in new tmux window with descriptive name
       local window_name = string.format("nvim-%s", tostring(issue_number))
-      vim.fn.system(string.format(
-        "tmux new-window -n %s -c %s %s",
-        vim.fn.shellescape(window_name),
-        vim.fn.shellescape(path),
-        run_cmd
-      ))
-      vim.notify("Opened in tmux window: " .. window_name, vim.log.levels.INFO)
+      local escaped_path = vim.fn.shellescape(path)
+
+      if auto_claude then
+        if layout == "windows" then
+          -- Separate windows: one for nvim, one for claude
+          -- Create nvim window
+          vim.fn.system(string.format(
+            "tmux new-window -n %s -c %s nvim",
+            vim.fn.shellescape(window_name),
+            escaped_path
+          ))
+          -- Create claude window
+          local claude_window = string.format("claude-%s", tostring(issue_number))
+          vim.fn.system(string.format(
+            "tmux new-window -n %s -c %s %s",
+            vim.fn.shellescape(claude_window),
+            escaped_path,
+            vim.fn.shellescape(claude_cmd)
+          ))
+          vim.notify("Opened nvim + claude in separate windows", vim.log.levels.INFO)
+        else
+          -- Panes (default): nvim and claude side-by-side in same window
+          -- Create window with nvim
+          vim.fn.system(string.format(
+            "tmux new-window -n %s -c %s nvim",
+            vim.fn.shellescape(window_name),
+            escaped_path
+          ))
+          -- Split horizontally and run claude in the new pane
+          vim.fn.system(string.format(
+            "tmux split-window -h -c %s %s",
+            escaped_path,
+            vim.fn.shellescape(claude_cmd)
+          ))
+          -- Focus back on the nvim pane (left pane)
+          vim.fn.system("tmux select-pane -L")
+          vim.notify("Opened nvim + claude side-by-side: " .. window_name, vim.log.levels.INFO)
+        end
+      else
+        -- No claude, just nvim
+        vim.fn.system(string.format(
+          "tmux new-window -n %s -c %s nvim",
+          vim.fn.shellescape(window_name),
+          escaped_path
+        ))
+        vim.notify("Opened nvim in tmux window: " .. window_name, vim.log.levels.INFO)
+      end
       return
     else
       vim.notify("tmux mode requested but not in tmux, falling back to tab", vim.log.levels.WARN)

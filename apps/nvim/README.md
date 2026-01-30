@@ -80,6 +80,60 @@ require("ghp").setup({
 })
 ```
 
+## Statusline Integration
+
+Show the current issue in your statusline with lualine:
+
+```lua
+-- In your lualine config
+require("lualine").setup({
+  sections = {
+    lualine_c = {
+      -- ... your other components ...
+      require("ghp.statusline").lualine,
+    },
+  },
+})
+```
+
+This displays: ` #139 nvim: Status line integration [In Progress]`
+
+### Statusline Configuration
+
+```lua
+require("ghp").setup({
+  statusline = {
+    cache_ttl = 30,           -- Cache TTL in seconds
+    max_title_length = 40,    -- Truncate long titles
+    format = "#{number} {title}", -- Available: {number}, {title}, {status}
+    show_status = true,       -- Show [Status] after title
+    icon = " ",              -- Icon before issue info (nil to disable)
+    no_issue_text = nil,      -- Text when no issue (nil = hide component)
+    -- Status colors (highlight groups or hex colors)
+    status_colors = {
+      ["Backlog"] = "Comment",
+      ["In Progress"] = "Keyword",
+      ["In Review"] = "String",
+      ["Done"] = "DiagnosticOk",
+    },
+  },
+})
+```
+
+### Manual Control
+
+```lua
+-- Force refresh (useful after ghp start/done)
+require("ghp.statusline").refresh()
+
+-- Clear cache
+require("ghp.statusline").clear_cache()
+
+-- Get component directly (for custom statuslines)
+local text = require("ghp.statusline").component()
+local color = require("ghp.statusline").component_color()
+```
+
 ## Commands
 
 | Command | Description |
@@ -94,6 +148,9 @@ require("ghp").setup({
 | `:GhpComment [issue]` | Add comment to an issue |
 | `:GhpPr [create\|open]` | View PR status, create PR, or open in browser |
 | `:GhpConfig` | Edit ghp-cli config file |
+| `:GhpDashboard` | Show branch dashboard in split |
+| `:GhpDashboardFloat` | Show branch dashboard in floating window |
+| `:GhpDashboardRefresh` | Refresh current dashboard |
 | `:GhpPickPlan [shortcut]` | Fuzzy picker for project board |
 | `:GhpPickWork` | Fuzzy picker for your work |
 | `:GhpPickIssues` | Fuzzy picker for issues |

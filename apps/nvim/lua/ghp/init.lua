@@ -21,6 +21,14 @@ M.config = {
     pr = " ",
     dashboard = " ",
   },
+  -- Statusline settings (see ghp.statusline for all options)
+  statusline = {
+    cache_ttl = 30,
+    max_title_length = 40,
+    format = "#{number} {title}",
+    show_status = true,
+    icon = " ",
+  },
 }
 
 function M.setup(opts)
@@ -29,6 +37,11 @@ function M.setup(opts)
   -- Set up keymaps if enabled (disabled by default for lazy.nvim users)
   if M.config.keymaps then
     require("ghp.keymaps").setup(M.config.keymaps)
+  end
+
+  -- Set up statusline config
+  if M.config.statusline then
+    require("ghp.statusline").setup(M.config.statusline)
   end
 
   vim.g.ghp_setup_done = true

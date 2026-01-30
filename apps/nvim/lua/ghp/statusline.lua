@@ -10,6 +10,16 @@ local cache = {
   timestamp = 0,
 }
 
+-- Cache for git branch (avoid blocking calls on every refresh)
+local branch_cache = {
+  value = nil,
+  timestamp = 0,
+  ttl = 5, -- Short TTL for branch changes
+}
+
+-- Guard against concurrent fetches
+local is_fetching = false
+
 -- Default config (can be overridden via setup)
 M.config = {
   -- Cache TTL in seconds
@@ -37,24 +47,29 @@ M.config = {
   no_issue_text = nil, -- nil = hide component entirely
 }
 
--- Get current git branch
+-- Get current git branch (cached to avoid blocking on every statusline refresh)
 local function get_current_branch()
-  local handle = io.popen("git rev-parse --abbrev-ref HEAD 2>/dev/null")
-  if not handle then
-    return nil
+  local now = os.time()
+  if branch_cache.value and (now - branch_cache.timestamp) < branch_cache.ttl then
+    return branch_cache.value
   end
-  local branch = handle:read("*l")
-  handle:close()
-  return branch
+
+  -- Use vim.fn.system which is still sync but faster than io.popen
+  local branch = vim.fn.system("git rev-parse --abbrev-ref HEAD 2>/dev/null"):gsub("\n", "")
+  if vim.v.shell_error == 0 and branch ~= "" then
+    branch_cache.value = branch
+    branch_cache.timestamp = now
+    return branch
+  end
+
+  branch_cache.value = nil
+  branch_cache.timestamp = now
+  return nil
 end
 
 -- Get ghp path from main config
 local function get_ghp_path()
-  local ok, ghp = pcall(require, "ghp")
-  if ok and ghp.config then
-    return ghp.config.ghp_path or "ghp"
-  end
-  return "ghp"
+  return require("ghp").config.ghp_path
 end
 
 -- Fetch issue data async
@@ -66,7 +81,7 @@ local function fetch_issue_data(callback)
     on_stdout = function(_, data)
       if data and #data > 0 then
         local json_str = table.concat(data, "\n")
-        local ok, parsed = pcall(vim.fn.json_decode, json_str)
+        local ok, parsed = pcall(vim.json.decode, json_str)
         if ok and parsed then
           callback(parsed)
         else
@@ -161,7 +176,13 @@ end
 
 -- Refresh cache (called async, updates on next statusline refresh)
 local function refresh_cache_async(branch)
+  if is_fetching then
+    return
+  end
+  is_fetching = true
+
   fetch_issue_data(function(issues)
+    is_fetching = false
     local issue = find_issue_for_branch(issues, branch)
     update_cache(branch, issue)
     -- Trigger statusline refresh
@@ -176,16 +197,15 @@ function M.component()
     return M.config.no_issue_text
   end
 
-  -- Check cache
+  -- Check cache - return immediately if valid
   if is_cache_valid(branch) then
     return format_issue(cache.data)
   end
 
   -- Cache miss or stale - trigger async refresh
-  -- Return cached data (may be stale) or nil while fetching
   refresh_cache_async(branch)
 
-  -- Return existing cache if available (may be from different branch)
+  -- Return stale cache for current branch while refreshing (prevents flicker)
   if cache.data and cache.branch == branch then
     return format_issue(cache.data)
   end
@@ -193,10 +213,10 @@ function M.component()
   return M.config.no_issue_text
 end
 
--- Get color for lualine
+-- Get color for lualine (uses cached branch to avoid extra calls)
 function M.component_color()
-  local branch = get_current_branch()
-  if not branch or not cache.data or cache.branch ~= branch then
+  -- Use cached branch value to avoid redundant calls
+  if not branch_cache.value or not cache.data or cache.branch ~= branch_cache.value then
     return { fg = M.config.default_color }
   end
 
@@ -216,6 +236,7 @@ function M.refresh()
   local branch = get_current_branch()
   if branch then
     cache.timestamp = 0 -- Invalidate cache
+    is_fetching = false -- Reset fetch guard
     refresh_cache_async(branch)
   end
 end
@@ -225,6 +246,9 @@ function M.clear_cache()
   cache.data = nil
   cache.branch = nil
   cache.timestamp = 0
+  branch_cache.value = nil
+  branch_cache.timestamp = 0
+  is_fetching = false
 end
 
 -- Setup function to override config
@@ -239,7 +263,7 @@ M.lualine = {
     return M.component()
   end,
   cond = function()
-    -- Only show when in a git repo
+    -- Only show when in a git repo (uses cached branch)
     return get_current_branch() ~= nil
   end,
   color = function()

@@ -129,14 +129,30 @@ local function fetch_issue_data(callback)
   })
 end
 
--- Find issue matching current branch
-local function find_issue_for_branch(issues, branch)
-  if not issues or not branch then
+-- Extract issue number from branch name
+-- Matches patterns like: user/123-title, 123-title, feature/123-title
+local function extract_issue_number(branch)
+  if not branch then
+    return nil
+  end
+
+  -- Try to find a number that looks like an issue number
+  -- Pattern: after a slash or at start, followed by dash or end
+  local num = branch:match("/(%d+)%-") or branch:match("^(%d+)%-") or branch:match("/(%d+)$")
+  if num then
+    return tonumber(num)
+  end
+  return nil
+end
+
+-- Find issue by number
+local function find_issue_by_number(issues, issue_number)
+  if not issues or not issue_number then
     return nil
   end
 
   for _, issue in ipairs(issues) do
-    if issue.branch == branch then
+    if issue.number == issue_number then
       return issue
     end
   end
@@ -246,9 +262,16 @@ local function refresh_cache_async(branch)
   end
   is_fetching = true
 
+  local issue_number = extract_issue_number(branch)
+  if not issue_number then
+    is_fetching = false
+    update_cache(branch, nil)
+    return
+  end
+
   fetch_issue_data(function(issues)
     is_fetching = false
-    local issue = find_issue_for_branch(issues, branch)
+    local issue = find_issue_by_number(issues, issue_number)
     update_cache(branch, issue)
     -- Trigger statusline refresh
     vim.cmd("redrawstatus")

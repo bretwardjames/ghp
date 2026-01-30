@@ -230,23 +230,31 @@ local function open_nvim_in_worktree(path)
     mode = is_tmux() and "tmux" or "tab"
   end
 
-  if mode == "tmux" and is_tmux() then
-    -- Open in new tmux window
-    vim.fn.system(string.format("tmux new-window -c '%s' nvim", path))
-    vim.notify("Opened nvim in new tmux window: " .. path, vim.log.levels.INFO)
-  elseif mode == "terminal" and config.terminal_cmd then
-    -- Use custom terminal command
-    local cmd = config.terminal_cmd:gsub("{path}", path)
+  if mode == "tmux" then
+    if is_tmux() then
+      -- Open in new tmux window (escape path for shell)
+      vim.fn.system(string.format("tmux new-window -c %s nvim", vim.fn.shellescape(path)))
+      vim.notify("Opened nvim in new tmux window: " .. path, vim.log.levels.INFO)
+      return
+    else
+      vim.notify("tmux mode requested but not in tmux, falling back to tab", vim.log.levels.WARN)
+    end
+  end
+
+  if mode == "terminal" and config.terminal_cmd then
+    -- Use custom terminal command (escape path for shell)
+    local cmd = config.terminal_cmd:gsub("{path}", vim.fn.shellescape(path))
     vim.fn.jobstart(cmd, { detach = true })
     vim.notify("Opened nvim in new terminal: " .. path, vim.log.levels.INFO)
-  else
-    -- Fallback: open in new tab with terminal
-    vim.cmd("tabnew")
-    vim.cmd("lcd " .. path)
-    vim.cmd("terminal nvim")
-    vim.cmd("startinsert")
-    vim.notify("Opened nvim in new tab: " .. path, vim.log.levels.INFO)
+    return
   end
+
+  -- Fallback: open in new tab with terminal
+  vim.cmd("tabnew")
+  vim.cmd("lcd " .. vim.fn.fnameescape(path))
+  vim.cmd("terminal nvim")
+  vim.cmd("startinsert")
+  vim.notify("Opened nvim in new tab: " .. path, vim.log.levels.INFO)
 end
 
 function M.start_parallel(issue_number)
@@ -254,6 +262,12 @@ function M.start_parallel(issue_number)
     issue_number = vim.fn.input("Issue number: ")
   end
   if issue_number == "" then
+    return
+  end
+
+  -- Validate issue number is numeric
+  if not tostring(issue_number):match("^%d+$") then
+    vim.notify("Invalid issue number: " .. issue_number, vim.log.levels.ERROR)
     return
   end
 

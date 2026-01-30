@@ -228,6 +228,10 @@ local function open_nvim_in_worktree(path, issue_number)
   local claude_cmd = config.claude_cmd or "claude"
   -- Layout: "panes" (side-by-side in same window) or "windows" (separate tmux windows)
   local layout = config.layout or "panes"
+  if layout ~= "panes" and layout ~= "windows" then
+    vim.notify("Invalid parallel.layout '" .. layout .. "', using 'panes'", vim.log.levels.WARN)
+    layout = "panes"
+  end
 
   -- Auto-detect mode
   if mode == "auto" then
@@ -304,12 +308,15 @@ local function open_nvim_in_worktree(path, issue_number)
   vim.cmd("tabnew")
   vim.cmd("lcd " .. vim.fn.fnameescape(path))
   if auto_claude then
-    vim.cmd("terminal " .. claude_cmd)
+    -- Use termopen for safer command execution (no shell interpolation)
+    vim.fn.termopen(claude_cmd)
+    vim.cmd("startinsert")
+    vim.notify("Opened claude in new tab: " .. path, vim.log.levels.INFO)
   else
-    vim.cmd("terminal nvim")
+    vim.fn.termopen("nvim")
+    vim.cmd("startinsert")
+    vim.notify("Opened nvim in new tab: " .. path, vim.log.levels.INFO)
   end
-  vim.cmd("startinsert")
-  vim.notify("Opened nvim in new tab: " .. path, vim.log.levels.INFO)
 end
 
 -- Start parallel work on an issue

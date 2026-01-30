@@ -45,10 +45,18 @@ M.config = {
   icon = " ",
   -- What to show when no issue is linked
   no_issue_text = nil, -- nil = hide component entirely
+  -- Show assignment warnings
+  show_unassigned_warning = true,
+  -- Text to show when issue has no assignees
+  unassigned_text = "(unassigned)",
+  -- Text to show when issue is assigned to someone else
+  not_yours_text = "(not yours)",
   -- Auto-add to lualine if installed
   auto_lualine = false,
   -- Which lualine section to add to (lualine_a through lualine_z)
   lualine_section = "lualine_c",
+  -- Hide the default branch component (redundant with issue display)
+  hide_lualine_branch = true,
 }
 
 -- Get current git branch (cached to avoid blocking on every statusline refresh)
@@ -76,9 +84,29 @@ local function get_ghp_path()
   return require("ghp").config.ghp_path
 end
 
--- Fetch issue data async
+-- Get current git user
+local function get_git_user()
+  local user = vim.fn.system("gh api user -q .login 2>/dev/null"):gsub("\n", "")
+  if vim.v.shell_error == 0 and user ~= "" then
+    return user
+  end
+  return nil
+end
+
+-- Cache for git user (rarely changes)
+local user_cache = { value = nil }
+
+local function get_current_user()
+  if user_cache.value then
+    return user_cache.value
+  end
+  user_cache.value = get_git_user()
+  return user_cache.value
+end
+
+-- Fetch issue data async (uses plan --all to get all issues, not just assigned)
 local function fetch_issue_data(callback)
-  local cmd = get_ghp_path() .. " work --json"
+  local cmd = get_ghp_path() .. " plan --json --all"
 
   vim.fn.jobstart(cmd, {
     stdout_buffered = true,
@@ -127,6 +155,29 @@ local function truncate_title(title, max_len)
   return string.sub(title, 1, max_len - 1) .. "…"
 end
 
+-- Check assignment status
+local function get_assignment_status(issue)
+  if not issue or not issue.assignees then
+    return "unknown"
+  end
+
+  if #issue.assignees == 0 then
+    return "unassigned"
+  end
+
+  local current_user = get_current_user()
+  if current_user then
+    for _, assignee in ipairs(issue.assignees) do
+      if assignee == current_user then
+        return "yours"
+      end
+    end
+    return "not_yours"
+  end
+
+  return "assigned" -- Assigned but can't determine if to you
+end
+
 -- Format the statusline string
 local function format_issue(issue)
   if not issue then
@@ -141,6 +192,16 @@ local function format_issue(issue)
 
   if M.config.show_status and issue.status then
     result = result .. " [" .. issue.status .. "]"
+  end
+
+  -- Add assignment warning if enabled
+  if M.config.show_unassigned_warning then
+    local assignment = get_assignment_status(issue)
+    if assignment == "unassigned" and M.config.unassigned_text then
+      result = result .. " " .. M.config.unassigned_text
+    elseif assignment == "not_yours" and M.config.not_yours_text then
+      result = result .. " " .. M.config.not_yours_text
+    end
   end
 
   if M.config.icon then
@@ -255,6 +316,23 @@ function M.clear_cache()
   is_fetching = false
 end
 
+-- Remove branch component from a lualine section
+local function remove_branch_component(section_components)
+  if not section_components then
+    return
+  end
+
+  for i = #section_components, 1, -1 do
+    local comp = section_components[i]
+    -- Check for string "branch" or table with "branch"
+    if comp == "branch" then
+      table.remove(section_components, i)
+    elseif type(comp) == "table" and comp[1] == "branch" then
+      table.remove(section_components, i)
+    end
+  end
+end
+
 -- Try to auto-register with lualine
 local function auto_register_lualine(section)
   -- Defer to ensure lualine is loaded
@@ -268,6 +346,13 @@ local function auto_register_lualine(section)
     local lualine_cfg = require("lualine").get_config()
     if not lualine_cfg or not lualine_cfg.sections then
       return
+    end
+
+    -- Hide branch component if configured
+    if M.config.hide_lualine_branch then
+      remove_branch_component(lualine_cfg.sections.lualine_a)
+      remove_branch_component(lualine_cfg.sections.lualine_b)
+      remove_branch_component(lualine_cfg.sections.lualine_c)
     end
 
     -- Add our component to the specified section

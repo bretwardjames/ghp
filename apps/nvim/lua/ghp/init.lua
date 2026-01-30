@@ -28,10 +28,14 @@ M.config = {
     format = "#{number} {title}",
     show_status = true,
     icon = " ",
+    -- Show warnings for unassigned issues
+    show_unassigned_warning = true,
     -- Auto-add to lualine if installed
     auto_lualine = false,
     -- Which lualine section to add to
     lualine_section = "lualine_c",
+    -- Hide branch component (redundant with issue display)
+    hide_lualine_branch = true,
   },
 }
 

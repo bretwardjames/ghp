@@ -221,9 +221,11 @@ local function get_worktree_path(issue_number)
 end
 
 -- Open nvim in a new worktree
-local function open_nvim_in_worktree(path)
+local function open_nvim_in_worktree(path, issue_number)
   local config = require("ghp").config.parallel or {}
   local mode = config.open_mode or "auto"
+  local auto_claude = config.auto_claude ~= false -- default: true
+  local claude_cmd = config.claude_cmd or "claude"
 
   -- Auto-detect mode
   if mode == "auto" then
@@ -232,9 +234,22 @@ local function open_nvim_in_worktree(path)
 
   if mode == "tmux" then
     if is_tmux() then
-      -- Open in new tmux window (escape path for shell)
-      vim.fn.system(string.format("tmux new-window -c %s nvim", vim.fn.shellescape(path)))
-      vim.notify("Opened nvim in new tmux window: " .. path, vim.log.levels.INFO)
+      -- Build the command to run in the new window
+      local run_cmd = "nvim"
+      if auto_claude then
+        -- Start nvim, then run claude in a split (user can configure claude_cmd)
+        run_cmd = string.format("%s; exec $SHELL", vim.fn.shellescape(claude_cmd))
+      end
+
+      -- Open in new tmux window with descriptive name
+      local window_name = string.format("nvim-%s", tostring(issue_number))
+      vim.fn.system(string.format(
+        "tmux new-window -n %s -c %s %s",
+        vim.fn.shellescape(window_name),
+        vim.fn.shellescape(path),
+        run_cmd
+      ))
+      vim.notify("Opened in tmux window: " .. window_name, vim.log.levels.INFO)
       return
     else
       vim.notify("tmux mode requested but not in tmux, falling back to tab", vim.log.levels.WARN)
@@ -243,7 +258,9 @@ local function open_nvim_in_worktree(path)
 
   if mode == "terminal" and config.terminal_cmd then
     -- Use custom terminal command (escape path for shell)
-    local cmd = config.terminal_cmd:gsub("{path}", vim.fn.shellescape(path))
+    local cmd = config.terminal_cmd
+      :gsub("{path}", vim.fn.shellescape(path))
+      :gsub("{issue}", tostring(issue_number))
     vim.fn.jobstart(cmd, { detach = true })
     vim.notify("Opened nvim in new terminal: " .. path, vim.log.levels.INFO)
     return
@@ -252,12 +269,20 @@ local function open_nvim_in_worktree(path)
   -- Fallback: open in new tab with terminal
   vim.cmd("tabnew")
   vim.cmd("lcd " .. vim.fn.fnameescape(path))
-  vim.cmd("terminal nvim")
+  if auto_claude then
+    vim.cmd("terminal " .. claude_cmd)
+  else
+    vim.cmd("terminal nvim")
+  end
   vim.cmd("startinsert")
   vim.notify("Opened nvim in new tab: " .. path, vim.log.levels.INFO)
 end
 
-function M.start_parallel(issue_number)
+-- Start parallel work on an issue
+-- opts.no_open: if true, create worktree but don't open editor (for agent-only workflows)
+function M.start_parallel(issue_number, opts)
+  opts = opts or {}
+
   if not issue_number then
     issue_number = vim.fn.input("Issue number: ")
   end
@@ -274,29 +299,45 @@ function M.start_parallel(issue_number)
   -- Check if worktree already exists
   local existing_path = get_worktree_path(issue_number)
   if existing_path then
-    vim.notify("Worktree already exists, opening...", vim.log.levels.INFO)
-    open_nvim_in_worktree(existing_path)
-    return
+    if opts.no_open then
+      vim.notify("Worktree already exists: " .. existing_path, vim.log.levels.INFO)
+    else
+      vim.notify("Worktree already exists, opening...", vim.log.levels.INFO)
+      open_nvim_in_worktree(existing_path, issue_number)
+    end
+    return existing_path
   end
 
   -- Create worktree using ghp start --parallel
   vim.notify("Creating worktree for #" .. issue_number .. "...", vim.log.levels.INFO)
 
-  local result, code = run_ghp_sync("start " .. issue_number .. " --parallel --force-defaults")
+  -- Add --no-open to CLI if we don't want to open the terminal
+  local cli_args = "start " .. issue_number .. " --parallel --force-defaults"
+  if opts.no_open then
+    cli_args = cli_args .. " --no-open"
+  end
+
+  local result, code = run_ghp_sync(cli_args)
 
   if code ~= 0 then
     vim.notify("Failed to create worktree:\n" .. result, vim.log.levels.ERROR)
-    return
+    return nil
   end
 
   -- Get the worktree path
   local path = get_worktree_path(issue_number)
   if not path then
     vim.notify("Worktree created but couldn't find path", vim.log.levels.ERROR)
-    return
+    return nil
   end
 
-  open_nvim_in_worktree(path)
+  if opts.no_open then
+    vim.notify("Worktree created: " .. path, vim.log.levels.INFO)
+  else
+    open_nvim_in_worktree(path, issue_number)
+  end
+
+  return path
 end
 
 function M.setup()
@@ -319,8 +360,11 @@ function M.setup()
   end, { nargs = "?" })
 
   vim.api.nvim_create_user_command("GhpStartParallel", function(opts)
-    M.start_parallel(opts.args ~= "" and opts.args or nil)
-  end, { nargs = "?", desc = "Start working on issue in a new worktree" })
+    -- Use bang (!) to create worktree without opening editor
+    -- :GhpStartParallel 123 → opens editor
+    -- :GhpStartParallel! 123 → creates worktree only (for agent workflows)
+    M.start_parallel(opts.args ~= "" and opts.args or nil, { no_open = opts.bang })
+  end, { nargs = "?", bang = true, desc = "Start working on issue in a new worktree (use ! to skip opening editor)" })
 
   vim.api.nvim_create_user_command("GhpAdd", function(opts)
     M.add(opts.args ~= "" and opts.args or nil)

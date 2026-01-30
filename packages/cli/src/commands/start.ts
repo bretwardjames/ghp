@@ -350,6 +350,9 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     let worktreePath: string | undefined;
     let worktreeBranch: string | undefined; // Branch name for worktree (used in spawn directive)
 
+    // Remember original branch for --parallel mode (switch back after worktree creation)
+    const originalBranch = await getCurrentBranch();
+
     if (linkedBranch) {
         // ═══════════════════════════════════════════════════════════════════════
         // Issue already has a linked branch - offer switch or parallel worktree
@@ -595,7 +598,6 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             // For parallel mode, create a worktree and switch back to original branch
             const newBranchName = await getCurrentBranch();
             if (newBranchName) {
-                const mainBranch = getConfig('mainBranch') || 'main';
                 const result = await createParallelWorktree(
                     repo,
                     issueNumber,
@@ -611,9 +613,11 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 worktreeBranch = newBranchName;
                 isParallelMode = true;
 
-                // Switch back to main branch so user stays in original context
-                await checkoutBranch(mainBranch);
-                console.log(chalk.green('✓'), `Switched back to ${mainBranch} (worktree created)`);
+                // Switch back to original branch so user stays in their previous context
+                if (originalBranch && originalBranch !== newBranchName) {
+                    await checkoutBranch(originalBranch);
+                    console.log(chalk.green('✓'), `Switched back to ${originalBranch} (worktree created)`);
+                }
             }
         }
     }

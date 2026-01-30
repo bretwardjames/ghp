@@ -1,5 +1,16 @@
 # @bretwardjames/ghp-mcp
 
+## 0.1.0
+
+### Patch Changes
+
+- 04cfa9e: feat(cli): add ghp update command for self-updating packages
+- Updated dependencies [150b7ef]
+- Updated dependencies [2e0ec74]
+- Updated dependencies [9db9db9]
+- Updated dependencies [ebff9dc]
+  - @bretwardjames/ghp-core@0.2.0
+
 ## 0.1.0-beta.9
 
 ### Patch Changes

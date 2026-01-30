@@ -28,6 +28,10 @@ M.config = {
     format = "#{number} {title}",
     show_status = true,
     icon = " ",
+    -- Auto-add to lualine if installed
+    auto_lualine = false,
+    -- Which lualine section to add to
+    lualine_section = "lualine_c",
   },
 }
 

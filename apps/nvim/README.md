@@ -82,10 +82,34 @@ require("ghp").setup({
 
 ## Statusline Integration
 
-Show the current issue in your statusline with lualine:
+Show the current issue in your statusline with lualine.
+
+### Auto Setup (Recommended)
 
 ```lua
--- In your lualine config
+require("ghp").setup({
+  statusline = {
+    auto_lualine = true,  -- Auto-add to lualine if installed
+  },
+})
+```
+
+This automatically adds the component to `lualine_c`. To use a different section:
+
+```lua
+require("ghp").setup({
+  statusline = {
+    auto_lualine = true,
+    lualine_section = "lualine_x",  -- or lualine_a, lualine_b, etc.
+  },
+})
+```
+
+### Manual Setup
+
+If you prefer manual control, add to your lualine config:
+
+```lua
 require("lualine").setup({
   sections = {
     lualine_c = {

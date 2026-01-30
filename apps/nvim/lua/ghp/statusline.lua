@@ -45,6 +45,10 @@ M.config = {
   icon = " ",
   -- What to show when no issue is linked
   no_issue_text = nil, -- nil = hide component entirely
+  -- Auto-add to lualine if installed
+  auto_lualine = false,
+  -- Which lualine section to add to (lualine_a through lualine_z)
+  lualine_section = "lualine_c",
 }
 
 -- Get current git branch (cached to avoid blocking on every statusline refresh)
@@ -251,9 +255,38 @@ function M.clear_cache()
   is_fetching = false
 end
 
+-- Try to auto-register with lualine
+local function auto_register_lualine(section)
+  -- Defer to ensure lualine is loaded
+  vim.schedule(function()
+    local ok, lualine = pcall(require, "lualine")
+    if not ok then
+      return
+    end
+
+    -- Get current lualine config
+    local lualine_cfg = require("lualine").get_config()
+    if not lualine_cfg or not lualine_cfg.sections then
+      return
+    end
+
+    -- Add our component to the specified section
+    local target = lualine_cfg.sections[section]
+    if target then
+      table.insert(target, M.lualine)
+      lualine.setup(lualine_cfg)
+    end
+  end)
+end
+
 -- Setup function to override config
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+
+  -- Auto-register with lualine if enabled
+  if M.config.auto_lualine then
+    auto_register_lualine(M.config.lualine_section or "lualine_c")
+  end
 end
 
 -- Lualine component table (ready to use in lualine config)

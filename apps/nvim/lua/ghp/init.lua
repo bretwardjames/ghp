@@ -21,6 +21,13 @@ M.config = {
     pr = " ",
     dashboard = " ",
   },
+  -- Parallel worktree settings
+  parallel = {
+    -- How to open nvim in new worktree: "tmux", "terminal", or "tab"
+    open_mode = "auto", -- auto-detect tmux, fallback to tab
+    -- Terminal command for non-tmux (use {path} placeholder)
+    terminal_cmd = nil, -- e.g., "alacritty --working-directory {path} -e nvim"
+  },
   -- Statusline settings (see ghp.statusline for all options)
   statusline = {
     cache_ttl = 30,

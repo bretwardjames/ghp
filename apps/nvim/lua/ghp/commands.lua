@@ -239,6 +239,11 @@ local function open_nvim_in_worktree(path, issue_number, opts)
   opts = opts or {}
   local config = require("ghp").config.parallel or {}
   local mode = config.open_mode or "auto"
+  local valid_modes = { auto = true, tmux = true, terminal = true, tab = true }
+  if not valid_modes[mode] then
+    vim.notify("Invalid parallel.open_mode '" .. mode .. "', using 'auto'", vim.log.levels.WARN)
+    mode = "auto"
+  end
   local auto_claude = config.auto_claude ~= false -- default: true
   local base_claude_cmd = config.claude_cmd or "claude"
   -- Layout: "panes" (side-by-side in same window) or "windows" (separate tmux windows)
@@ -314,10 +319,10 @@ local function open_nvim_in_worktree(path, issue_number, opts)
   end
 
   if mode == "terminal" and config.terminal_cmd then
-    -- Use custom terminal command (escape path for shell)
+    -- Use custom terminal command (escape placeholders for shell)
     local cmd = config.terminal_cmd
       :gsub("{path}", vim.fn.shellescape(path))
-      :gsub("{issue}", tostring(issue_number))
+      :gsub("{issue}", vim.fn.shellescape(tostring(issue_number)))
     vim.fn.jobstart(cmd, { detach = true })
     vim.notify("Opened nvim in new terminal: " .. path, vim.log.levels.INFO)
     return

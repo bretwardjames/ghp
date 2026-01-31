@@ -617,6 +617,8 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 if (originalBranch && originalBranch !== newBranchName) {
                     await checkoutBranch(originalBranch);
                     console.log(chalk.green('✓'), `Switched back to ${originalBranch} (worktree created)`);
+                } else if (!originalBranch) {
+                    console.log(chalk.yellow('⚠'), 'Was in detached HEAD state, staying on new branch');
                 }
             }
         }

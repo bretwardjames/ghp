@@ -1,9 +1,9 @@
 -- ghp/agents.lua - Agent dashboard for managing running Claude agents
--- Displays agents in a floating window with keymaps for kill, attach, refresh
+-- Features: floating window display, workspace filtering, preview/attach/kill/refresh,
+-- stale agent detection, and tmux integration for switching to agent windows
 
 local M = {}
 
--- Forward declarations for functions used before definition
 local get_agent_worktree_path
 
 -- Highlight groups for the agent dashboard
@@ -53,8 +53,9 @@ local function parse_worktree_output(result)
   return worktrees
 end
 
--- Parse git worktree list --porcelain output from a specific directory
--- Returns a table mapping branch names to worktree paths
+-- Get a mapping of branch names to worktree paths
+-- Tries current directory first, then scans ~/.ghp/worktrees/ as fallback
+-- Returns a table: { ["branch-name"] = "/path/to/worktree", ... }
 local function get_worktree_map()
   -- Try multiple strategies to find worktrees
 
@@ -87,36 +88,6 @@ local function get_worktree_map()
   return {}
 end
 
--- Get the git root directory for the current workspace
-local function get_git_root()
-  local result = vim.fn.system("git rev-parse --show-toplevel 2>/dev/null")
-  if vim.v.shell_error ~= 0 then
-    return nil
-  end
-  return vim.trim(result)
-end
-
--- Get the repo name from git remote or directory
-local function get_repo_identifier()
-  -- Try to get from remote origin
-  local remote = vim.fn.system("git remote get-url origin 2>/dev/null")
-  if vim.v.shell_error == 0 and remote ~= "" then
-    -- Extract repo name from URL (e.g., "owner/repo" from "git@github.com:owner/repo.git")
-    local repo = remote:match("[:/]([^/]+/[^/%.]+)%.?g?i?t?%s*$")
-    if repo then
-      return repo
-    end
-  end
-
-  -- Fallback to directory name
-  local root = get_git_root()
-  if root then
-    return root:match("([^/]+)$")
-  end
-
-  return nil
-end
-
 -- Filter agents to only those belonging to the current workspace
 local function filter_agents_for_workspace(agents, worktree_map)
   if not agents or #agents == 0 then
@@ -143,36 +114,81 @@ local function fetch_agents_data(callback, filter_workspace)
   -- Always get worktree map for path lookups (needed for attach even if not filtering)
   local worktree_map = get_worktree_map()
 
-  vim.fn.jobstart(cmd, {
+  -- Track if callback has been invoked to prevent double-invocation
+  local callback_invoked = false
+  local stdout_data = nil
+  local stderr_data = nil
+
+  local job_id = vim.fn.jobstart(cmd, {
     stdout_buffered = true,
+    stderr_buffered = true,
     on_stdout = function(_, data)
       if data and #data > 0 then
-        local json_str = table.concat(data, "\n")
-        local ok, parsed = pcall(vim.json.decode, json_str)
-        if ok and parsed then
-          -- Always add worktree paths to agents
-          for _, agent in ipairs(parsed) do
-            if agent.branch and worktree_map[agent.branch] then
-              agent._worktree_path = worktree_map[agent.branch]
-            end
-          end
-
-          -- Filter to workspace if requested
-          if filter_workspace then
-            parsed = filter_agents_for_workspace(parsed, worktree_map)
-          end
-          callback(parsed, nil)
-        else
-          callback(nil, "Failed to parse agents data")
-        end
+        stdout_data = table.concat(data, "\n")
       end
     end,
     on_stderr = function(_, data)
-      if data and data[1] ~= "" then
-        callback(nil, table.concat(data, "\n"))
+      if data and #data > 0 then
+        local text = table.concat(data, "\n")
+        if vim.trim(text) ~= "" then
+          stderr_data = text
+        end
       end
     end,
+    on_exit = function(_, exit_code)
+      if callback_invoked then return end
+      callback_invoked = true
+
+      vim.schedule(function()
+        -- Handle errors first
+        if exit_code ~= 0 then
+          local error_msg = stderr_data or ("ghp agents list failed with exit code " .. exit_code)
+          callback(nil, error_msg)
+          return
+        end
+
+        -- Handle empty output
+        if not stdout_data or vim.trim(stdout_data) == "" then
+          callback({}, nil) -- Empty agent list
+          return
+        end
+
+        -- Parse JSON
+        local ok, result = pcall(vim.json.decode, stdout_data)
+        if not ok then
+          callback(nil, "JSON parse error: " .. tostring(result))
+          return
+        end
+
+        if not result then
+          callback({}, nil)
+          return
+        end
+
+        -- Add worktree paths to agents
+        for _, agent in ipairs(result) do
+          if agent.branch and worktree_map[agent.branch] then
+            agent._worktree_path = worktree_map[agent.branch]
+          end
+        end
+
+        -- Filter to workspace if requested
+        if filter_workspace then
+          result = filter_agents_for_workspace(result, worktree_map)
+        end
+
+        callback(result, nil)
+      end)
+    end,
   })
+
+  -- Check if job started successfully
+  if job_id <= 0 then
+    local error_msg = job_id == 0
+      and "ghp command not executable (check that ghp is installed and in PATH)"
+      or "Failed to start ghp agents list"
+    callback(nil, error_msg)
+  end
 end
 
 -- Pad string to width
@@ -230,8 +246,8 @@ local function format_agents(agents, width)
         status_icon = "○"
       end
 
-      -- Format: #123  ●  3h 2m  Issue title here
-      -- Mark stale agents (no worktree) with warning
+      -- Format: [⚠] #123  ● run   3h 2m  Issue title here
+      -- ⚠ = stale agent (worktree missing), ● = status icon, run/wait/stop = state
       local is_stale = not agent._worktree_path
       local stale_marker = is_stale and "⚠ " or "  "
       local issue_str = "#" .. tostring(agent.issueNumber)
@@ -368,15 +384,33 @@ local function kill_agent(agent)
     return
   end
 
-  local cmd = get_ghp_path() .. " agents stop " .. agent.issueNumber
+  local issue_num = tonumber(agent.issueNumber)
+  if not issue_num then
+    vim.notify("Invalid agent issue number", vim.log.levels.ERROR)
+    return
+  end
+
+  local cmd = get_ghp_path() .. " agents stop " .. issue_num
+  local stderr_output = nil
+
   vim.fn.jobstart(cmd, {
+    stderr_buffered = true,
+    on_stderr = function(_, data)
+      if data and #data > 0 then
+        local text = table.concat(data, "\n")
+        if vim.trim(text) ~= "" then
+          stderr_output = text
+        end
+      end
+    end,
     on_exit = function(_, code)
       vim.schedule(function()
         if code == 0 then
-          vim.notify("Stopped agent for #" .. agent.issueNumber, vim.log.levels.INFO)
+          vim.notify("Stopped agent for #" .. issue_num, vim.log.levels.INFO)
           M.refresh()
         else
-          vim.notify("Failed to stop agent", vim.log.levels.ERROR)
+          local error_msg = stderr_output or "Unknown error"
+          vim.notify("Failed to stop agent: " .. vim.trim(error_msg), vim.log.levels.ERROR)
         end
       end)
     end,
@@ -384,7 +418,11 @@ local function kill_agent(agent)
 end
 
 -- Find the tmux target (session:window) for an agent
--- Returns nil if not found
+-- Searches all tmux sessions for windows matching:
+--   1. The issue number
+--   2. The worktree path
+--   3. Issue number extracted from branch name
+-- Returns session:window_index string (e.g., "ghp:2") or nil if not found
 local function find_agent_tmux_target(agent, worktree_path)
   local search_patterns = {
     tostring(agent.issueNumber),
@@ -435,12 +473,17 @@ local function preview_agent(agent)
   end
 
   -- Capture the pane content
-  local capture_cmd = string.format("tmux capture-pane -t %s -p -S -100 2>/dev/null",
+  local capture_cmd = string.format("tmux capture-pane -t %s -p -S -100 2>&1",
     vim.fn.shellescape(tmux_target))
   local content = vim.fn.system(capture_cmd)
 
-  if vim.v.shell_error ~= 0 or content == "" then
-    vim.notify("Failed to capture pane content", vim.log.levels.ERROR)
+  if vim.v.shell_error ~= 0 then
+    vim.notify("Failed to capture pane: " .. vim.trim(content), vim.log.levels.ERROR)
+    return
+  end
+
+  if content == "" then
+    vim.notify("Pane content is empty - agent may not have produced output yet", vim.log.levels.WARN)
     return
   end
 
@@ -516,6 +559,8 @@ local function preview_agent(agent)
       vim.api.nvim_buf_set_option(buf, "modifiable", false)
       vim.api.nvim_win_set_cursor(win, { #new_lines, 0 })
       vim.notify("Refreshed", vim.log.levels.INFO)
+    else
+      vim.notify("Failed to refresh - pane may no longer exist", vim.log.levels.ERROR)
     end
   end, opts)
 end
@@ -553,8 +598,12 @@ local function attach_agent(agent)
   -- Get the worktree path for this agent
   local worktree_path = get_agent_worktree_path(agent)
   if not worktree_path then
-    vim.notify("Could not find worktree for agent #" .. agent.issueNumber, vim.log.levels.WARN)
-    worktree_path = vim.fn.getcwd() -- Fallback to current directory
+    vim.notify(
+      "Could not find worktree for agent #" .. agent.issueNumber ..
+      ". The worktree may have been deleted.",
+      vim.log.levels.ERROR
+    )
+    return
   end
 
   -- Check if we're in tmux
@@ -619,8 +668,12 @@ local function attach_agent(agent)
     vim.cmd("lcd " .. vim.fn.fnameescape(worktree_path))
     vim.fn.termopen(string.format("claude --resume %s", vim.fn.shellescape(agent.id)), {
       cwd = worktree_path,
-      on_exit = function()
-        vim.notify("Agent session ended", vim.log.levels.INFO)
+      on_exit = function(_, exit_code)
+        if exit_code == 0 then
+          vim.notify("Agent session ended normally", vim.log.levels.INFO)
+        else
+          vim.notify("Agent session exited with error (code " .. exit_code .. ")", vim.log.levels.WARN)
+        end
       end,
     })
     vim.cmd("startinsert")
@@ -703,6 +756,8 @@ Tip: Use :GhpAgents! to show all agents (not just workspace)
 end
 
 -- Create a floating window with the agent list
+-- opts.workspace: if false, show all agents; if true/nil (default), show workspace only
+-- opts.width, opts.height: override default floating window dimensions (0.0-1.0)
 function M.show_float(opts)
   opts = opts or {}
   local float_config = require("ghp").config.float
@@ -831,33 +886,6 @@ function M.refresh()
       vim.notify("Refreshed", vim.log.levels.INFO)
     end)
   end, filter_workspace)
-end
-
--- Debug helper (can be removed later)
-function M._debug_worktree_map()
-  local ghp_worktrees_dir = vim.fn.expand("~/.ghp/worktrees")
-  local dir_exists = vim.fn.isdirectory(ghp_worktrees_dir)
-
-  -- Try to find a .git file or dir (worktrees use files)
-  local find_cmd = string.format("find %s -maxdepth 4 -name '.git' 2>/dev/null | head -1",
-    vim.fn.shellescape(ghp_worktrees_dir))
-  local git_dir = vim.trim(vim.fn.system(find_cmd))
-
-  local worktree_output = ""
-  if git_dir ~= "" then
-    local repo_dir = git_dir:gsub("/.git$", "")
-    worktree_output = vim.fn.system(string.format("git -C %s worktree list --porcelain 2>&1",
-      vim.fn.shellescape(repo_dir)))
-  end
-
-  return {
-    cwd = vim.fn.getcwd(),
-    ghp_dir = ghp_worktrees_dir,
-    ghp_dir_exists = dir_exists == 1,
-    found_git_dir = git_dir,
-    worktree_output = worktree_output:sub(1, 500), -- truncate
-    parsed = get_worktree_map(),
-  }
 end
 
 return M

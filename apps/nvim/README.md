@@ -38,7 +38,7 @@ return {
 ```lua
 {
   "bretwardjames/ghp.nvim",
-  cmd = { "GhpPlan", "GhpWork", "GhpOpen", "GhpStart", "GhpAdd" },
+  cmd = { "GhpPlan", "GhpWork", "GhpOpen", "GhpStart", "GhpAdd", "GhpDone", "GhpPr", "GhpAgents" },
   config = function()
     require("ghp").setup()
   end,

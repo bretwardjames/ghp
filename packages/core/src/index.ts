@@ -338,3 +338,42 @@ export type {
     HookItem,
     HookResponse,
 } from './dashboard/hooks.js';
+
+// =============================================================================
+// Event Hooks System
+// =============================================================================
+
+export {
+    // Registry
+    getEventHooksConfigPath,
+    loadEventHooksConfig,
+    saveEventHooksConfig,
+    getEventHooks,
+    getEnabledEventHooks,
+    getEventHook,
+    getHooksForEvent,
+    addEventHook,
+    updateEventHook,
+    removeEventHook,
+    enableEventHook,
+    disableEventHook,
+    getValidEventTypes,
+    // Executor
+    substituteTemplateVariables,
+    executeEventHook,
+    executeHooksForEvent,
+    hasHooksForEvent,
+} from './plugins/index.js';
+
+export type {
+    EventType,
+    EventHook,
+    EventHooksConfig,
+    BaseEventPayload,
+    IssueCreatedPayload,
+    IssueStartedPayload,
+    PrCreatedPayload,
+    PrMergedPayload,
+    EventPayload,
+    HookResult,
+} from './plugins/index.js';

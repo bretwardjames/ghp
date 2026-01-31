@@ -1,5 +1,25 @@
 # @bretwardjames/ghp-core
 
+## 0.2.1
+
+### Patch Changes
+
+- feat: Add event hooks system for external tool integration
+
+  - Add `ghp hooks` commands to register shell commands that run on lifecycle events
+  - Supported events: `issue-created`, `issue-started`, `pr-created`, `pr-merged`
+  - Template variable substitution: `${issue.number}`, `${issue.json}`, `${branch}`, `${repo}`
+  - Fire `issue-created` hooks after `ghp add`
+  - Fire `issue-started` hooks after `ghp start`
+
+  Example usage with ragtime:
+
+  ```bash
+  ghp hooks add ragtime-context \
+    --event issue-started \
+    --command "ragtime new-branch \${issue.number} --issue-json '\${issue.json}'"
+  ```
+
 ## 0.2.0
 
 ### Minor Changes

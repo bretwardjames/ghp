@@ -32,6 +32,35 @@ const linker = new BranchLinker(api);
 await linker.linkBranch(issueNumber, branchName);
 ```
 
+### Event Hooks
+
+Register and execute lifecycle event hooks:
+
+```typescript
+import {
+  addEventHook,
+  executeHooksForEvent,
+  type IssueStartedPayload,
+} from '@bretwardjames/ghp-core';
+
+// Register a hook
+addEventHook({
+  name: 'my-hook',
+  event: 'issue-started',
+  command: 'echo "Started issue ${issue.number} on ${branch}"',
+});
+
+// Execute hooks for an event
+const payload: IssueStartedPayload = {
+  repo: 'owner/repo',
+  issue: { number: 123, title: 'Fix bug', body: '', url: '...' },
+  branch: 'feature/123-fix-bug',
+};
+const results = await executeHooksForEvent('issue-started', payload);
+```
+
+Available events: `issue-created`, `issue-started`, `pr-created`, `pr-merged`
+
 ## License
 
 MIT

@@ -21,6 +21,24 @@ M.config = {
     pr = " ",
     dashboard = " ",
   },
+  -- Parallel worktree settings
+  parallel = {
+    -- How to open nvim in new worktree: "auto", "tmux", "terminal", or "tab"
+    open_mode = "auto", -- auto-detect tmux, fallback to tab
+    -- Terminal command for non-tmux (use {path} and {issue} placeholders)
+    terminal_cmd = nil, -- e.g., "alacritty --working-directory {path} -e nvim"
+    -- Auto-start claude in the new worktree (default: true)
+    auto_claude = true,
+    -- Claude command to run (default: "claude")
+    claude_cmd = "claude", -- e.g., "claude --model opus" or a different CLI
+    -- Layout when auto_claude is enabled: "panes" or "windows"
+    -- "panes": nvim and claude side-by-side in same tmux window (default)
+    -- "windows": nvim and claude in separate tmux windows
+    layout = "panes",
+    -- Default prompt to send to claude (use {issue}, {path} placeholders)
+    -- Can be overridden inline: :GhpStartParallel 123 Your custom prompt here
+    claude_prompt = nil, -- e.g., "Working on #{issue}. Read the issue and begin."
+  },
   -- Statusline settings (see ghp.statusline for all options)
   statusline = {
     cache_ttl = 30,

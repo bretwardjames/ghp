@@ -80,6 +80,48 @@ require("ghp").setup({
 })
 ```
 
+## Parallel Worktrees
+
+Work on multiple issues simultaneously using git worktrees. Each issue gets its own directory with a separate checkout.
+
+```lua
+require("ghp").setup({
+  parallel = {
+    -- How to open editor: "auto" (detect tmux), "tmux", "terminal", or "tab"
+    open_mode = "auto",
+    -- Auto-start claude in new worktree (default: true)
+    auto_claude = true,
+    -- Claude command to run
+    claude_cmd = "claude", -- e.g., "claude --model opus"
+    -- Layout when auto_claude is enabled:
+    -- "panes": nvim and claude side-by-side in same tmux window (default)
+    -- "windows": nvim and claude in separate tmux windows
+    layout = "panes",
+    -- Default prompt to send to claude (use {issue}, {path} placeholders)
+    claude_prompt = "Working on #{issue}. Read the issue and begin.",
+    -- Custom terminal command (for terminal mode)
+    terminal_cmd = nil, -- e.g., "alacritty --working-directory {path} -e nvim"
+  },
+})
+```
+
+### Usage
+
+```vim
+" Create worktree and open nvim + claude (uses default prompt if configured)
+:GhpStartParallel 123
+
+" With inline prompt (overrides default)
+:GhpStartParallel 123 Fix the authentication bug and add tests
+
+" Create worktree only (for agent-only workflows)
+:GhpStartParallel! 123
+:GhpStartParallel! 456
+" Then manage agents with :GhpAgents (see issue #141)
+```
+
+When inside tmux, `:GhpStartParallel` opens a new tmux window named `nvim-{issue}`.
+
 ## Statusline Integration
 
 Show the current issue in your statusline with lualine.
@@ -166,6 +208,8 @@ local color = require("ghp.statusline").component_color()
 | `:GhpWork` | View items assigned to you |
 | `:GhpOpen [issue]` | View issue details |
 | `:GhpStart [issue]` | Start working on an issue (creates branch, updates status) |
+| `:GhpStartParallel [issue]` | Start in a new worktree and open nvim + claude |
+| `:GhpStartParallel! [issue]` | Create worktree only (no editor - for agent workflows) |
 | `:GhpAdd [title]` | Create a new issue |
 | `:GhpDone [issue]` | Mark an issue as done |
 | `:GhpMove <issue> <status>` | Move issue to different status |

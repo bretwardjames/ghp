@@ -22,7 +22,7 @@ Add to `~/.config/nvim/lua/plugins/ghp.lua`:
 ```lua
 return {
   "bretwardjames/ghp.nvim",
-  cmd = { "GhpPlan", "GhpWork", "GhpOpen", "GhpStart", "GhpAdd", "GhpDone", "GhpPr" },
+  cmd = { "GhpPlan", "GhpWork", "GhpOpen", "GhpStart", "GhpAdd", "GhpDone", "GhpPr", "GhpAgents" },
   keys = {
     { "<leader>gp", "<cmd>GhpPlan<cr>", desc = "Project Board" },
     { "<leader>gw", "<cmd>GhpWork<cr>", desc = "My Work" },
@@ -219,6 +219,9 @@ local color = require("ghp.statusline").component_color()
 | `:GhpDashboard` | Show branch dashboard in split |
 | `:GhpDashboardFloat` | Show branch dashboard in floating window |
 | `:GhpDashboardRefresh` | Refresh current dashboard |
+| `:GhpAgents` | View running Claude agents (workspace only) |
+| `:GhpAgents!` | View all running Claude agents |
+| `:GhpAgentsRefresh` | Refresh current agents window |
 | `:GhpPickPlan [shortcut]` | Fuzzy picker for project board |
 | `:GhpPickWork` | Fuzzy picker for your work |
 | `:GhpPickIssues` | Fuzzy picker for issues |
@@ -286,6 +289,25 @@ When viewing issues in a floating window:
 | `d` | Mark issue as done |
 | `c` | Comment on issue |
 | `?` | Show help |
+
+## Keymaps in Agents Window
+
+When viewing agents with `:GhpAgents`:
+
+| Key | Action |
+|-----|--------|
+| `q` / `<Esc>` | Close window |
+| `<Enter>` / `p` | Preview agent output (shows tmux pane content) |
+| `a` | Attach to agent (switch to tmux window or create terminal) |
+| `x` | Kill/stop the selected agent |
+| `r` | Refresh agent list |
+| `?` | Show help |
+
+Status indicators:
+- `●` Running - agent is actively working
+- `⏸` Waiting - agent is waiting for input
+- `○` Stopped - agent has stopped
+- `⚠` Stale - agent's worktree no longer exists
 
 ## Workflow
 

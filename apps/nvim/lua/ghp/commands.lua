@@ -229,8 +229,8 @@ local function build_claude_cmd(base_cmd, prompt, issue_number, path)
   local expanded = prompt
     :gsub("{issue}", tostring(issue_number))
     :gsub("{path}", path)
-  -- Add -p flag with the prompt
-  return string.format("%s -p %s", base_cmd, vim.fn.shellescape(expanded))
+  -- Prompt is a positional argument (not a flag)
+  return string.format("%s %s", base_cmd, vim.fn.shellescape(expanded))
 end
 
 -- Open nvim in a new worktree

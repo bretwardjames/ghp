@@ -274,39 +274,6 @@ require("telescope").extensions.ghp.plan()
 
 Without telescope, the picker uses `vim.ui.select`. Install [snacks.nvim](https://github.com/folke/snacks.nvim) or [dressing.nvim](https://github.com/stevearc/dressing.nvim) to enhance the UI with fuzzy finding.
 
-## Parallel Worktrees
-
-Work on multiple issues simultaneously with `:GhpStartParallel`:
-
-```vim
-:GhpStartParallel 123    " Create worktree and open nvim in it
-```
-
-This will:
-1. Create a git worktree for the issue (via `ghp start --parallel`)
-2. Open nvim in the new worktree directory
-
-### Open Modes
-
-Configure how nvim opens in the new worktree:
-
-```lua
-require("ghp").setup({
-  parallel = {
-    open_mode = "auto",  -- "auto", "tmux", "terminal", or "tab"
-    -- Custom terminal command (for open_mode = "terminal")
-    terminal_cmd = "alacritty --working-directory {path} -e nvim",
-  },
-})
-```
-
-| Mode | Behavior |
-|------|----------|
-| `auto` | Use tmux if available, otherwise tab (default) |
-| `tmux` | Open in new tmux window |
-| `terminal` | Use custom `terminal_cmd` |
-| `tab` | Open nvim in a new neovim tab with terminal |
-
 ## Keymaps in Float Windows
 
 When viewing issues in a floating window:

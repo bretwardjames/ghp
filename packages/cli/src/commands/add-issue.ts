@@ -10,7 +10,13 @@ import { join } from 'path';
 import { promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { generateWithClaude } from '../claude-runner.js';
 import { runFeedbackLoop } from '../ai-feedback.js';
-import { ClaudeClient, claudePrompts } from '@bretwardjames/ghp-core';
+import {
+    ClaudeClient,
+    claudePrompts,
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type IssueCreatedPayload,
+} from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
@@ -466,6 +472,38 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
                 console.log(chalk.green(`${fieldName}:`), value);
             } else {
                 console.log(chalk.yellow('Warning:'), `Failed to set field "${fieldName}"`);
+            }
+        }
+    }
+
+    // Fire issue-created event hooks
+    if (hasHooksForEvent('issue-created')) {
+        console.log();
+        console.log(chalk.dim('Running issue-created hooks...'));
+
+        const payload: IssueCreatedPayload = {
+            repo: `${repo.owner}/${repo.name}`,
+            issue: {
+                number: issue.number,
+                title,
+                body,
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issue.number}`,
+            },
+        };
+
+        const results = await executeHooksForEvent('issue-created', payload);
+
+        for (const result of results) {
+            if (result.success) {
+                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                if (result.output) {
+                    console.log(chalk.dim(result.output));
+                }
+            } else {
+                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                if (result.error) {
+                    console.log(chalk.dim(result.error));
+                }
             }
         }
     }

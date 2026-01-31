@@ -23,7 +23,15 @@ import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
 import { openParallelWorkTerminal, openAdminPane, isInsideTmux } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
-import { registerAgent, updateAgent, extractIssueNumberFromBranch, getAgentByIssue } from '@bretwardjames/ghp-core';
+import {
+    registerAgent,
+    updateAgent,
+    extractIssueNumberFromBranch,
+    getAgentByIssue,
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type IssueStartedPayload,
+} from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
@@ -660,6 +668,48 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
     console.log();
     console.log(chalk.green.bold('Ready to work on:'), item.title);
+
+    // Fire issue-started event hooks
+    const finalBranch = worktreeBranch || linkedBranch || await getCurrentBranch() || '';
+    if (hasHooksForEvent('issue-started')) {
+        console.log();
+        console.log(chalk.dim('Running issue-started hooks...'));
+
+        // Note: ProjectItem doesn't include body, but hooks can fetch it if needed
+        const payload: IssueStartedPayload = {
+            repo: `${repo.owner}/${repo.name}`,
+            issue: {
+                number: issueNumber,
+                title: item.title,
+                body: '', // Body not available from ProjectItem, hooks can fetch via API
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            },
+            branch: finalBranch,
+        };
+
+        const results = await executeHooksForEvent('issue-started', payload);
+
+        for (const result of results) {
+            if (result.success) {
+                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                if (result.output) {
+                    // Show first few lines of output
+                    const lines = result.output.split('\n').slice(0, 3);
+                    for (const line of lines) {
+                        console.log(chalk.dim(`  ${line}`));
+                    }
+                    if (result.output.split('\n').length > 3) {
+                        console.log(chalk.dim('  ...'));
+                    }
+                }
+            } else {
+                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                if (result.error) {
+                    console.log(chalk.dim(`  ${result.error}`));
+                }
+            }
+        }
+    }
 
     // Show path info for parallel worktree
     if (isParallelMode && worktreePath) {

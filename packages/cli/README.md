@@ -256,6 +256,44 @@ Hook commands receive `--branch` and `--repo` arguments and return JSON:
 
 See [docs/hooks/README.md](../../docs/hooks/README.md) for the full hook API.
 
+### Event Hooks
+
+Integrate external tools by registering hooks that run on lifecycle events:
+
+```bash
+ghp hooks list                      # List registered hooks
+ghp hooks add <name>                # Register a new hook
+  --event <event>                   # Event: issue-created, issue-started, pr-created, pr-merged
+  --command <cmd>                   # Shell command with ${var} templates
+  --timeout <ms>                    # Timeout in milliseconds (default: 30000)
+ghp hooks remove <name>             # Remove a hook
+ghp hooks enable <name>             # Enable a hook
+ghp hooks disable <name>            # Disable a hook
+ghp hooks show <name>               # Show hook details
+```
+
+**Events and Template Variables:**
+
+| Event | Trigger | Variables |
+|-------|---------|-----------|
+| `issue-created` | After `ghp add` | `${issue.number}`, `${issue.json}`, `${issue.title}`, `${repo}` |
+| `issue-started` | After `ghp start` | `${issue.number}`, `${issue.json}`, `${branch}`, `${repo}` |
+| `pr-created` | After `ghp pr --create` | `${pr.number}`, `${pr.json}`, `${branch}`, `${repo}` |
+| `pr-merged` | After PR merge | `${pr.number}`, `${pr.json}`, `${branch}`, `${repo}` |
+
+**Example: Ragtime Integration**
+
+```bash
+# Register hook to generate context when starting work
+ghp hooks add ragtime-context \
+  --event issue-started \
+  --command "ragtime new-branch \${issue.number} --issue-json '\${issue.json}'"
+
+# Now `ghp start 42` will:
+# 1. Create/switch to branch
+# 2. Run ragtime to generate context in .claude/memory/
+```
+
 ### Agent Management
 
 Manage Claude agents running in parallel worktrees:

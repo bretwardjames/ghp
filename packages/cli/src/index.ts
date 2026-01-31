@@ -43,6 +43,14 @@ import {
     hooksDisableCommand,
     hooksShowCommand,
 } from './commands/dashboard-hooks.js';
+import {
+    hooksListCommand as eventHooksListCommand,
+    hooksAddCommand as eventHooksAddCommand,
+    hooksRemoveCommand as eventHooksRemoveCommand,
+    hooksEnableCommand as eventHooksEnableCommand,
+    hooksDisableCommand as eventHooksDisableCommand,
+    hooksShowCommand as eventHooksShowCommand,
+} from './commands/event-hooks.js';
 
 const program = new Command();
 
@@ -184,6 +192,50 @@ hooksCmd
     .command('show <name>')
     .description('Show details of a hook')
     .action(hooksShowCommand);
+
+// =============================================================================
+// Event Hooks
+// =============================================================================
+
+const eventHooksCmd = program
+    .command('hooks')
+    .description('Manage event hooks (lifecycle triggers for external tools)');
+
+eventHooksCmd
+    .command('list')
+    .alias('ls')
+    .description('List all registered hooks')
+    .action(eventHooksListCommand);
+
+eventHooksCmd
+    .command('add <name>')
+    .description('Add a new event hook')
+    .option('-e, --event <event>', 'Event to trigger on (issue-created, issue-started, pr-created, pr-merged)')
+    .option('-c, --command <cmd>', 'Shell command to execute (supports ${var} templates)')
+    .option('-d, --display-name <name>', 'Human-readable display name')
+    .option('-t, --timeout <ms>', 'Timeout in milliseconds (default: 30000)')
+    .action(eventHooksAddCommand);
+
+eventHooksCmd
+    .command('remove <name>')
+    .alias('rm')
+    .description('Remove a hook')
+    .action(eventHooksRemoveCommand);
+
+eventHooksCmd
+    .command('enable <name>')
+    .description('Enable a hook')
+    .action(eventHooksEnableCommand);
+
+eventHooksCmd
+    .command('disable <name>')
+    .description('Disable a hook')
+    .action(eventHooksDisableCommand);
+
+eventHooksCmd
+    .command('show <name>')
+    .description('Show details of a hook')
+    .action(eventHooksShowCommand);
 
 // Workflow commands
 program

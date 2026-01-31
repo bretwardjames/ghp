@@ -375,13 +375,10 @@ function M.start_parallel(issue_number, opts)
   end
 
   -- Create worktree using ghp start --parallel
+  -- Always pass --no-open since nvim plugin handles opening the editor
   vim.notify("Creating worktree for #" .. issue_number .. "...", vim.log.levels.INFO)
 
-  -- Add --no-open to CLI if we don't want to open the terminal
-  local cli_args = "start " .. issue_number .. " --parallel --force-defaults"
-  if opts.no_open then
-    cli_args = cli_args .. " --no-open"
-  end
+  local cli_args = "start " .. issue_number .. " --parallel --force-defaults --no-open"
 
   local result, code = run_ghp_sync(cli_args)
 

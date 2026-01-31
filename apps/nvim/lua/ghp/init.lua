@@ -35,6 +35,9 @@ M.config = {
     -- "panes": nvim and claude side-by-side in same tmux window (default)
     -- "windows": nvim and claude in separate tmux windows
     layout = "panes",
+    -- Default prompt to send to claude (use {issue}, {path} placeholders)
+    -- Can be overridden inline: :GhpStartParallel 123 Your custom prompt here
+    claude_prompt = nil, -- e.g., "Working on #{issue}. Read the issue and begin."
   },
   -- Statusline settings (see ghp.statusline for all options)
   statusline = {

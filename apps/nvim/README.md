@@ -97,6 +97,8 @@ require("ghp").setup({
     -- "panes": nvim and claude side-by-side in same tmux window (default)
     -- "windows": nvim and claude in separate tmux windows
     layout = "panes",
+    -- Default prompt to send to claude (use {issue}, {path} placeholders)
+    claude_prompt = "Working on #{issue}. Read the issue and begin.",
     -- Custom terminal command (for terminal mode)
     terminal_cmd = nil, -- e.g., "alacritty --working-directory {path} -e nvim"
   },
@@ -106,8 +108,11 @@ require("ghp").setup({
 ### Usage
 
 ```vim
-" Create worktree and open nvim + claude
+" Create worktree and open nvim + claude (uses default prompt if configured)
 :GhpStartParallel 123
+
+" With inline prompt (overrides default)
+:GhpStartParallel 123 Fix the authentication bug and add tests
 
 " Create worktree only (for agent-only workflows)
 :GhpStartParallel! 123

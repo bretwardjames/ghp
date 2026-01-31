@@ -220,18 +220,37 @@ local function get_worktree_path(issue_number)
   return nil
 end
 
+-- Build claude command with optional prompt
+local function build_claude_cmd(base_cmd, prompt, issue_number, path)
+  if not prompt or prompt == "" then
+    return base_cmd
+  end
+  -- Substitute placeholders in prompt
+  local expanded = prompt
+    :gsub("{issue}", tostring(issue_number))
+    :gsub("{path}", path)
+  -- Add -p flag with the prompt
+  return string.format("%s -p %s", base_cmd, vim.fn.shellescape(expanded))
+end
+
 -- Open nvim in a new worktree
-local function open_nvim_in_worktree(path, issue_number)
+-- opts.prompt: optional prompt to send to claude
+local function open_nvim_in_worktree(path, issue_number, opts)
+  opts = opts or {}
   local config = require("ghp").config.parallel or {}
   local mode = config.open_mode or "auto"
   local auto_claude = config.auto_claude ~= false -- default: true
-  local claude_cmd = config.claude_cmd or "claude"
+  local base_claude_cmd = config.claude_cmd or "claude"
   -- Layout: "panes" (side-by-side in same window) or "windows" (separate tmux windows)
   local layout = config.layout or "panes"
   if layout ~= "panes" and layout ~= "windows" then
     vim.notify("Invalid parallel.layout '" .. layout .. "', using 'panes'", vim.log.levels.WARN)
     layout = "panes"
   end
+
+  -- Determine prompt: inline override > config default > none
+  local prompt = opts.prompt or config.claude_prompt
+  local claude_cmd = build_claude_cmd(base_claude_cmd, prompt, issue_number, path)
 
   -- Auto-detect mode
   if mode == "auto" then
@@ -321,6 +340,7 @@ end
 
 -- Start parallel work on an issue
 -- opts.no_open: if true, create worktree but don't open editor (for agent-only workflows)
+-- opts.prompt: optional prompt to send to claude (overrides config default)
 function M.start_parallel(issue_number, opts)
   opts = opts or {}
 
@@ -344,7 +364,7 @@ function M.start_parallel(issue_number, opts)
       vim.notify("Worktree already exists: " .. existing_path, vim.log.levels.INFO)
     else
       vim.notify("Worktree already exists, opening...", vim.log.levels.INFO)
-      open_nvim_in_worktree(existing_path, issue_number)
+      open_nvim_in_worktree(existing_path, issue_number, { prompt = opts.prompt })
     end
     return existing_path
   end
@@ -375,7 +395,7 @@ function M.start_parallel(issue_number, opts)
   if opts.no_open then
     vim.notify("Worktree created: " .. path, vim.log.levels.INFO)
   else
-    open_nvim_in_worktree(path, issue_number)
+    open_nvim_in_worktree(path, issue_number, { prompt = opts.prompt })
   end
 
   return path
@@ -402,10 +422,14 @@ function M.setup()
 
   vim.api.nvim_create_user_command("GhpStartParallel", function(opts)
     -- Use bang (!) to create worktree without opening editor
-    -- :GhpStartParallel 123 → opens editor
+    -- :GhpStartParallel 123 → opens editor with default prompt
+    -- :GhpStartParallel 123 Fix the bug → opens editor with custom prompt
     -- :GhpStartParallel! 123 → creates worktree only (for agent workflows)
-    M.start_parallel(opts.args ~= "" and opts.args or nil, { no_open = opts.bang })
-  end, { nargs = "?", bang = true, desc = "Start working on issue in a new worktree (use ! to skip opening editor)" })
+    local args = vim.split(opts.args, " ", { trimempty = true })
+    local issue = args[1]
+    local prompt = #args > 1 and table.concat(args, " ", 2) or nil
+    M.start_parallel(issue, { no_open = opts.bang, prompt = prompt })
+  end, { nargs = "*", bang = true, desc = "Start working on issue in a new worktree (use ! to skip opening editor)" })
 
   vim.api.nvim_create_user_command("GhpAdd", function(opts)
     M.add(opts.args ~= "" and opts.args or nil)

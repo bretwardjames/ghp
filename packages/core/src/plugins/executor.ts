@@ -14,11 +14,14 @@ const execAsync = promisify(exec);
 // =============================================================================
 
 /**
- * Escape a string for safe use in shell commands
+ * Escape a string for safe use in shell commands.
+ * Wraps the string in single quotes and escapes any embedded single quotes.
+ * This prevents shell injection attacks from issue titles, bodies, etc.
  */
 function shellEscape(str: string): string {
-    // Replace single quotes with escaped version
-    return str.replace(/'/g, "'\\''");
+    // Single-quote the string and escape embedded single quotes
+    // 'foo'bar' becomes 'foo'\''bar'
+    return "'" + str.replace(/'/g, "'\\''") + "'";
 }
 
 /**
@@ -84,9 +87,11 @@ export async function executeEventHook(
         // Substitute template variables
         const command = substituteTemplateVariables(hook.command, payload);
 
+        // Use sh as the shell for maximum portability
+        // /bin/sh exists on all POSIX systems including minimal containers
         const { stdout } = await execAsync(command, {
             timeout: hook.timeout || 30000,
-            shell: '/bin/bash',
+            shell: '/bin/sh',
         });
 
         return {

@@ -498,8 +498,12 @@ local function preview_agent(agent)
     M._current_buf = nil
     M._current_win = nil
     -- Switch to tmux
-    vim.fn.system("tmux switch-client -t " .. vim.fn.shellescape(tmux_target))
-    vim.notify("Switched to " .. tmux_target, vim.log.levels.INFO)
+    local result = vim.fn.system("tmux switch-client -t " .. vim.fn.shellescape(tmux_target))
+    if vim.v.shell_error ~= 0 then
+      vim.notify("Failed to switch to " .. tmux_target .. ": " .. vim.trim(result), vim.log.levels.ERROR)
+    else
+      vim.notify("Switched to " .. tmux_target, vim.log.levels.INFO)
+    end
   end, opts)
 
   -- Refresh preview
@@ -584,8 +588,12 @@ local function attach_agent(agent)
             local session, window_index = window_line:match("^([^:]+):(%d+):")
             if session and window_index then
               local target = session .. ":" .. window_index
-              vim.fn.system("tmux switch-client -t " .. vim.fn.shellescape(target))
-              vim.notify("Switched to " .. target, vim.log.levels.INFO)
+              local result = vim.fn.system("tmux switch-client -t " .. vim.fn.shellescape(target))
+              if vim.v.shell_error ~= 0 then
+                vim.notify("Failed to switch to " .. target .. ": " .. vim.trim(result), vim.log.levels.ERROR)
+              else
+                vim.notify("Switched to " .. target, vim.log.levels.INFO)
+              end
               return
             end
           end
@@ -599,14 +607,17 @@ local function attach_agent(agent)
       "tmux new-window -n 'agent-%d' 'cd %s && claude --resume %s'",
       agent.issueNumber,
       vim.fn.shellescape(worktree_path),
-      agent.id
+      vim.fn.shellescape(agent.id)
     )
-    vim.fn.system(new_window_cmd)
+    local result = vim.fn.system(new_window_cmd)
+    if vim.v.shell_error ~= 0 then
+      vim.notify("Failed to create tmux window: " .. vim.trim(result), vim.log.levels.ERROR)
+    end
   else
     -- Not in tmux - open terminal in nvim with correct directory
     vim.cmd("tabnew")
     vim.cmd("lcd " .. vim.fn.fnameescape(worktree_path))
-    vim.fn.termopen(string.format("claude --resume %s", agent.id), {
+    vim.fn.termopen(string.format("claude --resume %s", vim.fn.shellescape(agent.id)), {
       cwd = worktree_path,
       on_exit = function()
         vim.notify("Agent session ended", vim.log.levels.INFO)

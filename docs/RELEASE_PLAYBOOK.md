@@ -521,9 +521,47 @@ Regardless of `AUTO_BETA` setting, you can always manually trigger the workflow:
 
 This is useful for re-running a failed release or testing the workflow.
 
-### Neovim Mirror (Manual Setup)
+### Neovim Mirror Sync
 
-The Neovim sync currently requires manual push to the mirror repo. To fully automate:
+The `ghp.nvim` repo is a mirror of `apps/nvim/` for plugin managers. Sync it after releases:
+
+```bash
+# One-time setup: clone the mirror repo as a sibling
+cd ..
+git clone git@github.com:bretwardjames/ghp.nvim.git ghp.nvim-mirror
+cd ghp  # back to monorepo
+
+# Sync: copy files and push
+rsync -av --delete --exclude='.git' apps/nvim/ ../ghp.nvim-mirror/
+cd ../ghp.nvim-mirror
+git add -A
+git commit -m "sync: update from monorepo"
+git push
+cd ../ghp  # back to monorepo
+```
+
+Or use the convenience script (if available):
+```bash
+pnpm release:nvim
+```
+
+#### Tagging Releases
+
+For versioned releases, create a tag in the mirror:
+```bash
+cd ../ghp.nvim-mirror
+git tag v0.2.0
+git push --tags
+```
+
+Users can then pin to a specific version in lazy.nvim:
+```lua
+{ "bretwardjames/ghp.nvim", tag = "v0.2.0" }
+```
+
+#### Future: Automated Sync
+
+To fully automate via GitHub Actions:
 
 1. Create a deploy key for the mirror repo
 2. Add as `NVIM_MIRROR_DEPLOY_KEY` secret

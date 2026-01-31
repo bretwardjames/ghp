@@ -185,6 +185,16 @@ function M.dashboard(opts)
   require("ghp.dashboard").show_split(opts)
 end
 
+-- Agents functions
+function M.agents(opts)
+  opts = opts or {}
+  require("ghp.agents").show_float(opts)
+end
+
+function M.agents_refresh()
+  require("ghp.agents").refresh()
+end
+
 function M.dashboard_float(opts)
   opts = opts or {}
   require("ghp.dashboard").show_float(opts)
@@ -490,6 +500,16 @@ function M.setup()
   vim.api.nvim_create_user_command("GhpDashboardRefresh", function()
     M.dashboard_refresh()
   end, { desc = "Refresh current dashboard" })
+
+  -- Agents commands
+  vim.api.nvim_create_user_command("GhpAgents", function(cmd_opts)
+    -- Use bang (!) to show all agents instead of just workspace
+    M.agents({ workspace = not cmd_opts.bang })
+  end, { bang = true, desc = "Show running agents (use ! for all agents)" })
+
+  vim.api.nvim_create_user_command("GhpAgentsRefresh", function()
+    M.agents_refresh()
+  end, { desc = "Refresh current agents window" })
 end
 
 return M

@@ -393,7 +393,7 @@ local function kill_agent(agent)
   local cmd = get_ghp_path() .. " agents stop " .. issue_num
   local stderr_output = nil
 
-  vim.fn.jobstart(cmd, {
+  local job_id = vim.fn.jobstart(cmd, {
     stderr_buffered = true,
     on_stderr = function(_, data)
       if data and #data > 0 then
@@ -415,6 +415,13 @@ local function kill_agent(agent)
       end)
     end,
   })
+
+  if job_id <= 0 then
+    local error_msg = job_id == 0
+      and "ghp command not executable"
+      or "Failed to start ghp agents stop"
+    vim.notify("Failed to stop agent: " .. error_msg, vim.log.levels.ERROR)
+  end
 end
 
 -- Find the tmux target (session:window) for an agent
@@ -552,15 +559,17 @@ local function preview_agent(agent)
   -- Refresh preview
   vim.keymap.set("n", "r", function()
     local new_content = vim.fn.system(capture_cmd)
-    if vim.v.shell_error == 0 and new_content ~= "" then
+    if vim.v.shell_error ~= 0 then
+      vim.notify("Failed to refresh - pane may no longer exist", vim.log.levels.ERROR)
+    elseif new_content == "" then
+      vim.notify("Pane content is empty", vim.log.levels.WARN)
+    else
       local new_lines = vim.split(new_content, "\n")
       vim.api.nvim_buf_set_option(buf, "modifiable", true)
       vim.api.nvim_buf_set_lines(buf, 0, -1, false, new_lines)
       vim.api.nvim_buf_set_option(buf, "modifiable", false)
       vim.api.nvim_win_set_cursor(win, { #new_lines, 0 })
       vim.notify("Refreshed", vim.log.levels.INFO)
-    else
-      vim.notify("Failed to refresh - pane may no longer exist", vim.log.levels.ERROR)
     end
   end, opts)
 end
@@ -628,7 +637,9 @@ local function attach_agent(agent)
     local list_cmd = "tmux list-windows -a -F '#{session_name}:#{window_index}:#{window_name}:#{pane_current_path}' 2>/dev/null"
     local all_windows = vim.fn.system(list_cmd)
 
-    if vim.v.shell_error == 0 and all_windows ~= "" then
+    if vim.v.shell_error ~= 0 then
+      vim.notify("Warning: Could not list tmux windows. Creating new window.", vim.log.levels.WARN)
+    elseif all_windows ~= "" then
       -- Search for matching window
       for window_line in all_windows:gmatch("[^\n]+") do
         for _, pattern in ipairs(search_patterns) do
@@ -666,7 +677,7 @@ local function attach_agent(agent)
     -- Not in tmux - open terminal in nvim with correct directory
     vim.cmd("tabnew")
     vim.cmd("lcd " .. vim.fn.fnameescape(worktree_path))
-    vim.fn.termopen(string.format("claude --resume %s", vim.fn.shellescape(agent.id)), {
+    local term_job_id = vim.fn.termopen(string.format("claude --resume %s", vim.fn.shellescape(agent.id)), {
       cwd = worktree_path,
       on_exit = function(_, exit_code)
         if exit_code == 0 then
@@ -676,6 +687,16 @@ local function attach_agent(agent)
         end
       end,
     })
+
+    if term_job_id <= 0 then
+      local error_msg = term_job_id == 0
+        and "claude command not executable"
+        or "Failed to open terminal"
+      vim.notify("Failed to attach: " .. error_msg, vim.log.levels.ERROR)
+      vim.cmd("tabclose")
+      return
+    end
+
     vim.cmd("startinsert")
   end
 end

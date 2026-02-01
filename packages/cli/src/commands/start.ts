@@ -49,6 +49,8 @@ interface StartOptions {
     status?: boolean;
     /** Review mode: skip status, label, and assignment changes */
     review?: boolean;
+    /** Treat input as issue number (default in review mode: treat as PR number) */
+    issue?: boolean;
     // Non-interactive flags
     assign?: AssignAction;
     branchAction?: BranchAction;
@@ -184,10 +186,44 @@ async function createAndLinkBranch(
  * 3. Issue NOT linked + NOT on main → Offer: Switch to main & create, Create from current, Link existing
  */
 export async function startCommand(issue: string, options: StartOptions): Promise<void> {
-    const issueNumber = parseInt(issue, 10);
-    if (isNaN(issueNumber)) {
-        console.error(chalk.red('Error:'), 'Issue must be a number');
+    let inputNumber = parseInt(issue, 10);
+    if (isNaN(inputNumber)) {
+        console.error(chalk.red('Error:'), 'Input must be a number');
         process.exit(1);
+    }
+
+    // In review mode, default to treating input as PR number (unless --issue flag)
+    let issueNumber = inputNumber;
+    let prBranch: string | null = null;
+
+    if (options.review && !options.issue) {
+        // Treat input as PR number - resolve to issue via branch name
+        console.log(chalk.dim(`Looking up PR #${inputNumber}...`));
+        try {
+            const { stdout } = await execAsync(
+                `gh pr view ${inputNumber} --json headRefName,number --jq '.headRefName'`
+            );
+            prBranch = stdout.trim();
+            if (!prBranch) {
+                console.error(chalk.red('Error:'), `PR #${inputNumber} not found or has no branch`);
+                process.exit(1);
+            }
+
+            // Extract issue number from branch name
+            const extractedIssue = extractIssueNumberFromBranch(prBranch);
+            if (!extractedIssue) {
+                console.error(chalk.red('Error:'), `Could not extract issue number from branch: ${prBranch}`);
+                console.log(chalk.dim('Use --issue flag to specify an issue number directly'));
+                process.exit(1);
+            }
+
+            issueNumber = extractedIssue;
+            console.log(chalk.dim(`PR #${inputNumber} → branch "${prBranch}" → issue #${issueNumber}`));
+        } catch (error) {
+            console.error(chalk.red('Error:'), `Failed to look up PR #${inputNumber}`);
+            console.log(chalk.dim('Use --issue flag if you want to specify an issue number directly'));
+            process.exit(1);
+        }
     }
 
     // Detect repository

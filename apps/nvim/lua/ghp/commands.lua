@@ -450,45 +450,49 @@ end
 -- Review an issue in a worktree (no status/label/assignment changes)
 -- opts.no_open: if true, create worktree but don't open editor
 -- opts.prompt: optional prompt to send to claude (overrides config default)
-function M.review(issue_number, opts)
+-- opts.is_issue: if true, treat number as issue number; otherwise treat as PR number (default)
+function M.review(number, opts)
   opts = opts or {}
 
-  if not issue_number then
-    issue_number = vim.fn.input("Issue number: ")
+  if not number then
+    number = vim.fn.input("PR number (or 'issue <num>' for issue): ")
   end
-  if issue_number == "" then
+  if number == "" then
     return
   end
 
-  -- Validate issue number is numeric
-  if not tostring(issue_number):match("^%d+$") then
-    vim.notify("Invalid issue number: " .. issue_number, vim.log.levels.ERROR)
+  -- Validate number is numeric
+  if not tostring(number):match("^%d+$") then
+    vim.notify("Invalid number: " .. number, vim.log.levels.ERROR)
     return
   end
 
-  -- Check if worktree already exists
-  local existing_path = get_worktree_path(issue_number)
-  if existing_path then
-    if opts.no_open then
-      vim.notify("Worktree already exists: " .. existing_path, vim.log.levels.INFO)
-    else
-      vim.notify("Worktree already exists, opening for review...", vim.log.levels.INFO)
-      open_nvim_in_worktree(existing_path, issue_number, { prompt = opts.prompt })
-    end
-    return existing_path
+  -- Build CLI args - default treats number as PR, --issue treats as issue
+  local cli_args = "start " .. number .. " --review --parallel --force-defaults --no-open"
+  if opts.is_issue then
+    cli_args = cli_args .. " --issue"
   end
 
-  -- Create worktree using ghp start --review --parallel
-  -- --review skips status, label, and assignment changes
-  vim.notify("Creating review worktree for #" .. issue_number .. "...", vim.log.levels.INFO)
-
-  local cli_args = "start " .. issue_number .. " --review --parallel --force-defaults --no-open"
+  -- For PR review, we can't check existing worktree until CLI resolves PR → issue
+  -- So we just call CLI and let it handle the worktree creation
+  local what = opts.is_issue and ("issue #" .. number) or ("PR #" .. number)
+  vim.notify("Creating review worktree for " .. what .. "...", vim.log.levels.INFO)
 
   local result, code = run_ghp_sync(cli_args)
 
   if code ~= 0 then
     vim.notify("Failed to create worktree:\n" .. result, vim.log.levels.ERROR)
     return nil
+  end
+
+  -- Extract issue number from CLI output for PR case
+  -- The CLI prints: "PR #388 → branch "..." → issue #123"
+  local issue_number = number
+  if not opts.is_issue then
+    local extracted = result:match("→ issue #(%d+)")
+    if extracted then
+      issue_number = extracted
+    end
   end
 
   -- Get the worktree path
@@ -539,14 +543,28 @@ function M.setup()
 
   vim.api.nvim_create_user_command("GhpReview", function(opts)
     -- Review mode: opens worktree without changing issue status/labels/assignment
-    -- :GhpReview 123 → opens editor for review
-    -- :GhpReview 123 Review the auth changes → opens editor with custom prompt
-    -- :GhpReview! 123 → creates worktree only (for scripted workflows)
+    -- Default: treat number as PR number (resolves PR → issue via branch)
+    -- :GhpReview 388 → review PR #388 (finds linked issue)
+    -- :GhpReview 388 Review the auth changes → with custom prompt
+    -- :GhpReview issue 123 → review issue #123 directly
+    -- :GhpReview! 388 → creates worktree only (for scripted workflows)
     local args = vim.split(opts.args, " ", { trimempty = true })
-    local issue = args[1]
-    local prompt = #args > 1 and table.concat(args, " ", 2) or nil
-    M.review(issue, { no_open = opts.bang, prompt = prompt })
-  end, { nargs = "*", bang = true, desc = "Review issue in worktree (no status/label changes)" })
+    local number, prompt, is_issue
+
+    if args[1] == "issue" then
+      -- :GhpReview issue 123 [prompt...]
+      is_issue = true
+      number = args[2]
+      prompt = #args > 2 and table.concat(args, " ", 3) or nil
+    else
+      -- :GhpReview 388 [prompt...] (default: PR number)
+      is_issue = false
+      number = args[1]
+      prompt = #args > 1 and table.concat(args, " ", 2) or nil
+    end
+
+    M.review(number, { no_open = opts.bang, prompt = prompt, is_issue = is_issue })
+  end, { nargs = "*", bang = true, desc = "Review PR in worktree (use 'issue <num>' for issue number)" })
 
   vim.api.nvim_create_user_command("GhpWorktreeRemove", function(opts)
     -- Remove worktree for an issue

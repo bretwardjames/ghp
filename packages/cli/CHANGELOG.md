@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- Add worktree lifecycle events to hook system
+
+  - New `worktree-created` event fires when a NEW worktree is created (not for existing ones)
+  - Payload includes repo, issue, branch, and worktree path/name
+  - Enables tools like ragtime to set up context for parallel worktrees
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.4.0
+
 ## 0.4.0
 
 ### Minor Changes

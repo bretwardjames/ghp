@@ -11,6 +11,11 @@ import {
 } from '../git-utils.js';
 import { getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
+import {
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type WorktreeRemovedPayload,
+} from '@bretwardjames/ghp-core';
 
 interface WorktreeRemoveOptions {
     force?: boolean;
@@ -78,9 +83,12 @@ export async function worktreeRemoveCommand(
     }
 
     // Remove the worktree
+    const worktreePath = worktree.path;
+    const worktreeName = worktreePath.split('/').pop() || '';
+
     try {
-        await removeWorktree(worktree.path, {}, options.force);
-        console.log(chalk.green('✓'), `Removed worktree: ${worktree.path}`);
+        await removeWorktree(worktreePath, {}, options.force);
+        console.log(chalk.green('✓'), `Removed worktree: ${worktreePath}`);
     } catch (error) {
         if (options.force) {
             console.error(chalk.red('Error:'), 'Failed to remove worktree:', error);
@@ -89,6 +97,47 @@ export async function worktreeRemoveCommand(
             console.log(chalk.dim('You may have uncommitted changes. Use --force to remove anyway.'));
         }
         process.exit(1);
+    }
+
+    // Fire worktree-removed hooks (only after successful removal)
+    if (hasHooksForEvent('worktree-removed')) {
+        console.log(chalk.dim('Running worktree-removed hooks...'));
+
+        const payload: WorktreeRemovedPayload = {
+            repo: `${repo.owner}/${repo.name}`,
+            issue: {
+                number: issueNumber,
+                title: '', // Title not fetched to avoid extra API call
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            },
+            branch: branchName,
+            worktree: {
+                path: worktreePath,
+                name: worktreeName,
+            },
+        };
+
+        const results = await executeHooksForEvent('worktree-removed', payload);
+
+        for (const result of results) {
+            if (result.success) {
+                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                if (result.output) {
+                    const lines = result.output.split('\n').slice(0, 3);
+                    for (const line of lines) {
+                        console.log(chalk.dim(`  ${line}`));
+                    }
+                    if (result.output.split('\n').length > 3) {
+                        console.log(chalk.dim('  ...'));
+                    }
+                }
+            } else {
+                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                if (result.error) {
+                    console.log(chalk.dim(`  ${result.error}`));
+                }
+            }
+        }
     }
 }
 

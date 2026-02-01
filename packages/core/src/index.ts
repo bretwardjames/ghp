@@ -374,6 +374,8 @@ export type {
     IssueStartedPayload,
     PrCreatedPayload,
     PrMergedPayload,
+    WorktreeCreatedPayload,
+    WorktreeRemovedPayload,
     EventPayload,
     HookResult,
 } from './plugins/index.js';

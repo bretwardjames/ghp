@@ -263,7 +263,8 @@ Integrate external tools by registering hooks that run on lifecycle events:
 ```bash
 ghp hooks list                      # List registered hooks
 ghp hooks add <name>                # Register a new hook
-  --event <event>                   # Event: issue-created, issue-started, pr-created, pr-merged
+  --event <event>                   # Event: issue-created, issue-started, pr-created, pr-merged,
+                                    #        worktree-created, worktree-removed
   --command <cmd>                   # Shell command with ${var} templates
   --timeout <ms>                    # Timeout in milliseconds (default: 30000)
 ghp hooks remove <name>             # Remove a hook
@@ -280,6 +281,8 @@ ghp hooks show <name>               # Show hook details
 | `issue-started` | After `ghp start` | `${issue.number}`, `${issue.json}`, `${branch}`, `${repo}` |
 | `pr-created` | After `ghp pr --create` | `${pr.number}`, `${pr.json}`, `${branch}`, `${repo}` |
 | `pr-merged` | After PR merge | `${pr.number}`, `${pr.json}`, `${branch}`, `${repo}` |
+| `worktree-created` | After `ghp start --parallel` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${repo}` |
+| `worktree-removed` | After `ghp worktree remove` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${repo}` |
 
 **Example: Ragtime Integration**
 
@@ -292,6 +295,20 @@ ghp hooks add ragtime-context \
 # Now `ghp start 42` will:
 # 1. Create/switch to branch
 # 2. Run ragtime to generate context in .claude/memory/
+```
+
+**Example: Tailscale Funnel Integration**
+
+```bash
+# Set up Tailscale funnel when a worktree is created
+ghp hooks add ts-funnel-up \
+  --event worktree-created \
+  --command "ts-magic up \${worktree.path}"
+
+# Tear down funnel when worktree is removed
+ghp hooks add ts-funnel-down \
+  --event worktree-removed \
+  --command "ts-magic down --port \${issue.number}"
 ```
 
 ### Agent Management

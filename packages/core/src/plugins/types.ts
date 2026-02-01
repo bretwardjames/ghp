@@ -13,10 +13,12 @@
  * Lifecycle events that hooks can subscribe to
  */
 export type EventType =
-    | 'issue-created'   // After ghp add creates an issue
-    | 'issue-started'   // After ghp start creates/switches to branch
-    | 'pr-created'      // After ghp pr --create
-    | 'pr-merged';      // After PR merge detected
+    | 'issue-created'     // After ghp add creates an issue
+    | 'issue-started'     // After ghp start creates/switches to branch
+    | 'pr-created'        // After ghp pr --create
+    | 'pr-merged'         // After PR merge detected
+    | 'worktree-created'  // After ghp start --parallel creates a worktree
+    | 'worktree-removed'; // After ghp worktree remove removes a worktree
 
 // =============================================================================
 // Event Hook
@@ -40,6 +42,8 @@ export interface EventHook {
      * - ${pr.number} - PR number
      * - ${pr.json} - Full PR JSON (escaped for shell)
      * - ${repo} - Repository in owner/name format
+     * - ${worktree.path} - Absolute path to worktree
+     * - ${worktree.name} - Directory name of worktree
      */
     command: string;
     /** Whether the hook is enabled (default: true) */
@@ -133,13 +137,55 @@ export interface PrMergedPayload extends BaseEventPayload {
 }
 
 /**
+ * Payload for worktree-created event
+ */
+export interface WorktreeCreatedPayload extends BaseEventPayload {
+    issue?: {
+        number: number;
+        title: string;
+        body?: string;
+        url: string;
+        [key: string]: unknown;
+    };
+    branch: string;
+    worktree: {
+        /** Absolute path to the worktree */
+        path: string;
+        /** Directory name of the worktree */
+        name: string;
+    };
+}
+
+/**
+ * Payload for worktree-removed event
+ */
+export interface WorktreeRemovedPayload extends BaseEventPayload {
+    issue?: {
+        number: number;
+        title: string;
+        body?: string;
+        url: string;
+        [key: string]: unknown;
+    };
+    branch: string;
+    worktree: {
+        /** Absolute path to the worktree */
+        path: string;
+        /** Directory name of the worktree */
+        name: string;
+    };
+}
+
+/**
  * Union of all event payloads
  */
 export type EventPayload =
     | IssueCreatedPayload
     | IssueStartedPayload
     | PrCreatedPayload
-    | PrMergedPayload;
+    | PrMergedPayload
+    | WorktreeCreatedPayload
+    | WorktreeRemovedPayload;
 
 // =============================================================================
 // Execution Results

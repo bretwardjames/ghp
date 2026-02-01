@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- Add worktree-created event to hooks help text
+
 ## 0.5.0
 
 ### Minor Changes

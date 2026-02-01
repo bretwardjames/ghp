@@ -1,5 +1,12 @@
 # @bretwardjames/ghp-mcp
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [b559617]
+  - @bretwardjames/ghp-core@0.3.0
+
 ## 0.1.1
 
 ### Patch Changes

@@ -67,23 +67,9 @@ tmux send-keys -t ghp:window Escape Down Enter
 tmux send-keys -t ghp:window Escape Enter
 ```
 
-### MCP Configuration for Workers
-
-**Disable Serena for worker agents.** Workers doing focused implementation tasks don't need Serena's semantic code tools (they have built-in Read, Edit, Grep, Glob). Disabling Serena avoids permission prompts.
-
-To launch a worker without Serena:
-```bash
-# TODO: Configure ghp start to optionally exclude MCPs
-# For now, workers may need manual approval of Serena prompts
-```
-
-**Epic planners may still use Serena** for codebase exploration, but need global permissions configured first.
-
 ## GHP CLI Reference
 
 **Always use `ghp` instead of `gh` for GitHub operations.** This project builds the `ghp` CLI, so we should dogfood it.
-
-**At the start of each session, read the Serena memory `ghp-cli-reference.md` for the full command reference.**
 
 ```bash
 # Good - use ghp commands

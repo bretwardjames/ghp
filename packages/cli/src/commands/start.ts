@@ -47,6 +47,8 @@ export type WorkMode = 'switch' | 'parallel';
 interface StartOptions {
     branch?: boolean;
     status?: boolean;
+    /** Review mode: skip status, label, and assignment changes */
+    review?: boolean;
     // Non-interactive flags
     assign?: AssignAction;
     branchAction?: BranchAction;
@@ -310,12 +312,12 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         }
     }
 
-    // Check if current user is assigned
+    // Check if current user is assigned (skip in review mode)
     const isAssigned = item.assignees.some(
         (a) => a.toLowerCase() === api.username?.toLowerCase()
     );
 
-    if (!isAssigned) {
+    if (!isAssigned && !options.review) {
         console.log(chalk.yellow('You are not assigned to this issue.'));
 
         // Map --assign flag to choice index
@@ -633,9 +635,9 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Update status (unless --no-status)
+    // Update status (unless --no-status or --review)
     // ═══════════════════════════════════════════════════════════════════════════
-    if (options.status !== false) {
+    if (options.status !== false && !options.review) {
         const targetStatus = getConfig('startWorkingStatus');
         if (targetStatus && item.status !== targetStatus) {
             const statusField = await api.getStatusField(item.projectId);
@@ -661,17 +663,24 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Apply active label
+    // Apply active label (skip in review mode)
     // ═══════════════════════════════════════════════════════════════════════════
-    // In parallel mode, don't remove label from other issues (non-exclusive)
-    await applyActiveLabel(repo, issueNumber, !isParallelMode);
+    if (!options.review) {
+        // In parallel mode, don't remove label from other issues (non-exclusive)
+        await applyActiveLabel(repo, issueNumber, !isParallelMode);
+    }
 
     console.log();
-    console.log(chalk.green.bold('Ready to work on:'), item.title);
+    if (options.review) {
+        console.log(chalk.cyan.bold('Review mode:'), item.title);
+        console.log(chalk.dim('(skipped status, label, and assignment changes)'));
+    } else {
+        console.log(chalk.green.bold('Ready to work on:'), item.title);
+    }
 
-    // Fire issue-started event hooks
+    // Fire issue-started event hooks (skip in review mode)
     const finalBranch = worktreeBranch || linkedBranch || await getCurrentBranch() || '';
-    if (hasHooksForEvent('issue-started')) {
+    if (!options.review && hasHooksForEvent('issue-started')) {
         console.log();
         console.log(chalk.dim('Running issue-started hooks...'));
 

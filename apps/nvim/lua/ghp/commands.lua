@@ -413,6 +413,100 @@ function M.start_parallel(issue_number, opts)
   return path
 end
 
+-- Remove worktree for an issue (cleanup after review or parallel work)
+-- opts.force: if true, force removal even with uncommitted changes
+function M.worktree_remove(issue_number, opts)
+  opts = opts or {}
+
+  if not issue_number then
+    issue_number = vim.fn.input("Issue number: ")
+  end
+  if issue_number == "" then
+    return false
+  end
+
+  -- Validate issue number is numeric
+  if not tostring(issue_number):match("^%d+$") then
+    vim.notify("Invalid issue number: " .. issue_number, vim.log.levels.ERROR)
+    return false
+  end
+
+  local cli_args = "worktree remove " .. issue_number
+  if opts.force then
+    cli_args = cli_args .. " --force"
+  end
+
+  local result, code = run_ghp_sync(cli_args)
+
+  if code ~= 0 then
+    vim.notify("Failed to remove worktree:\n" .. result, vim.log.levels.ERROR)
+    return false
+  end
+
+  vim.notify("Removed worktree for #" .. issue_number, vim.log.levels.INFO)
+  return true
+end
+
+-- Review an issue in a worktree (no status/label/assignment changes)
+-- opts.no_open: if true, create worktree but don't open editor
+-- opts.prompt: optional prompt to send to claude (overrides config default)
+function M.review(issue_number, opts)
+  opts = opts or {}
+
+  if not issue_number then
+    issue_number = vim.fn.input("Issue number: ")
+  end
+  if issue_number == "" then
+    return
+  end
+
+  -- Validate issue number is numeric
+  if not tostring(issue_number):match("^%d+$") then
+    vim.notify("Invalid issue number: " .. issue_number, vim.log.levels.ERROR)
+    return
+  end
+
+  -- Check if worktree already exists
+  local existing_path = get_worktree_path(issue_number)
+  if existing_path then
+    if opts.no_open then
+      vim.notify("Worktree already exists: " .. existing_path, vim.log.levels.INFO)
+    else
+      vim.notify("Worktree already exists, opening for review...", vim.log.levels.INFO)
+      open_nvim_in_worktree(existing_path, issue_number, { prompt = opts.prompt })
+    end
+    return existing_path
+  end
+
+  -- Create worktree using ghp start --review --parallel
+  -- --review skips status, label, and assignment changes
+  vim.notify("Creating review worktree for #" .. issue_number .. "...", vim.log.levels.INFO)
+
+  local cli_args = "start " .. issue_number .. " --review --parallel --force-defaults --no-open"
+
+  local result, code = run_ghp_sync(cli_args)
+
+  if code ~= 0 then
+    vim.notify("Failed to create worktree:\n" .. result, vim.log.levels.ERROR)
+    return nil
+  end
+
+  -- Get the worktree path
+  local path = get_worktree_path(issue_number)
+  if not path then
+    vim.notify("Worktree created but couldn't find path", vim.log.levels.ERROR)
+    return nil
+  end
+
+  if opts.no_open then
+    vim.notify("Review worktree created: " .. path, vim.log.levels.INFO)
+  else
+    open_nvim_in_worktree(path, issue_number, { prompt = opts.prompt })
+  end
+
+  return path
+end
+
 function M.setup()
   -- Register user commands
   vim.api.nvim_create_user_command("GhpPlan", function(opts)
@@ -442,6 +536,29 @@ function M.setup()
     local prompt = #args > 1 and table.concat(args, " ", 2) or nil
     M.start_parallel(issue, { no_open = opts.bang, prompt = prompt })
   end, { nargs = "*", bang = true, desc = "Start working on issue in a new worktree (use ! to skip opening editor)" })
+
+  vim.api.nvim_create_user_command("GhpReview", function(opts)
+    -- Review mode: opens worktree without changing issue status/labels/assignment
+    -- :GhpReview 123 → opens editor for review
+    -- :GhpReview 123 Review the auth changes → opens editor with custom prompt
+    -- :GhpReview! 123 → creates worktree only (for scripted workflows)
+    local args = vim.split(opts.args, " ", { trimempty = true })
+    local issue = args[1]
+    local prompt = #args > 1 and table.concat(args, " ", 2) or nil
+    M.review(issue, { no_open = opts.bang, prompt = prompt })
+  end, { nargs = "*", bang = true, desc = "Review issue in worktree (no status/label changes)" })
+
+  vim.api.nvim_create_user_command("GhpWorktreeRemove", function(opts)
+    -- Remove worktree for an issue
+    -- :GhpWorktreeRemove 123 → removes worktree
+    -- :GhpWorktreeRemove! 123 → force remove even with uncommitted changes
+    M.worktree_remove(opts.args ~= "" and opts.args or nil, { force = opts.bang })
+  end, { nargs = "?", bang = true, desc = "Remove worktree for issue (use ! to force)" })
+
+  -- Alias for review cleanup workflow
+  vim.api.nvim_create_user_command("GhpReviewDone", function(opts)
+    M.worktree_remove(opts.args ~= "" and opts.args or nil, { force = opts.bang })
+  end, { nargs = "?", bang = true, desc = "Clean up review worktree (alias for GhpWorktreeRemove)" })
 
   vim.api.nvim_create_user_command("GhpAdd", function(opts)
     M.add(opts.args ~= "" and opts.args or nil)

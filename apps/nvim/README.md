@@ -122,6 +122,26 @@ require("ghp").setup({
 
 When inside tmux, `:GhpStartParallel` opens a new tmux window named `nvim-{issue}`.
 
+## PR Review Workflow
+
+Review PRs without affecting issue state. The review commands create worktrees but skip status updates, label changes, and assignment modifications.
+
+```vim
+" Open worktree for PR review (doesn't change issue status/labels/assignment)
+:GhpReview 123
+
+" With custom prompt for Claude
+:GhpReview 123 Review the authentication changes for security issues
+
+" After submitting review, clean up the worktree
+:GhpReviewDone 123
+
+" Force remove (if there are uncommitted changes)
+:GhpReviewDone! 123
+```
+
+This maps to `ghp start --review --parallel` under the hood.
+
 ## Statusline Integration
 
 Show the current issue in your statusline with lualine.
@@ -210,6 +230,9 @@ local color = require("ghp.statusline").component_color()
 | `:GhpStart [issue]` | Start working on an issue (creates branch, updates status) |
 | `:GhpStartParallel [issue]` | Start in a new worktree and open nvim + claude |
 | `:GhpStartParallel! [issue]` | Create worktree only (no editor - for agent workflows) |
+| `:GhpReview [issue]` | Open worktree for PR review (no status/label changes) |
+| `:GhpReviewDone [issue]` | Clean up review worktree |
+| `:GhpWorktreeRemove [issue]` | Remove worktree for issue (use `!` to force) |
 | `:GhpAdd [title]` | Create a new issue |
 | `:GhpDone [issue]` | Mark an issue as done |
 | `:GhpMove <issue> <status>` | Move issue to different status |

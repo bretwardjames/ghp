@@ -244,6 +244,7 @@ program
     .description('Start working on an issue - creates branch and updates status')
     .option('--no-branch', 'Skip branch creation')
     .option('--no-status', 'Skip status update')
+    .option('--review', 'Review mode: skip status, label, and assignment changes (for PR review)')
     // Parallel work mode
     .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')

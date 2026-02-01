@@ -44,6 +44,8 @@ const VALID_EVENTS: EventType[] = [
     'issue-started',
     'pr-created',
     'pr-merged',
+    'worktree-created',
+    'worktree-removed',
 ];
 
 /**

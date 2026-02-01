@@ -31,6 +31,7 @@ import {
     executeHooksForEvent,
     hasHooksForEvent,
     type IssueStartedPayload,
+    type WorktreeCreatedPayload,
 } from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
@@ -394,6 +395,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     let isParallelMode = options.parallel === true;
     let worktreePath: string | undefined;
     let worktreeBranch: string | undefined; // Branch name for worktree (used in spawn directive)
+    let worktreeWasCreated = false; // Track if a NEW worktree was created (for hooks)
 
     // Remember original branch for --parallel mode (switch back after worktree creation)
     const originalBranch = await getCurrentBranch();
@@ -447,6 +449,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 }
                 worktreePath = result.path;
                 worktreeBranch = linkedBranch;
+                worktreeWasCreated = !result.alreadyExisted;
             } else {
                 // ─────────────────────────────────────────────────────────────────
                 // Switch mode: checkout the branch
@@ -657,6 +660,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 worktreePath = result.path;
                 worktreeBranch = newBranchName;
                 isParallelMode = true;
+                worktreeWasCreated = !result.alreadyExisted;
 
                 // Switch back to original branch so user stays in their previous context
                 if (originalBranch && originalBranch !== newBranchName) {
@@ -738,6 +742,49 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
                 if (result.output) {
                     // Show first few lines of output
+                    const lines = result.output.split('\n').slice(0, 3);
+                    for (const line of lines) {
+                        console.log(chalk.dim(`  ${line}`));
+                    }
+                    if (result.output.split('\n').length > 3) {
+                        console.log(chalk.dim('  ...'));
+                    }
+                }
+            } else {
+                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                if (result.error) {
+                    console.log(chalk.dim(`  ${result.error}`));
+                }
+            }
+        }
+    }
+
+    // Fire worktree-created hooks if a NEW worktree was created (not for existing worktrees)
+    if (worktreeWasCreated && worktreePath && hasHooksForEvent('worktree-created')) {
+        console.log();
+        console.log(chalk.dim('Running worktree-created hooks...'));
+
+        const worktreeName = worktreePath.split('/').pop() || '';
+        const worktreePayload: WorktreeCreatedPayload = {
+            repo: `${repo.owner}/${repo.name}`,
+            issue: {
+                number: issueNumber,
+                title: item.title,
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            },
+            branch: finalBranch,
+            worktree: {
+                path: worktreePath,
+                name: worktreeName,
+            },
+        };
+
+        const worktreeResults = await executeHooksForEvent('worktree-created', worktreePayload);
+
+        for (const result of worktreeResults) {
+            if (result.success) {
+                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                if (result.output) {
                     const lines = result.output.split('\n').slice(0, 3);
                     for (const line of lines) {
                         console.log(chalk.dim(`  ${line}`));

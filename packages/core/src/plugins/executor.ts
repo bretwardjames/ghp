@@ -37,6 +37,8 @@ function shellEscape(str: string): string {
  * - ${pr.json} - Full PR JSON (shell-escaped)
  * - ${pr.title} - PR title
  * - ${repo} - Repository in owner/name format
+ * - ${worktree.path} - Absolute path to worktree
+ * - ${worktree.name} - Directory name of worktree
  */
 export function substituteTemplateVariables(command: string, payload: EventPayload): string {
     let result = command;
@@ -65,6 +67,12 @@ export function substituteTemplateVariables(command: string, payload: EventPaylo
         result = result.replace(/\$\{pr\.body\}/g, shellEscape((payload.pr as { body?: string }).body || ''));
         result = result.replace(/\$\{pr\.url\}/g, shellEscape(payload.pr.url || ''));
         result = result.replace(/\$\{pr\.json\}/g, shellEscape(JSON.stringify(payload.pr)));
+    }
+
+    // Worktree variables
+    if ('worktree' in payload && payload.worktree) {
+        result = result.replace(/\$\{worktree\.path\}/g, shellEscape(payload.worktree.path));
+        result = result.replace(/\$\{worktree\.name\}/g, shellEscape(payload.worktree.name));
     }
 
     return result;

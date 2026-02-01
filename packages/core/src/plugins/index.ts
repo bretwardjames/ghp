@@ -12,6 +12,8 @@ export type {
     IssueStartedPayload,
     PrCreatedPayload,
     PrMergedPayload,
+    WorktreeCreatedPayload,
+    WorktreeRemovedPayload,
     EventPayload,
     HookResult,
 } from './types.js';

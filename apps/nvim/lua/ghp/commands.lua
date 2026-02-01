@@ -455,7 +455,10 @@ function M.review(number, opts)
   opts = opts or {}
 
   if not number then
-    number = vim.fn.input("PR number (or 'issue <num>' for issue): ")
+    local prompt_text = opts.is_issue
+      and "Issue number: "
+      or "PR number (or 'issue <num>' for issue): "
+    number = vim.fn.input(prompt_text)
   end
   if number == "" then
     return
@@ -492,6 +495,8 @@ function M.review(number, opts)
     local extracted = result:match("→ issue #(%d+)")
     if extracted then
       issue_number = extracted
+    else
+      vim.notify("Warning: Could not parse issue number from CLI output", vim.log.levels.WARN)
     end
   end
 

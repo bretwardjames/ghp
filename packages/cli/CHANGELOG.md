@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+### Patch Changes
+
+- Support PR number in review mode - resolves PR → issue via branch name
+
+  - `ghp start 388 --review` now treats 388 as PR number (default)
+  - Use `--issue` flag to treat as issue number directly
+  - Prints resolution path: "PR #388 → branch "..." → issue #123"
+
 ## 0.3.0
 
 ### Minor Changes

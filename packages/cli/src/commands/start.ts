@@ -194,7 +194,6 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
     // In review mode, default to treating input as PR number (unless --issue flag)
     let issueNumber = inputNumber;
-    let prBranch: string | null = null;
 
     if (options.review && !options.issue) {
         // Treat input as PR number - resolve to issue via branch name
@@ -203,7 +202,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             const { stdout } = await execAsync(
                 `gh pr view ${inputNumber} --json headRefName,number --jq '.headRefName'`
             );
-            prBranch = stdout.trim();
+            const prBranch = stdout.trim();
             if (!prBranch) {
                 console.error(chalk.red('Error:'), `PR #${inputNumber} not found or has no branch`);
                 process.exit(1);

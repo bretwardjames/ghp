@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- Add `--review` flag for PR review workflow
+
+  - `ghp start 123 --review --parallel` creates a worktree without changing issue status, labels, or assignment
+  - Useful for reviewing PRs without claiming the issue
+  - Skips issue-started event hooks in review mode
+
 ## 0.2.1
 
 ### Patch Changes

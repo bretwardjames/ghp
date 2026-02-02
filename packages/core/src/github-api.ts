@@ -43,8 +43,10 @@ import type {
     Collaborator,
     IssueReference,
     IssueRelationships,
+    RetryConfig,
 } from './types.js';
 import * as queries from './queries.js';
+import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js';
 
 /**
  * Create an AuthError with the appropriate type
@@ -96,11 +98,73 @@ export class GitHubAPI {
     private graphqlWithSubIssues: typeof graphql | null = null;
     private tokenProvider: TokenProvider;
     private onAuthError?: (error: AuthError) => void;
+    private retryConfig: RetryConfig;
     public username: string | null = null;
 
     constructor(options: GitHubAPIOptions) {
         this.tokenProvider = options.tokenProvider;
         this.onAuthError = options.onAuthError;
+        this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...options.retryConfig };
+    }
+
+    /**
+     * Execute a GraphQL query with automatic retry for transient failures.
+     * This wraps graphqlWithAuth with exponential backoff for rate limits and server errors.
+     */
+    private async graphqlWithRetry<T>(
+        query: string,
+        params?: Record<string, unknown>
+    ): Promise<T> {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        return withRetry(
+            () => this.graphqlWithAuth!(query, params) as Promise<T>,
+            this.retryConfig
+        );
+    }
+
+    /**
+     * Execute a GraphQL query with sub-issues feature and automatic retry.
+     */
+    private async graphqlSubIssuesWithRetry<T>(
+        query: string,
+        params?: Record<string, unknown>
+    ): Promise<T> {
+        if (!this.graphqlWithSubIssues) throw new Error('Not authenticated');
+
+        return withRetry(
+            () => this.graphqlWithSubIssues!(query, params) as Promise<T>,
+            this.retryConfig
+        );
+    }
+
+    /**
+     * Execute a fetch request with automatic retry for transient failures.
+     * Throws on transient HTTP errors (429, 5xx) so they can be retried,
+     * but returns the Response for other status codes (including 4xx like 422).
+     */
+    private async fetchWithRetry(
+        url: string,
+        options: RequestInit
+    ): Promise<Response> {
+        return withRetry(async () => {
+            const response = await fetch(url, options);
+            // Native fetch doesn't throw on HTTP errors, only network failures.
+            // We need to throw on transient HTTP errors so they trigger retries.
+            // Non-transient errors (401, 403, 404, 422, etc.) should return normally.
+            const status = response.status;
+            if (status === 429 || (status >= 500 && status < 600)) {
+                const error = new Error(`HTTP ${status}`) as Error & {
+                    status: number;
+                    headers: Record<string, string>;
+                };
+                error.status = status;
+                // Convert Headers to plain object for rate limit parsing
+                error.headers = Object.fromEntries(response.headers.entries());
+                throw error;
+            }
+            return response;
+        }, this.retryConfig);
     }
 
     /**
@@ -142,7 +206,7 @@ export class GitHubAPI {
 
         try {
             const response: { viewer: { login: string } } =
-                await this.graphqlWithAuth(queries.VIEWER_QUERY);
+                await this.graphqlWithRetry(queries.VIEWER_QUERY);
             this.username = response.viewer.login;
             return true;
         } catch {
@@ -181,7 +245,7 @@ export class GitHubAPI {
                         }>;
                     };
                 } | null;
-            } = await this.graphqlWithAuth(queries.REPOSITORY_PROJECTS_QUERY, {
+            } = await this.graphqlWithRetry(queries.REPOSITORY_PROJECTS_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
             });
@@ -280,7 +344,7 @@ export class GitHubAPI {
         let hasNextPage = true;
 
         while (hasNextPage) {
-            const response: PaginatedResponse = await this.graphqlWithSubIssues(
+            const response: PaginatedResponse = await this.graphqlSubIssuesWithRetry(
                 queries.PROJECT_ITEMS_QUERY,
                 { projectId, cursor }
             );
@@ -384,7 +448,7 @@ export class GitHubAPI {
                     }>;
                 };
             };
-        } = await this.graphqlWithAuth(queries.PROJECT_FIELDS_QUERY, { projectId });
+        } = await this.graphqlWithRetry(queries.PROJECT_FIELDS_QUERY, { projectId });
 
         const statusField = response.node.fields.nodes.find(
             f => f.__typename === 'ProjectV2SingleSelectField' && f.name === 'Status'
@@ -414,7 +478,7 @@ export class GitHubAPI {
                         }>;
                     };
                 };
-            } = await this.graphqlWithAuth(queries.PROJECT_VIEWS_QUERY, { projectId });
+            } = await this.graphqlWithRetry(queries.PROJECT_VIEWS_QUERY, { projectId });
 
             return response.node.views.nodes;
         } catch {
@@ -434,7 +498,7 @@ export class GitHubAPI {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
 
         try {
-            await this.graphqlWithAuth(queries.UPDATE_ITEM_STATUS_MUTATION, {
+            await this.graphqlWithRetry(queries.UPDATE_ITEM_STATUS_MUTATION, {
                 projectId,
                 itemId,
                 fieldId,
@@ -490,7 +554,7 @@ export class GitHubAPI {
         };
 
         try {
-            const response: IssueWithProjectItems = await this.graphqlWithSubIssues(
+            const response: IssueWithProjectItems = await this.graphqlSubIssuesWithRetry(
                 queries.ISSUE_WITH_PROJECT_ITEMS_QUERY,
                 { owner: repo.owner, name: repo.name, number: issueNumber }
             );
@@ -584,7 +648,7 @@ export class GitHubAPI {
                     }>;
                 };
             };
-        } = await this.graphqlWithAuth(queries.PROJECT_FIELDS_QUERY, { projectId });
+        } = await this.graphqlWithRetry(queries.PROJECT_FIELDS_QUERY, { projectId });
 
         return response.node.fields.nodes.map(f => ({
             id: f.id,
@@ -606,7 +670,7 @@ export class GitHubAPI {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
 
         try {
-            await this.graphqlWithAuth(queries.UPDATE_ITEM_FIELD_MUTATION, {
+            await this.graphqlWithRetry(queries.UPDATE_ITEM_FIELD_MUTATION, {
                 projectId,
                 itemId,
                 fieldId,
@@ -631,7 +695,7 @@ export class GitHubAPI {
         try {
             // First get the repository ID
             const repoResponse: { repository: { id: string } } =
-                await this.graphqlWithAuth(queries.REPOSITORY_ID_QUERY, {
+                await this.graphqlWithRetry(queries.REPOSITORY_ID_QUERY, {
                     owner: repo.owner,
                     name: repo.name,
                 });
@@ -640,7 +704,7 @@ export class GitHubAPI {
                 createIssue: {
                     issue: { id: string; number: number };
                 };
-            } = await this.graphqlWithAuth(queries.CREATE_ISSUE_MUTATION, {
+            } = await this.graphqlWithRetry(queries.CREATE_ISSUE_MUTATION, {
                 repositoryId: repoResponse.repository.id,
                 title,
                 body: body || '',
@@ -661,7 +725,7 @@ export class GitHubAPI {
         try {
             const response: {
                 addProjectV2ItemById: { item: { id: string } };
-            } = await this.graphqlWithAuth(queries.ADD_TO_PROJECT_MUTATION, {
+            } = await this.graphqlWithRetry(queries.ADD_TO_PROJECT_MUTATION, {
                 projectId,
                 contentId,
             });
@@ -710,7 +774,7 @@ export class GitHubAPI {
                         };
                     } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_DETAILS_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_DETAILS_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -750,7 +814,7 @@ export class GitHubAPI {
                 repository: {
                     issueOrPullRequest: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_NODE_ID_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_NODE_ID_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -761,7 +825,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithAuth(queries.ADD_COMMENT_MUTATION, { subjectId, body });
+            await this.graphqlWithRetry(queries.ADD_COMMENT_MUTATION, { subjectId, body });
             return true;
         } catch {
             return false;
@@ -784,7 +848,7 @@ export class GitHubAPI {
                         nodes: Array<{ login: string; name: string | null }>;
                     };
                 };
-            } = await this.graphqlWithAuth(queries.COLLABORATORS_QUERY, {
+            } = await this.graphqlWithRetry(queries.COLLABORATORS_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
             });
@@ -816,7 +880,7 @@ export class GitHubAPI {
                         }>;
                     };
                 };
-            } = await this.graphqlWithAuth(queries.RECENT_ISSUES_QUERY, {
+            } = await this.graphqlWithRetry(queries.RECENT_ISSUES_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 limit,
@@ -846,7 +910,7 @@ export class GitHubAPI {
                 repository: {
                     label: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.LABEL_EXISTS_QUERY, {
+            } = await this.graphqlWithRetry(queries.LABEL_EXISTS_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 labelName,
@@ -856,9 +920,9 @@ export class GitHubAPI {
                 return true;
             }
 
-            // Create the label using REST API
+            // Create the label using REST API (with retry for transient failures)
             const token = await this.getToken();
-            const response = await fetch(
+            const response = await this.fetchWithRetry(
                 `https://api.github.com/repos/${repo.owner}/${repo.name}/labels`,
                 {
                     method: 'POST',
@@ -893,7 +957,7 @@ export class GitHubAPI {
                     issue: { id: string } | null;
                     label: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_AND_LABEL_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_AND_LABEL_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -904,7 +968,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithAuth(queries.ADD_LABELS_MUTATION, {
+            await this.graphqlWithRetry(queries.ADD_LABELS_MUTATION, {
                 issueId: response.repository.issue.id,
                 labelIds: [response.repository.label.id],
             });
@@ -927,7 +991,7 @@ export class GitHubAPI {
                     issue: { id: string } | null;
                     label: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_AND_LABEL_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_AND_LABEL_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -938,7 +1002,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithAuth(queries.REMOVE_LABELS_MUTATION, {
+            await this.graphqlWithRetry(queries.REMOVE_LABELS_MUTATION, {
                 issueId: response.repository.issue.id,
                 labelIds: [response.repository.label.id],
             });
@@ -962,7 +1026,7 @@ export class GitHubAPI {
                         nodes: Array<{ number: number }>;
                     };
                 };
-            } = await this.graphqlWithAuth(queries.ISSUES_WITH_LABEL_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUES_WITH_LABEL_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 labels: [labelName],
@@ -987,7 +1051,7 @@ export class GitHubAPI {
                         nodes: Array<{ id: string; name: string }>;
                     } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_TYPES_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_TYPES_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
             });
@@ -1009,7 +1073,7 @@ export class GitHubAPI {
                 repository: {
                     issue: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_FOR_UPDATE_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_FOR_UPDATE_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -1019,7 +1083,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithAuth(queries.UPDATE_ISSUE_TYPE_MUTATION, {
+            await this.graphqlWithRetry(queries.UPDATE_ISSUE_TYPE_MUTATION, {
                 issueId: issueResponse.repository.issue.id,
                 issueTypeId,
             });
@@ -1041,7 +1105,7 @@ export class GitHubAPI {
                 repository: {
                     issue: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_FOR_UPDATE_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_FOR_UPDATE_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -1051,7 +1115,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithAuth(queries.UPDATE_ISSUE_BODY_MUTATION, {
+            await this.graphqlWithRetry(queries.UPDATE_ISSUE_BODY_MUTATION, {
                 issueId: issueResponse.repository.issue.id,
                 body,
             });
@@ -1077,7 +1141,7 @@ export class GitHubAPI {
                 repository: {
                     issue: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_FOR_UPDATE_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_FOR_UPDATE_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -1087,7 +1151,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithAuth(queries.UPDATE_ISSUE_MUTATION, {
+            await this.graphqlWithRetry(queries.UPDATE_ISSUE_MUTATION, {
                 issueId: issueResponse.repository.issue.id,
                 title: updates.title,
                 body: updates.body,
@@ -1118,7 +1182,7 @@ export class GitHubAPI {
                         assignees: { nodes: Array<{ id: string; login: string }> };
                     } | null;
                 };
-            } = await this.graphqlWithAuth(
+            } = await this.graphqlWithRetry(
                 `query($owner: String!, $name: String!, $number: Int!) {
                     repository(owner: $owner, name: $name) {
                         issue(number: $number) {
@@ -1139,7 +1203,7 @@ export class GitHubAPI {
             // Get user IDs for the new assignees
             const assigneeIds: string[] = [];
             for (const login of assigneeLogins) {
-                const userResponse: { user: { id: string } | null } = await this.graphqlWithAuth(
+                const userResponse: { user: { id: string } | null } = await this.graphqlWithRetry(
                     `query($login: String!) { user(login: $login) { id } }`,
                     { login }
                 );
@@ -1151,7 +1215,7 @@ export class GitHubAPI {
             // Clear existing assignees first
             const currentAssigneeIds = issueResponse.repository.issue.assignees.nodes.map(a => a.id);
             if (currentAssigneeIds.length > 0) {
-                await this.graphqlWithAuth(
+                await this.graphqlWithRetry(
                     `mutation($assignableId: ID!, $assigneeIds: [ID!]!) {
                         removeAssigneesFromAssignable(input: { assignableId: $assignableId, assigneeIds: $assigneeIds }) {
                             clientMutationId
@@ -1163,7 +1227,7 @@ export class GitHubAPI {
 
             // Add new assignees
             if (assigneeIds.length > 0) {
-                await this.graphqlWithAuth(
+                await this.graphqlWithRetry(
                     `mutation($assignableId: ID!, $assigneeIds: [ID!]!) {
                         addAssigneesToAssignable(input: { assignableId: $assignableId, assigneeIds: $assigneeIds }) {
                             clientMutationId
@@ -1194,7 +1258,7 @@ export class GitHubAPI {
                 repository: {
                     issue: { id: string } | null;
                 };
-            } = await this.graphqlWithAuth(queries.ISSUE_FOR_UPDATE_QUERY, {
+            } = await this.graphqlWithRetry(queries.ISSUE_FOR_UPDATE_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,
@@ -1226,7 +1290,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithSubIssues(queries.ADD_SUB_ISSUE_MUTATION, {
+            await this.graphqlSubIssuesWithRetry(queries.ADD_SUB_ISSUE_MUTATION, {
                 issueId: parentId,
                 subIssueId: childId,
             });
@@ -1257,7 +1321,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithSubIssues(queries.REMOVE_SUB_ISSUE_MUTATION, {
+            await this.graphqlSubIssuesWithRetry(queries.REMOVE_SUB_ISSUE_MUTATION, {
                 issueId: parentId,
                 subIssueId: childId,
             });
@@ -1288,7 +1352,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithSubIssues(queries.ADD_BLOCKED_BY_MUTATION, {
+            await this.graphqlSubIssuesWithRetry(queries.ADD_BLOCKED_BY_MUTATION, {
                 issueId: blockedId,
                 blockingIssueId: blockingId,
             });
@@ -1319,7 +1383,7 @@ export class GitHubAPI {
                 return false;
             }
 
-            await this.graphqlWithSubIssues(queries.REMOVE_BLOCKED_BY_MUTATION, {
+            await this.graphqlSubIssuesWithRetry(queries.REMOVE_BLOCKED_BY_MUTATION, {
                 issueId: blockedId,
                 blockingIssueId: blockingId,
             });
@@ -1355,7 +1419,7 @@ export class GitHubAPI {
                         };
                     } | null;
                 };
-            } = await this.graphqlWithSubIssues(queries.ISSUE_RELATIONSHIPS_QUERY, {
+            } = await this.graphqlSubIssuesWithRetry(queries.ISSUE_RELATIONSHIPS_QUERY, {
                 owner: repo.owner,
                 name: repo.name,
                 number: issueNumber,

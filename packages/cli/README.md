@@ -10,6 +10,30 @@ Part of the [GHP monorepo](https://github.com/bretwardjames/ghp). Works alongsid
 npm install -g @bretwardjames/ghp-cli
 ```
 
+## Breaking Changes in v0.7.0
+
+Short flags removed to fix semantic collisions (same letter meant different things):
+
+| Removed | Use Instead | Command |
+|---------|-------------|---------|
+| `-f` | `--flat` | `work` |
+| `-a` | `--assign` | `add issue/epic` |
+| `-c` | `--create` | `pr` |
+| `-m` | `--mine` | `plan` |
+| `-t` | `--type` | `progress` |
+| `-s` | `--show` | `config` |
+| `-p` | `--parent` | `set-parent` |
+| `-b` | `--browser` | `open` |
+| `-l` | `-L` | `--labels` in `add` |
+
+**Migration:** Update scripts to use long-form flags:
+```bash
+ghp work -f       →  ghp work --flat
+ghp pr -c         →  ghp pr --create
+ghp plan -m       →  ghp plan --mine
+ghp open 123 -b   →  ghp open 123 --browser
+```
+
 ## Quick Start
 
 ```bash
@@ -297,6 +321,28 @@ ghp hooks show <name>               # Show hook details
 | `worktree-removed` | After `ghp worktree remove` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${issue.title}`, `${issue.url}`, `${issue.json}`, `${repo}`, `${_event_file}` |
 
 > **Note:** `${_event_file}` is a path to a temporary JSON file containing the full event payload. Use this for complex data like arrays or when shell escaping becomes problematic.
+
+**Hook Failure Behavior:**
+
+By default, hooks use `fail-fast` - if one hook aborts, subsequent hooks don't run. Configure globally or per-event:
+
+```json
+// ~/.config/ghp-cli/config.json
+{
+  "hooks": {
+    "onFailure": "continue"  // Run all hooks even if some fail
+  }
+}
+
+// ~/.config/ghp-cli/event-hooks.json
+{
+  "hooks": [...],
+  "eventDefaults": {
+    "pre-pr": { "onFailure": "fail-fast" },     // Critical: stop on failure
+    "issue-created": { "onFailure": "continue" } // Non-critical: run all
+  }
+}
+```
 
 **Example: Ragtime Integration**
 

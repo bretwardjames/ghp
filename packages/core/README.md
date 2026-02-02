@@ -64,6 +64,64 @@ if (result.success) {
 }
 ```
 
+### Error Handling
+
+The `GitError` class provides detailed context for git operation failures:
+
+```typescript
+import { GitError } from '@bretwardjames/ghp-core';
+
+try {
+  await checkoutBranch('nonexistent-branch');
+} catch (error) {
+  if (error instanceof GitError) {
+    console.log(error.command);   // 'git checkout nonexistent-branch'
+    console.log(error.stderr);    // 'error: pathspec ... did not match'
+    console.log(error.exitCode);  // 1
+    console.log(error.cwd);       // '/path/to/repo'
+  }
+}
+```
+
+### Retry Utilities
+
+Handle transient GitHub API failures with exponential backoff:
+
+```typescript
+import { withRetry, isTransientError, DEFAULT_RETRY_CONFIG } from '@bretwardjames/ghp-core';
+
+// Wrap any async function with retry logic
+const result = await withRetry(
+  () => api.getIssue(repo, 123),
+  {
+    maxRetries: 3,
+    baseDelayMs: 1000,
+    maxDelayMs: 30000,
+    shouldRetry: isTransientError,  // Retries 429, 5xx, network errors
+  }
+);
+
+// Or use default config
+const result = await withRetry(() => api.getIssue(repo, 123), DEFAULT_RETRY_CONFIG);
+```
+
+### Shell Utilities
+
+Safe shell command construction to prevent injection:
+
+```typescript
+import { shellEscape, validateNumericInput, validateUrl } from '@bretwardjames/ghp-core';
+
+// Escape strings for shell
+const safe = shellEscape("user's input");  // 'user'\''s input'
+
+// Validate numeric input
+const num = validateNumericInput("123", "issue number");  // 123 or throws
+
+// Validate URLs
+validateUrl("https://github.com/...", "issue URL");  // throws if invalid
+```
+
 ### Event Hooks
 
 Register and execute lifecycle event hooks:
@@ -92,6 +150,7 @@ const payload: IssueStartedPayload = {
 // Hooks can execute in a specific directory (e.g., inside a worktree)
 const results = await executeHooksForEvent('issue-started', payload, {
   cwd: '/path/to/worktree',
+  onFailure: 'continue',  // 'fail-fast' (default) or 'continue'
 });
 ```
 

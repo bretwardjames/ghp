@@ -95,6 +95,9 @@ import { addIssueCommand } from './add-issue.js';
 // without throwing an error that would cause unhandled rejections
 vi.spyOn(process, 'exit').mockImplementation((() => undefined) as () => never);
 
+// Reset exit state before each test to prevent "process is exiting" errors
+import { _resetForTesting as resetExitState } from '../exit.js';
+
 // Mock console
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
 const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -102,6 +105,7 @@ const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 describe('addIssueCommand', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        resetExitState(); // Reset exit state to prevent "process is exiting" errors
 
         // Default mocks
         vi.mocked(detectRepository).mockResolvedValue({

@@ -15,6 +15,8 @@
 export type EventType =
     | 'issue-created'     // After ghp add creates an issue
     | 'issue-started'     // After ghp start creates/switches to branch
+    | 'pre-pr'            // Before PR creation begins (validation/linting)
+    | 'pr-creating'       // Just before GitHub API call (suggest title/body)
     | 'pr-created'        // After ghp pr --create
     | 'pr-merged'         // After ghp merge completes
     | 'worktree-created'  // After ghp start --parallel creates a worktree
@@ -215,11 +217,47 @@ export interface WorktreeRemovedPayload extends BaseEventPayload {
 }
 
 /**
+ * Payload for pre-pr event
+ * Fired before PR creation begins, for validation/linting
+ */
+export interface PrePrPayload extends BaseEventPayload {
+    /** Source branch for the PR */
+    branch: string;
+    /** Target base branch */
+    base: string;
+    /** List of changed file paths */
+    changed_files: string[];
+    /** Diff statistics */
+    diff_stat: {
+        additions: number;
+        deletions: number;
+        files_changed: number;
+    };
+}
+
+/**
+ * Payload for pr-creating event
+ * Fired just before GitHub API call, allows suggesting title/body
+ */
+export interface PrCreatingPayload extends BaseEventPayload {
+    /** Source branch for the PR */
+    branch: string;
+    /** Target base branch */
+    base: string;
+    /** Proposed PR title */
+    title: string;
+    /** Proposed PR body/description */
+    body: string;
+}
+
+/**
  * Union of all event payloads
  */
 export type EventPayload =
     | IssueCreatedPayload
     | IssueStartedPayload
+    | PrePrPayload
+    | PrCreatingPayload
     | PrCreatedPayload
     | PrMergedPayload
     | WorktreeCreatedPayload

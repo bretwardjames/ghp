@@ -98,6 +98,8 @@ const results = await executeHooksForEvent('issue-started', payload, {
 Available events:
 - `issue-created` - Fired when a new issue is created
 - `issue-started` - Fired when starting work on an issue
+- `pre-pr` - Fired before PR creation begins (for validation/linting)
+- `pr-creating` - Fired just before GitHub API call (for suggesting title/body)
 - `pr-created` - Fired when a pull request is created
 - `pr-merged` - Fired when a pull request is merged
 - `worktree-created` - Fired when a worktree is created

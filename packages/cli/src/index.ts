@@ -15,6 +15,7 @@ import { switchCommand } from './commands/switch.js';
 import { linkBranchCommand } from './commands/link-branch.js';
 import { unlinkBranchCommand } from './commands/unlink-branch.js';
 import { prCommand } from './commands/pr.js';
+import { mergeCommand } from './commands/merge.js';
 import { assignCommand } from './commands/assign.js';
 import { labelCommand } from './commands/label.js';
 import { authCommand } from './commands/auth.js';
@@ -210,7 +211,7 @@ eventHooksCmd
 eventHooksCmd
     .command('add <name>')
     .description('Add a new event hook')
-    .option('-e, --event <event>', 'Event to trigger on (issue-created, issue-started, worktree-created, pr-created, pr-merged)')
+    .option('-e, --event <event>', 'Event to trigger on (issue-created, issue-started, pr-created, pr-merged, worktree-created, worktree-removed)')
     .option('-c, --command <cmd>', 'Shell command to execute (supports ${var} templates)')
     .option('-d, --display-name <name>', 'Human-readable display name')
     .option('-t, --timeout <ms>', 'Timeout in milliseconds (default: 30000)')
@@ -317,6 +318,15 @@ program
     .option('--open', 'Open PR in browser')
     .option('--ai-description', 'Generate PR description using AI (follows CLAUDE.md conventions)')
     .action(prCommand);
+
+program
+    .command('merge [pr-number]')
+    .description('Merge a PR and fire pr-merged hook')
+    .option('--squash', 'Squash merge')
+    .option('--rebase', 'Rebase merge')
+    .option('--no-delete-branch', 'Keep branch after merge (default: delete)')
+    .option('--auto', 'Enable auto-merge (merge when requirements are met)')
+    .action(mergeCommand);
 
 // Assignment
 program

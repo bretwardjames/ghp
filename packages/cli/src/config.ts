@@ -256,30 +256,43 @@ function loadUserConfig(): Partial<Config> {
 }
 
 /**
- * Deep merge two config objects (right overwrites left, but nested objects are merged)
+ * Check if a value is a plain object (not array, null, or other types)
  */
-function deepMerge(base: Config, override: Partial<Config>): Config {
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Recursively deep merge two objects (right overwrites left, nested objects are merged at all depths)
+ */
+export function deepMergeObjects(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = { ...base };
+
     for (const [key, overrideValue] of Object.entries(override)) {
         if (overrideValue === undefined) continue;
 
         const baseValue = result[key];
-        if (
-            typeof overrideValue === 'object' &&
-            overrideValue !== null &&
-            !Array.isArray(overrideValue) &&
-            typeof baseValue === 'object' &&
-            baseValue !== null &&
-            !Array.isArray(baseValue)
-        ) {
-            // Deep merge nested objects (defaults, shortcuts)
-            result[key] = { ...baseValue as object, ...overrideValue };
+
+        if (isPlainObject(overrideValue) && isPlainObject(baseValue)) {
+            // Recursively merge nested objects
+            result[key] = deepMergeObjects(baseValue, overrideValue);
         } else {
-            // Direct override for primitives and arrays
+            // Direct override for primitives, arrays, and when types don't match
             result[key] = overrideValue;
         }
     }
-    return result as unknown as Config;
+
+    return result;
+}
+
+/**
+ * Deep merge two config objects (right overwrites left, nested objects are merged at all depths)
+ */
+function deepMerge(base: Config, override: Partial<Config>): Config {
+    return deepMergeObjects(
+        base as unknown as Record<string, unknown>,
+        override as Record<string, unknown>
+    ) as unknown as Config;
 }
 
 /**
@@ -320,6 +333,7 @@ export function getByPath(obj: Record<string, unknown>, path: string): unknown {
 /**
  * Set a value in an object using a dotted path (e.g., "mcp.tools.workflows")
  * Creates intermediate objects as needed.
+ * Throws an error if the path traverses through a non-object value.
  */
 export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): void {
     const parts = path.split('.');
@@ -329,6 +343,12 @@ export function setByPath(obj: Record<string, unknown>, path: string, value: unk
         const part = parts[i];
         if (current[part] === undefined || current[part] === null) {
             current[part] = {};
+        } else if (!isPlainObject(current[part])) {
+            const traversedPath = parts.slice(0, i + 1).join('.');
+            const actualType = Array.isArray(current[part]) ? 'an array' : `a ${typeof current[part]}`;
+            throw new Error(
+                `Cannot set "${path}": "${traversedPath}" is ${actualType}, not an object`
+            );
         }
         current = current[part] as Record<string, unknown>;
     }

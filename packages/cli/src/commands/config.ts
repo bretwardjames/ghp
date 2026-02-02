@@ -480,12 +480,17 @@ export async function configCommand(
     if (key && value) {
         // Set a value (supports dotted paths like "mcp.tools.workflows")
         const parsedValue = parseValue(value);
-        if (key.includes('.')) {
-            setConfigByPath(key, parsedValue, scope);
-        } else {
-            setConfig(key as keyof Config, parsedValue as Config[keyof Config], scope);
+        try {
+            if (key.includes('.')) {
+                setConfigByPath(key, parsedValue, scope);
+            } else {
+                setConfig(key as keyof Config, parsedValue as Config[keyof Config], scope);
+            }
+            console.log(`Set ${key} = ${value} (in ${scope} config)`);
+        } catch (err) {
+            console.error(chalk.red(`Error: ${err instanceof Error ? err.message : err}`));
+            process.exit(1);
         }
-        console.log(`Set ${key} = ${value} (in ${scope} config)`);
         return;
     }
 

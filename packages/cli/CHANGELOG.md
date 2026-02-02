@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 16c3603: Add `ghp merge` command with pr-merged hook support
+
+  New command to merge PRs and fire the `pr-merged` event hook, enabling external tools to respond to PR merges (e.g., Ragtime graduating branch memories).
+
+- c5b3627: Add hook execution modes (fire-and-forget, blocking, interactive)
+
+  Hooks can now specify a `mode` that controls behavior on completion:
+
+  - `fire-and-forget` (default): Silent execution, logged only, never aborts workflow
+  - `blocking`: Shows output on failure, non-zero exit aborts workflow
+  - `interactive`: Always shows output, prompts user to continue (y), abort (N), or view full output (v)
+
+  New CLI options for `ghp hooks add`:
+
+  - `--mode <mode>`: Set the execution mode
+  - `--continue-prompt <text>`: Custom prompt text for interactive mode
+
+  Hooks can also configure custom exit code classification via the `exitCodes` field in the config file.
+
+- 25143fe: Fire PR lifecycle hooks in ghp pr command
+
+  - Fire `pre-pr` hooks before PR creation (with changed files, diff stats)
+  - Fire `pr-creating` hooks just before GitHub API call (with proposed title/body)
+  - Fire `pr-created` hooks after successful creation
+  - Add `--force` flag to bypass blocking hook failures
+  - Add `--no-hooks` flag to skip all hooks
+  - Hooks now fire from core workflow layer (available to MCP, VS Code, nvim)
+
+### Patch Changes
+
+- f0e69f8: Centralize hook firing in core workflows
+
+  ## @bretwardjames/ghp-core (minor)
+
+  - Add workflow layer with functions that combine operations + hook firing:
+
+    - `createIssueWorkflow` - Create issue and fire `issue-created` hook
+    - `startIssueWorkflow` - Start working on issue and fire `issue-started` hook
+    - `createPRWorkflow` - Create PR and fire `pr-created` hook
+    - `createWorktreeWorkflow` - Create worktree and fire `worktree-created` hook
+    - `removeWorktreeWorkflow` - Remove worktree and fire `worktree-removed` hook
+
+  - Add `cwd` option to hook executor for firing hooks from inside worktrees
+  - Add tests for all workflow functions (24 tests)
+  - Add vitest test runner
+
+  ## @bretwardjames/ghp-cli (patch)
+
+  - Hook firing order improved: `worktree-created` fires before `issue-started` in parallel mode
+  - Hooks now fire from inside the worktree directory when using `--parallel`
+
+  ## @bretwardjames/ghp-mcp (patch)
+
+  - MCP `start` tool now fires `issue-started` hook
+  - MCP `add-issue` tool now fires `issue-created` hook
+
+  ## gh-projects (patch)
+
+  - VS Code extension now fires `issue-started` hook when starting work
+  - VS Code extension now fires `worktree-created` and `issue-started` hooks when creating worktrees
+  - Hooks fire from inside the worktree directory for correct file placement
+
+- c3a2ea3: fix(cli): include issue body in issue-started hook payload
+
+  The `issue-started` event hook now includes the actual issue body instead of an empty string. This enables hooks to access the full issue description via `${issue.body}` or `${issue.json}` template variables.
+
+  Relates to #217
+
+- Updated dependencies [62b7941]
+- Updated dependencies [16c3603]
+- Updated dependencies [f0e69f8]
+- Updated dependencies [3fce458]
+- Updated dependencies [c5b3627]
+- Updated dependencies [25143fe]
+  - @bretwardjames/ghp-core@0.5.0
+
 ## 0.5.1
 
 ### Patch Changes

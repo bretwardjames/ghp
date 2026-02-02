@@ -345,11 +345,17 @@ export async function executeEventHook(
     const startTime = Date.now();
     const mode = hook.mode || 'fire-and-forget';
 
-    // Write event payload to temp file for ${_event_file} access
-    const eventFilePath = writeEventFile(payload);
+    // Only create event file if the command uses ${_event_file}
+    const needsEventFile = hook.command.includes('${_event_file}');
+    let eventFilePath: string | undefined;
 
     try {
-        // Substitute template variables (including ${_event_file})
+        // Write event payload to temp file only when needed
+        if (needsEventFile) {
+            eventFilePath = writeEventFile(payload);
+        }
+
+        // Substitute template variables (including ${_event_file} if present)
         const command = substituteTemplateVariables(hook.command, payload, { eventFilePath });
 
         // Run the command
@@ -422,8 +428,10 @@ export async function executeEventHook(
 
         return result;
     } finally {
-        // Always clean up the event file
-        cleanupEventFile(eventFilePath);
+        // Clean up the event file if it was created
+        if (eventFilePath) {
+            cleanupEventFile(eventFilePath);
+        }
     }
 }
 

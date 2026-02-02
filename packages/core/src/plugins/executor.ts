@@ -66,7 +66,13 @@ export function substituteTemplateVariables(command: string, payload: EventPaylo
         result = result.replace(/\$\{pr\.title\}/g, shellEscape(payload.pr.title || ''));
         result = result.replace(/\$\{pr\.body\}/g, shellEscape((payload.pr as { body?: string }).body || ''));
         result = result.replace(/\$\{pr\.url\}/g, shellEscape(payload.pr.url || ''));
+        result = result.replace(/\$\{pr\.merged_at\}/g, shellEscape((payload.pr as { merged_at?: string }).merged_at || ''));
         result = result.replace(/\$\{pr\.json\}/g, shellEscape(JSON.stringify(payload.pr)));
+    }
+
+    // Base branch variable (for pr-merged event)
+    if ('base' in payload && payload.base) {
+        result = result.replace(/\$\{base\}/g, shellEscape(payload.base));
     }
 
     // Worktree variables

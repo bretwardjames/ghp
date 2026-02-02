@@ -16,7 +16,7 @@ export type EventType =
     | 'issue-created'     // After ghp add creates an issue
     | 'issue-started'     // After ghp start creates/switches to branch
     | 'pr-created'        // After ghp pr --create
-    | 'pr-merged'         // After PR merge detected
+    | 'pr-merged'         // After ghp merge completes
     | 'worktree-created'  // After ghp start --parallel creates a worktree
     | 'worktree-removed'; // After ghp worktree remove removes a worktree
 
@@ -40,7 +40,11 @@ export interface EventHook {
      * - ${issue.json} - Full issue JSON (escaped for shell)
      * - ${branch} - Branch name
      * - ${pr.number} - PR number
+     * - ${pr.title} - PR title
+     * - ${pr.url} - PR URL
+     * - ${pr.merged_at} - ISO timestamp when PR was merged (pr-merged only)
      * - ${pr.json} - Full PR JSON (escaped for shell)
+     * - ${base} - Base branch PR was merged into (pr-merged only)
      * - ${repo} - Repository in owner/name format
      * - ${worktree.path} - Absolute path to worktree
      * - ${worktree.name} - Directory name of worktree
@@ -131,9 +135,12 @@ export interface PrMergedPayload extends BaseEventPayload {
         number: number;
         title: string;
         url: string;
+        merged_at: string;
         [key: string]: unknown;
     };
     branch: string;
+    /** The base branch the PR was merged into */
+    base: string;
 }
 
 /**

@@ -312,7 +312,7 @@ export class GitHubAPI {
                 labels?: {
                     nodes: Array<{ name: string; color: string }>;
                 };
-                repository?: { name: string };
+                repository?: { name: string; owner?: { login: string } };
                 parent?: { id: string; number: number; title: string; state: string } | null;
                 subIssues?: {
                     nodes: Array<{ id: string; number: number; title: string; state: string }>;
@@ -418,7 +418,9 @@ export class GitHubAPI {
                     state,
                     assignees: content.assignees?.nodes.map(a => a.login) || [],
                     labels: content.labels?.nodes || [],
-                    repository: content.repository?.name || null,
+                    repository: content.repository?.owner?.login && content.repository?.name
+                        ? `${content.repository.owner.login}/${content.repository.name}`
+                        : null,
                     url: content.url || null,
                     projectId,
                     projectTitle,
@@ -610,7 +612,7 @@ export class GitHubAPI {
                 state: issue.state === 'OPEN' ? 'open' : 'closed',
                 assignees: issue.assignees.nodes.map(a => a.login),
                 labels: issue.labels.nodes,
-                repository: repo.name,
+                repository: `${repo.owner}/${repo.name}`,
                 url: issue.url,
                 projectId: projectItem.project.id,
                 projectTitle: projectItem.project.title,

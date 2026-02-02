@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
 import { join, dirname } from 'path';
-import { GitHubAPI } from './github-api';
+import { VSCodeGitHubAPI } from './vscode-github-api';
 import { ProjectBoardProvider, ItemNode, ViewNode, ProjectItemDragAndDropController } from './tree-provider';
 import { detectRepository, type RepoInfo } from './repo-detector';
 import { StatusBarManager, showAccessHelp } from './status-bar';
@@ -22,7 +22,7 @@ import {
     executeSuggestIssue,
 } from './ai';
 
-let api: GitHubAPI;
+let api: VSCodeGitHubAPI;
 let boardProvider: ProjectBoardProvider;
 let statusBar: StatusBarManager;
 let branchLinker: BranchLinker;
@@ -33,7 +33,7 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log('GitHub Projects extension is now active');
 
     // Initialize components
-    api = new GitHubAPI();
+    api = new VSCodeGitHubAPI();
     boardProvider = new ProjectBoardProvider(api);
     statusBar = new StatusBarManager();
     apiKeyManager = new ApiKeyManager(context.secrets);

@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import { existsSync, copyFileSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
-import { GitHubAPI } from './github-api';
+import { GitHubAPI } from './vscode-github-api';
 import {
     generateBranchName,
     branchExists,
@@ -663,7 +663,7 @@ export async function executeStartInWorktree(
     }
 
     // Generate worktree path with descriptive name
-    const worktreePath = generateWorktreePath(wtConfig.path, repoName, item.number, item.title);
+    const worktreePath = generateWorktreePath(wtConfig.path, repoName, item.number ?? undefined, item.title);
 
     // Check if worktree already exists for this branch
     const existingWorktree = await getWorktreeForBranch(branchName);
@@ -762,10 +762,10 @@ async function applyActiveLabelNonExclusive(api: GitHubAPI, item: NormalizedProj
         const labelName = api.getActiveLabelName();
 
         // Ensure the label exists
-        await api.ensureLabel(owner, repo, labelName, '1d76db', `Currently active issue for @${api.username}`);
+        await api.ensureLabelByOwnerRepo(owner, repo, labelName, '1d76db', `Currently active issue for @${api.username}`);
 
         // Just add the label, don't remove from others
-        await api.addLabelToIssue(owner, repo, item.number, labelName);
+        await api.addLabelToIssueByOwnerRepo(owner, repo, item.number, labelName);
     } catch (error) {
         console.warn('Failed to apply active label:', error);
     }

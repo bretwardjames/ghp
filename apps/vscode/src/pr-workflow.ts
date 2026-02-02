@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GitHubAPI } from './github-api';
+import { GitHubAPI } from './vscode-github-api';
 import { getCurrentBranch, extractIssueNumberFromBranch } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 
@@ -132,7 +132,7 @@ export async function executePROpened(
 
     // Find the item across all projects
     for (const project of projects) {
-        const items = await api.getProjectItems(project.id);
+        const items = await api.getProjectItemsNormalized(project.id);
         const item = findItemByNumber(items, issueNumber);
 
         if (item) {

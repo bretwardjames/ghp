@@ -94,7 +94,7 @@ export const PROJECT_ITEMS_QUERY = `
                                 issueType { name }
                                 assignees(first: 5) { nodes { login } }
                                 labels(first: 10) { nodes { name color } }
-                                repository { name }
+                                repository { name owner { login } }
                                 parent { id number title state }
                                 subIssues(first: 50) { nodes { id number title state } }
                                 blockedBy(first: 20) { nodes { id number title state } }
@@ -108,7 +108,7 @@ export const PROJECT_ITEMS_QUERY = `
                                 merged
                                 assignees(first: 5) { nodes { login } }
                                 labels(first: 10) { nodes { name color } }
-                                repository { name }
+                                repository { name owner { login } }
                             }
                             ... on DraftIssue {
                                 title

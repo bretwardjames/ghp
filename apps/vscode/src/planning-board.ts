@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GitHubAPI } from './github-api';
+import { GitHubAPI } from './vscode-github-api';
 import type { NormalizedProjectItem, ProjectWithViews, ProjectV2View } from './types';
 import type { RepoInfo } from './repo-detector';
 import { getWorktreeForIssue, listWorktrees } from './worktree';
@@ -119,7 +119,7 @@ export class PlanningBoardPanel {
 
         for (const project of this._projects) {
             // Get all items for this project
-            const allItems = await this._api.getProjectItems(project.id, {
+            const allItems = await this._api.getProjectItemsNormalized(project.id, {
                 assignedToMe,
                 statusFieldName: 'Status',
             });
@@ -131,7 +131,11 @@ export class PlanningBoardPanel {
             const projectFields = await this._api.getProjectFields(project.id);
 
             // Build slice options from fields (excluding Status which is used for columns)
-            this._buildSliceOptions(allItems, projectFields);
+            this._buildSliceOptions(allItems, projectFields.map(f => ({
+                id: f.id,
+                name: f.name,
+                options: f.options || []
+            })));
 
             // Filter views based on settings - allow ANY layout type now (Board, Table, Roadmap)
             let viewsToShow = project.views;

@@ -16,7 +16,7 @@ import {
     setBranchLinkInBody,
     removeBranchLinkFromBody,
 } from '@bretwardjames/ghp-core';
-import type { GitHubAPI } from './github-api';
+import type { GitHubAPI } from './vscode-github-api';
 import { getCurrentBranch, hasUncommittedChanges } from './git-utils';
 
 const execAsync = promisify(exec);

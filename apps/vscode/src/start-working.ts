@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GitHubAPI } from './github-api';
+import { GitHubAPI } from './vscode-github-api';
 import {
     getGitStatus,
     checkoutBranch,

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GitHubAPI } from './github-api';
+import { GitHubAPI } from './vscode-github-api';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 
 interface IssueComment {
@@ -251,7 +251,7 @@ export class IssueDetailPanel {
                     id: field.id,
                     name: field.name,
                     currentValue: fieldInfo?.value || null,
-                    options: field.options,
+                    options: field.options || [],
                 };
             });
 
@@ -350,7 +350,7 @@ export class IssueDetailPanel {
 
         try {
             // Get collaborators for suggestions
-            const collaborators = await this._api.getCollaborators(owner, repo);
+            const collaborators = await this._api.getCollaboratorsByOwnerRepo(owner, repo);
             const currentLogins = this._item.assignees.map((a) => a.login);
 
             // Show quick pick with multi-select

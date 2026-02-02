@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GitHubAPI } from './github-api';
+import { GitHubAPI } from './vscode-github-api';
 import type { BranchLinker } from './branch-linker';
 import type {
     NormalizedProjectItem,
@@ -212,7 +212,7 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         // Default to "Status" - most projects use this name
         const statusFieldName = 'Status';
 
-        const items = await this.api.getProjectItems(project.id, {
+        const items = await this.api.getProjectItemsNormalized(project.id, {
             assignedToMe,
             statusFieldName,
         });
@@ -293,7 +293,7 @@ export class ProjectBoardProvider implements vscode.TreeDataProvider<TreeElement
         const hiddenStatuses = config.get<string[]>('myStuffHiddenStatuses', ['Done', 'Closed']);
 
         // Always filter to current user's items in "My Stuff" view
-        const allItems = await this.api.getProjectItems(project.id, {
+        const allItems = await this.api.getProjectItemsNormalized(project.id, {
             assignedToMe: true,
             statusFieldName: 'Status',
         });
@@ -728,7 +728,7 @@ export class ProjectItemDragAndDropController implements vscode.TreeDragAndDropC
         const project = target.project;
 
         // Find the Status field and target option
-        const statusInfo = this.api.findStatusFieldAndOption(project, targetStatus);
+        const statusInfo = this.api.findStatusFieldAndOptionFromProject(project, targetStatus);
         if (!statusInfo) {
             vscode.window.showErrorMessage(`Could not find status "${targetStatus}" in project`);
             return;

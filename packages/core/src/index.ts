@@ -418,6 +418,8 @@ export {
     disableEventHook,
     getValidEventTypes,
     getValidModes,
+    getValidOnFailureBehaviors,
+    getEventSettings,
     // Executor
     substituteTemplateVariables,
     executeEventHook,
@@ -431,6 +433,8 @@ export type {
     HookMode,
     HookExitCodes,
     HookOutcome,
+    OnFailureBehavior,
+    EventHookSettings,
     EventHook,
     EventHooksConfig,
     BaseEventPayload,

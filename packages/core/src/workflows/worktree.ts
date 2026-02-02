@@ -19,6 +19,7 @@ import type {
     WorktreeCreatedPayload,
     WorktreeRemovedPayload,
     HookResult,
+    OnFailureBehavior,
 } from '../plugins/types.js';
 import type {
     CreateWorktreeOptions,
@@ -56,7 +57,7 @@ import type {
 export async function createWorktreeWorkflow(
     options: CreateWorktreeOptions
 ): Promise<CreateWorktreeResult> {
-    const { repo, issueNumber, issueTitle, branch, path } = options;
+    const { repo, issueNumber, issueTitle, branch, path, onFailure } = options;
     const hookResults: HookResult[] = [];
 
     try {
@@ -106,6 +107,7 @@ export async function createWorktreeWorkflow(
             // Fire hook from inside the worktree so plugins create files there
             const results = await executeHooksForEvent('worktree-created', payload, {
                 cwd: worktreePath,
+                onFailure,
             });
             hookResults.push(...results);
         }
@@ -161,7 +163,7 @@ export async function createWorktreeWorkflow(
 export async function removeWorktreeWorkflow(
     options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
-    const { repo, issueNumber, issueTitle, branch, worktreePath, force } = options;
+    const { repo, issueNumber, issueTitle, branch, worktreePath, force, onFailure } = options;
     const hookResults: HookResult[] = [];
 
     try {
@@ -230,7 +232,7 @@ export async function removeWorktreeWorkflow(
                 };
             }
 
-            const results = await executeHooksForEvent('worktree-removed', payload);
+            const results = await executeHooksForEvent('worktree-removed', payload, { onFailure });
             hookResults.push(...results);
         }
 

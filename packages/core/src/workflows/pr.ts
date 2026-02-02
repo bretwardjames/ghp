@@ -14,6 +14,7 @@ import type {
     PrCreatingPayload,
     PrCreatedPayload,
     HookResult,
+    OnFailureBehavior,
 } from '../plugins/types.js';
 import { getDiffStats, getChangedFiles } from '../dashboard/index.js';
 import type {
@@ -79,6 +80,7 @@ export async function createPRWorkflow(
         openInBrowser = false,
         skipHooks = false,
         force = false,
+        onFailure,
     } = options;
 
     const hookResults: HookResult[] = [];
@@ -117,7 +119,7 @@ export async function createPRWorkflow(
                 },
             };
 
-            const prePrResults = await executeHooksForEvent('pre-pr', prePrPayload);
+            const prePrResults = await executeHooksForEvent('pre-pr', prePrPayload, { onFailure });
             hookResults.push(...prePrResults);
 
             // Check if any hook signaled abort (unless --force)
@@ -147,7 +149,7 @@ export async function createPRWorkflow(
                 body: bodyContent,
             };
 
-            const prCreatingResults = await executeHooksForEvent('pr-creating', prCreatingPayload);
+            const prCreatingResults = await executeHooksForEvent('pr-creating', prCreatingPayload, { onFailure });
             hookResults.push(...prCreatingResults);
 
             // Check if any hook signaled abort (unless --force)
@@ -257,7 +259,7 @@ export async function createPRWorkflow(
                 };
             }
 
-            const results = await executeHooksForEvent('pr-created', payload);
+            const results = await executeHooksForEvent('pr-created', payload, { onFailure });
             hookResults.push(...results);
             // Note: pr-created hooks are typically fire-and-forget, so we don't
             // check for abort here - the PR has already been created

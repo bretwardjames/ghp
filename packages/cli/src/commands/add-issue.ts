@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
-import { getAddIssueDefaults, getClaudeConfig } from '../config.js';
+import { getAddIssueDefaults, getClaudeConfig, getHooksConfig } from '../config.js';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFileSync, readFileSync, unlinkSync, existsSync, readdirSync } from 'fs';
@@ -492,7 +492,10 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             },
         };
 
-        const results = await executeHooksForEvent('issue-created', payload);
+        const hooksConfig = getHooksConfig();
+        const results = await executeHooksForEvent('issue-created', payload, {
+            onFailure: hooksConfig.onFailure,
+        });
 
         for (const result of results) {
             if (result.success) {

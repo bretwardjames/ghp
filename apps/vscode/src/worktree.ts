@@ -27,7 +27,19 @@ import {
     type WorktreeCreatedPayload,
     type IssueStartedPayload,
     type HookResult,
+    type OnFailureBehavior,
 } from '@bretwardjames/ghp-core';
+
+/**
+ * Get hooks configuration from VS Code settings
+ */
+function getHooksConfig(): { onFailure: OnFailureBehavior } {
+    const config = vscode.workspace.getConfiguration('ghProjects');
+    const onFailure = config.get<string>('hooksOnFailure', 'fail-fast');
+    return {
+        onFailure: onFailure === 'continue' ? 'continue' : 'fail-fast',
+    };
+}
 
 const execAsync = promisify(exec);
 
@@ -796,6 +808,9 @@ async function fireWorktreeHooks(options: FireWorktreeHooksOptions): Promise<voi
         issueUrl,
     } = options;
 
+    // Load hooks config once for all hooks
+    const hooksConfig = getHooksConfig();
+
     // Fire worktree-created hook first
     if (hasHooksForEvent('worktree-created')) {
         const payload: WorktreeCreatedPayload = {
@@ -815,6 +830,7 @@ async function fireWorktreeHooks(options: FireWorktreeHooksOptions): Promise<voi
         try {
             const results = await executeHooksForEvent('worktree-created', payload, {
                 cwd: worktreePath,
+                onFailure: hooksConfig.onFailure,
             });
             logHookResults('worktree-created', results);
         } catch (error) {
@@ -838,6 +854,7 @@ async function fireWorktreeHooks(options: FireWorktreeHooksOptions): Promise<voi
         try {
             const results = await executeHooksForEvent('issue-started', payload, {
                 cwd: worktreePath,
+                onFailure: hooksConfig.onFailure,
             });
             logHookResults('issue-started', results);
         } catch (error) {

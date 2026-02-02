@@ -18,6 +18,7 @@ import type {
     IssueCreatedPayload,
     IssueStartedPayload,
     HookResult,
+    OnFailureBehavior,
 } from '../plugins/types.js';
 import type { RepoInfo } from '../types.js';
 import type {
@@ -73,6 +74,7 @@ export async function createIssueWorkflow(
         labels = [],
         assignees = [],
         parentIssueNumber,
+        onFailure,
     } = options;
 
     const hookResults: HookResult[] = [];
@@ -148,7 +150,7 @@ export async function createIssueWorkflow(
                 },
             };
 
-            const results = await executeHooksForEvent('issue-created', payload);
+            const results = await executeHooksForEvent('issue-created', payload, { onFailure });
             hookResults.push(...results);
         }
 
@@ -223,6 +225,7 @@ export async function startIssueWorkflow(
         projectId,
         statusFieldId,
         statusOptionId,
+        onFailure,
     } = options;
 
     const hookResults: HookResult[] = [];
@@ -264,6 +267,7 @@ export async function startIssueWorkflow(
                 issueTitle,
                 branch,
                 path: worktreePath,
+                onFailure,
             });
 
             if (!worktreeResult.success) {
@@ -311,6 +315,7 @@ export async function startIssueWorkflow(
             const hookCwd = worktreeInfo?.path;
             const results = await executeHooksForEvent('issue-started', payload, {
                 cwd: hookCwd,
+                onFailure,
             });
             hookResults.push(...results);
         }

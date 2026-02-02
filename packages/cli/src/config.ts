@@ -109,6 +109,22 @@ export interface ClaudeConfig {
     maxTokens?: number;
 }
 
+// Re-export OnFailureBehavior from core for convenience
+export { type OnFailureBehavior } from '@bretwardjames/ghp-core';
+import { type OnFailureBehavior } from '@bretwardjames/ghp-core';
+
+/**
+ * Event hooks configuration
+ */
+export interface HooksConfig {
+    /**
+     * Default behavior when a hook fails.
+     * Can be overridden per-event in event-hooks.json.
+     * Default: 'fail-fast'
+     */
+    onFailure?: OnFailureBehavior;
+}
+
 /**
  * Behavior when an issue is not in any project
  * - 'auto-add': Automatically add the issue to the first/default project
@@ -145,6 +161,9 @@ export interface Config {
 
     // Claude AI configuration
     claude?: ClaudeConfig;
+
+    // Event hooks configuration
+    hooks?: HooksConfig;
 
     // Command defaults
     defaults?: {
@@ -188,6 +207,10 @@ const DEFAULT_CONFIG: Config = {
             action: true,
         },
         disabledTools: [],
+    },
+    // Hooks defaults
+    hooks: {
+        onFailure: 'fail-fast',
     },
 };
 
@@ -519,6 +542,26 @@ export function getClaudeConfig(): ResolvedClaudeConfig {
         apiKey: process.env.ANTHROPIC_API_KEY || claudeConfig.apiKey,
         model: claudeConfig.model || DEFAULT_CLAUDE_MODEL,
         maxTokens: claudeConfig.maxTokens || DEFAULT_CLAUDE_MAX_TOKENS,
+    };
+}
+
+/**
+ * Resolved hooks configuration with defaults
+ */
+export interface ResolvedHooksConfig {
+    /** Behavior when a hook fails */
+    onFailure: OnFailureBehavior;
+}
+
+/**
+ * Get the hooks configuration with defaults applied.
+ */
+export function getHooksConfig(): ResolvedHooksConfig {
+    const config = loadConfig();
+    const hooksConfig = config.hooks || {};
+
+    return {
+        onFailure: hooksConfig.onFailure || 'fail-fast',
     };
 }
 

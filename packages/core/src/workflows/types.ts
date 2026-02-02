@@ -5,7 +5,7 @@
  * Workflows are used by CLI, MCP, VS Code extension, and nvim plugin.
  */
 
-import type { HookResult } from '../plugins/types.js';
+import type { HookResult, OnFailureBehavior } from '../plugins/types.js';
 import type { RepoInfo } from '../types.js';
 
 // =============================================================================
@@ -68,6 +68,8 @@ export interface CreateIssueOptions {
     assignees?: string[];
     /** Parent issue number for sub-issues (optional) */
     parentIssueNumber?: number;
+    /** Hook failure behavior (default: 'fail-fast') */
+    onFailure?: OnFailureBehavior;
 }
 
 /**
@@ -114,6 +116,8 @@ export interface StartIssueOptions {
     statusFieldId?: string;
     /** Status option ID (if known) */
     statusOptionId?: string;
+    /** Hook failure behavior (default: 'fail-fast') */
+    onFailure?: OnFailureBehavior;
 }
 
 /**
@@ -160,6 +164,8 @@ export interface CreatePROptions {
     skipHooks?: boolean;
     /** Force PR creation even if blocking hooks fail (--force flag) */
     force?: boolean;
+    /** Hook failure behavior (default: 'fail-fast') */
+    onFailure?: OnFailureBehavior;
 }
 
 /**
@@ -204,6 +210,8 @@ export interface CreateWorktreeOptions {
     branch: string;
     /** Full path for the worktree (required - caller determines path based on config) */
     path: string;
+    /** Hook failure behavior (default: 'fail-fast') */
+    onFailure?: OnFailureBehavior;
 }
 
 /**
@@ -234,6 +242,8 @@ export interface RemoveWorktreeOptions {
     worktreePath?: string;
     /** Force removal even with uncommitted changes */
     force?: boolean;
+    /** Hook failure behavior (default: 'fail-fast') */
+    onFailure?: OnFailureBehavior;
 }
 
 /**

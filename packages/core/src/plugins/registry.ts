@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { EventHook, EventHooksConfig, EventType, HookMode } from './types.js';
+import type { EventHook, EventHooksConfig, EventHookSettings, EventType, HookMode, OnFailureBehavior } from './types.js';
 
 // =============================================================================
 // Configuration
@@ -130,6 +130,48 @@ function isValidHook(hook: EventHook): boolean {
 // =============================================================================
 
 /**
+ * Valid onFailure behaviors
+ */
+const VALID_ON_FAILURE: OnFailureBehavior[] = ['fail-fast', 'continue'];
+
+/**
+ * Validate onFailure value
+ */
+function isValidOnFailure(value: unknown): value is OnFailureBehavior {
+    return typeof value === 'string' && VALID_ON_FAILURE.includes(value as OnFailureBehavior);
+}
+
+/**
+ * Validate and normalize eventDefaults
+ */
+function normalizeEventDefaults(
+    eventDefaults: unknown
+): Partial<Record<EventType, EventHookSettings>> | undefined {
+    if (!eventDefaults || typeof eventDefaults !== 'object') {
+        return undefined;
+    }
+
+    const result: Partial<Record<EventType, EventHookSettings>> = {};
+    for (const [event, settings] of Object.entries(eventDefaults as Record<string, unknown>)) {
+        if (!isValidEventType(event)) {
+            continue; // Skip invalid event types
+        }
+        if (settings && typeof settings === 'object') {
+            const eventSettings = settings as Record<string, unknown>;
+            const normalized: EventHookSettings = {};
+            if (isValidOnFailure(eventSettings.onFailure)) {
+                normalized.onFailure = eventSettings.onFailure;
+            }
+            if (Object.keys(normalized).length > 0) {
+                result[event] = normalized;
+            }
+        }
+    }
+
+    return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
  * Load event hooks configuration from disk
  */
 export function loadEventHooksConfig(): EventHooksConfig {
@@ -149,6 +191,7 @@ export function loadEventHooksConfig(): EventHooksConfig {
 
         return {
             hooks: config.hooks.map(normalizeHook).filter(isValidHook),
+            eventDefaults: normalizeEventDefaults(config.eventDefaults),
         };
     } catch (error) {
         console.error(`Failed to load event hooks config: ${error}`);
@@ -319,4 +362,19 @@ export function getValidEventTypes(): EventType[] {
  */
 export function getValidModes(): HookMode[] {
     return [...VALID_MODES];
+}
+
+/**
+ * Get list of valid onFailure behaviors
+ */
+export function getValidOnFailureBehaviors(): OnFailureBehavior[] {
+    return [...VALID_ON_FAILURE];
+}
+
+/**
+ * Get event-specific settings from event hooks config
+ */
+export function getEventSettings(event: EventType): EventHookSettings | undefined {
+    const config = loadEventHooksConfig();
+    return config.eventDefaults?.[event];
 }

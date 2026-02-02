@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
+import { loadHooksConfig } from '../tool-registry.js';
 import {
     executeHooksForEvent,
     hasHooksForEvent,
@@ -132,7 +133,10 @@ export function register(server: McpServer, context: ServerContext): void {
                         },
                     };
 
-                    const hookResults = await executeHooksForEvent('issue-created', payload);
+                    const hooksConfig = loadHooksConfig();
+                    const hookResults = await executeHooksForEvent('issue-created', payload, {
+                        onFailure: hooksConfig.onFailure,
+                    });
                     const successCount = hookResults.filter(r => r.success).length;
                     const failCount = hookResults.length - successCount;
 

@@ -15,6 +15,7 @@ import {
     type HookResult,
 } from '@bretwardjames/ghp-core';
 import { exit } from '../exit.js';
+import { getHooksConfig } from '../config.js';
 
 interface WorktreeRemoveOptions {
     force?: boolean;
@@ -111,12 +112,14 @@ export async function worktreeRemoveCommand(
     }
 
     // Use the workflow to remove worktree and fire hooks
+    const hooksConfig = getHooksConfig();
     const result = await removeWorktreeWorkflow({
         repo,
         issueNumber,
         branch: branchName,
         worktreePath: worktree.path,
         force: options.force,
+        onFailure: hooksConfig.onFailure,
     });
 
     if (!result.success) {

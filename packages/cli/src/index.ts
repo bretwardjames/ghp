@@ -326,6 +326,7 @@ program
     .option('--rebase', 'Rebase merge')
     .option('--no-delete-branch', 'Keep branch after merge (default: delete)')
     .option('--auto', 'Enable auto-merge (merge when requirements are met)')
+    .option('--auto-clean', 'Automatically remove worktree if branch is in use')
     .action(mergeCommand);
 
 // Assignment

@@ -1,12 +1,16 @@
 import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { detectRepository } from '../git-utils.js';
+import { detectRepository, removeWorktree } from '../git-utils.js';
 import { api } from '../github-api.js';
+import { getBranchWorktree } from '../worktree-utils.js';
+import { confirmWithDefault, isInteractive } from '../prompts.js';
 import {
     executeHooksForEvent,
     hasHooksForEvent,
+    extractIssueNumberFromBranch,
     type PrMergedPayload,
+    type WorktreeRemovedPayload,
 } from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
@@ -16,6 +20,7 @@ interface MergeOptions {
     rebase?: boolean;
     deleteBranch?: boolean;
     auto?: boolean;
+    autoClean?: boolean;
 }
 
 interface PrInfo {
@@ -113,6 +118,54 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
     console.log(chalk.green('Found PR:'), `#${prInfo.number} - ${prInfo.title}`);
     console.log(chalk.dim(`Branch: ${prInfo.headRefName} → ${prInfo.baseRefName}`));
 
+    // Track if we removed a worktree (for firing hook after merge)
+    let removedWorktree: { path: string; name: string } | null = null;
+
+    // Check for worktree using this branch (only if --delete-branch is enabled)
+    if (options.deleteBranch !== false) {
+        const worktree = await getBranchWorktree(prInfo.headRefName);
+
+        if (worktree) {
+            console.log();
+            console.log(chalk.yellow('Warning:'), `Branch is in use by worktree at ${worktree.path}`);
+
+            // Prompt to remove worktree (unless --auto-clean)
+            let shouldRemove = options.autoClean === true;
+
+            if (!shouldRemove && isInteractive()) {
+                shouldRemove = await confirmWithDefault(
+                    'Remove worktree and delete branch?',
+                    true
+                );
+            } else if (!shouldRemove) {
+                // Non-interactive without --auto-clean: abort
+                console.error(chalk.red('Error:'), 'Cannot delete branch while worktree exists');
+                console.log(chalk.dim('Use --auto-clean to automatically remove the worktree'));
+                console.log(chalk.dim('Or use --no-delete-branch to keep the branch'));
+                process.exit(1);
+            }
+
+            if (!shouldRemove) {
+                console.log('Aborted.');
+                process.exit(0);
+            }
+
+            // Remove the worktree
+            const worktreePath = worktree.path;
+            const worktreeName = worktreePath.split('/').pop() || '';
+
+            console.log(chalk.dim('Removing worktree...'));
+            try {
+                await removeWorktree(worktreePath, {}, true); // force removal
+                console.log(chalk.green('✓'), `Removed worktree: ${worktreePath}`);
+                removedWorktree = { path: worktreePath, name: worktreeName };
+            } catch (error) {
+                console.error(chalk.red('Error:'), 'Failed to remove worktree:', error);
+                process.exit(1);
+            }
+        }
+    }
+
     // Build merge command
     const flags = buildMergeFlags(options);
     const mergeCmd = `gh pr merge ${prInfo.number} ${flags.join(' ')}`;
@@ -131,6 +184,46 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
         console.error(chalk.red('Error:'), 'Failed to merge PR');
         if (err.stderr) console.error(chalk.dim(err.stderr));
         process.exit(1);
+    }
+
+    // Fire worktree-removed hook if we removed a worktree
+    if (removedWorktree && hasHooksForEvent('worktree-removed')) {
+        console.log();
+        console.log(chalk.dim('Running worktree-removed hooks...'));
+
+        const issueNumber = extractIssueNumberFromBranch(prInfo.headRefName);
+        const worktreePayload: WorktreeRemovedPayload = {
+            repo: `${repo.owner}/${repo.name}`,
+            issue: issueNumber ? {
+                number: issueNumber,
+                title: prInfo.title, // Use PR title as proxy
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            } : undefined,
+            branch: prInfo.headRefName,
+            worktree: removedWorktree,
+        };
+
+        const worktreeResults = await executeHooksForEvent('worktree-removed', worktreePayload);
+
+        for (const result of worktreeResults) {
+            if (result.success) {
+                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                if (result.output) {
+                    const lines = result.output.split('\n').slice(0, 3);
+                    for (const line of lines) {
+                        console.log(chalk.dim(`  ${line}`));
+                    }
+                    if (result.output.split('\n').length > 3) {
+                        console.log(chalk.dim('  ...'));
+                    }
+                }
+            } else {
+                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                if (result.error) {
+                    console.log(chalk.dim(`  ${result.error}`));
+                }
+            }
+        }
     }
 
     // Fire pr-merged hook

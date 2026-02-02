@@ -26,10 +26,8 @@ interface AddIssueOptions {
     project?: string;
     status?: string;
     edit?: boolean;
-    template?: string;
+    template?: string | false;  // --no-template sets this to false
     listTemplates?: boolean;
-    // Non-interactive flags
-    noTemplate?: boolean;
     /** Use default values for all prompts (non-interactive mode) */
     forceDefaults?: boolean;
     /** Use AI to expand brief description into full issue */
@@ -189,11 +187,12 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     const templates = getTemplates();
 
     // Determine which template to use (CLI > config default)
-    let templateName = options.template || defaults.template;
+    // Note: --no-template sets options.template to false (Commander.js convention)
+    let templateName = (options.template !== false && options.template) || defaults.template;
 
     // If no template specified and templates exist, prompt user to pick one
     // --no-template flag skips this entirely
-    if (!templateName && templates.length > 0 && !options.body && !options.noTemplate) {
+    if (!templateName && templates.length > 0 && !options.body && options.template !== false) {
         // Build options list: templates + blank issue
         const templateOptions = [...templates.map(t => t.name), chalk.dim('Blank issue')];
 

@@ -5,6 +5,7 @@ import { getShortcut, getPlanDefaults, listShortcuts, getConfig } from '../confi
 import { displayTable, parseColumns, DEFAULT_COLUMNS, calculateColumnWidths, displayTableWithWidths, type ColumnName } from '../table.js';
 import type { ProjectItem } from '../types.js';
 import { exit } from '../exit.js';
+import { validateEnum, GROUP_FIELDS } from '../validation.js';
 
 interface PlanOptions {
     project?: string;
@@ -110,6 +111,9 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
     // Commander passes (shortcut, options) for optional positional args
     // The options object is passed directly, not as command.opts()
     const cliOpts: PlanOptions = command?.opts?.() || command || {};
+
+    // Validate flag values
+    validateEnum(cliOpts.group, GROUP_FIELDS, '--group');
 
     let options: PlanOptions;
     let shortcutName: string | undefined = shortcut;

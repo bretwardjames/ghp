@@ -14,6 +14,7 @@ import {
     type WorktreeRemovedPayload,
 } from '@bretwardjames/ghp-core';
 import { exit } from '../exit.js';
+import { validateMutualExclusion } from '../validation.js';
 
 const execAsync = promisify(exec);
 
@@ -77,6 +78,12 @@ function buildMergeFlags(options: MergeOptions): string[] {
  * Merge a PR and fire the pr-merged hook
  */
 export async function mergeCommand(prNumber: string | undefined, options: MergeOptions): Promise<void> {
+    // Validate mutually exclusive flags
+    validateMutualExclusion(
+        ['--squash', '--rebase'],
+        [options.squash, options.rebase]
+    );
+
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {

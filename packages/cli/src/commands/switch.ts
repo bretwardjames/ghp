@@ -14,6 +14,7 @@ import { getConfig, getParallelWorkConfig, type TerminalMode } from '../config.j
 import { openParallelWorkTerminal } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
 import { exit } from '../exit.js';
+import { validateMutualExclusion } from '../validation.js';
 
 interface SwitchOptions {
     /** Create worktree instead of switching branches (parallel work mode) */
@@ -42,6 +43,12 @@ function getTerminalModeOverride(options: SwitchOptions): TerminalMode | undefin
 }
 
 export async function switchCommand(issue: string, options: SwitchOptions = {}): Promise<void> {
+    // Validate mutually exclusive terminal mode flags
+    validateMutualExclusion(
+        ['--nvim', '--claude', '--terminal-only'],
+        [options.nvim, options.claude, options.terminalOnly]
+    );
+
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');

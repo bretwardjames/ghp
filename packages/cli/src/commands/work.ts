@@ -194,20 +194,30 @@ export async function workCommand(cliOptions: WorkOptions): Promise<void> {
                 const ascending = field.startsWith('-');
                 const fieldName = ascending ? field.slice(1) : field;
 
-                let aVal: any = getFieldValue(a, fieldName);
-                let bVal: any = getFieldValue(b, fieldName);
+                const aVal = getFieldValue(a, fieldName);
+                const bVal = getFieldValue(b, fieldName);
 
                 if (aVal === bVal) continue;
-                if (aVal === null || aVal === undefined) return ascending ? -1 : 1;
-                if (bVal === null || bVal === undefined) return ascending ? 1 : -1;
+                if (aVal === null) return ascending ? -1 : 1;
+                if (bVal === null) return ascending ? 1 : -1;
 
+                // String comparison
                 if (typeof aVal === 'string' && typeof bVal === 'string') {
                     const cmp = aVal.localeCompare(bVal);
                     return ascending ? cmp : -cmp;
                 }
 
-                if (aVal < bVal) return ascending ? -1 : 1;
-                if (aVal > bVal) return ascending ? 1 : -1;
+                // Number comparison
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    if (aVal < bVal) return ascending ? -1 : 1;
+                    if (aVal > bVal) return ascending ? 1 : -1;
+                }
+
+                // Mixed types: convert to strings for comparison
+                const aStr = String(aVal);
+                const bStr = String(bVal);
+                const cmp = aStr.localeCompare(bStr);
+                if (cmp !== 0) return ascending ? cmp : -cmp;
             }
             return 0;
         });
@@ -261,9 +271,14 @@ export async function workCommand(cliOptions: WorkOptions): Promise<void> {
 }
 
 /**
+ * Sortable field value type - covers all possible values that can be compared
+ */
+type SortableFieldValue = string | number | null;
+
+/**
  * Get field value for sorting
  */
-function getFieldValue(item: ProjectItem, fieldName: string): any {
+function getFieldValue(item: ProjectItem, fieldName: string): SortableFieldValue {
     const lower = fieldName.toLowerCase();
 
     switch (lower) {
@@ -277,6 +292,7 @@ function getFieldValue(item: ProjectItem, fieldName: string): any {
             return item.type;
         case 'issuetype':
         case 'issue-type':
+        case 'issue_type':
             return item.issueType;
         case 'assignee':
         case 'assignees':

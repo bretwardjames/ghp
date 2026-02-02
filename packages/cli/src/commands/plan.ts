@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import type { Command } from 'commander';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import { getShortcut, getPlanDefaults, listShortcuts, getConfig } from '../config.js';
@@ -106,10 +107,12 @@ function applyViewFilter(items: ProjectItem[], filterExpr: string, username: str
     return result;
 }
 
-export async function planCommand(shortcut?: string, command?: any): Promise<void> {
+export async function planCommand(shortcut?: string, command?: Command | PlanOptions): Promise<void> {
     // Commander passes (shortcut, options) for optional positional args
     // The options object is passed directly, not as command.opts()
-    const cliOpts: PlanOptions = command?.opts?.() || command || {};
+    const cliOpts: PlanOptions = (command && 'opts' in command && typeof command.opts === 'function')
+        ? command.opts() as PlanOptions
+        : (command as PlanOptions | undefined) || {};
 
     let options: PlanOptions;
     let shortcutName: string | undefined = shortcut;
@@ -324,14 +327,12 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
                 const ascending = field.startsWith('-');
                 const fieldName = ascending ? field.slice(1) : field;
 
-                // Get field values (handle special fields and custom fields)
-                let aVal: any = getFieldValue(a, fieldName);
-                let bVal: any = getFieldValue(b, fieldName);
+                const aVal = getFieldValue(a, fieldName);
+                const bVal = getFieldValue(b, fieldName);
 
-                // Compare
                 if (aVal === bVal) continue;
-                if (aVal === null || aVal === undefined) return ascending ? -1 : 1;
-                if (bVal === null || bVal === undefined) return ascending ? 1 : -1;
+                if (aVal === null) return ascending ? -1 : 1;
+                if (bVal === null) return ascending ? 1 : -1;
 
                 // String comparison
                 if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -340,8 +341,16 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
                 }
 
                 // Number comparison
-                if (aVal < bVal) return ascending ? -1 : 1;
-                if (aVal > bVal) return ascending ? 1 : -1;
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    if (aVal < bVal) return ascending ? -1 : 1;
+                    if (aVal > bVal) return ascending ? 1 : -1;
+                }
+
+                // Mixed types: convert to strings for comparison
+                const aStr = String(aVal);
+                const bStr = String(bVal);
+                const cmp = aStr.localeCompare(bStr);
+                if (cmp !== 0) return ascending ? cmp : -cmp;
             }
             return 0;
         });
@@ -405,7 +414,12 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
     }
 }
 
-function getFieldValue(item: ProjectItem, fieldName: string): any {
+/**
+ * Sortable field value type - covers all possible values that can be compared
+ */
+type SortableFieldValue = string | number | null;
+
+function getFieldValue(item: ProjectItem, fieldName: string): SortableFieldValue {
     const lower = fieldName.toLowerCase();
 
     // Built-in fields

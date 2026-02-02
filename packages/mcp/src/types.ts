@@ -11,6 +11,8 @@ export interface ToolMeta {
     name: string;
     /** Tool category for filtering */
     category: ToolCategory;
+    /** If true, tool is disabled unless explicitly enabled via enabledTools config */
+    disabledByDefault?: boolean;
 }
 
 /**
@@ -31,4 +33,6 @@ export interface McpConfig {
     tools?: McpToolsConfig;
     /** Array of specific tool names to disable */
     disabledTools?: string[];
+    /** Array of specific tool names to enable (for opt-in tools with disabledByDefault) */
+    enabledTools?: string[];
 }

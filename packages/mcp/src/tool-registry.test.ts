@@ -42,6 +42,12 @@ vi.mock('@bretwardjames/ghp-core', () => ({
     createWorktree: vi.fn(),
     removeWorktree: vi.fn(),
     listWorktrees: vi.fn(),
+    extractIssueNumberFromBranch: vi.fn(),
+    createPRWorkflow: vi.fn(),
+    removeWorktreeWorkflow: vi.fn(),
+    validateNumericInput: vi.fn((n) => n),
+    validateSafeString: vi.fn((s) => s),
+    BranchLinker: vi.fn(),
 }));
 
 // Import after mocks
@@ -228,6 +234,110 @@ describe('tool-registry', () => {
             expect(registeredNames).not.toContain('create_issue');
             // Other action tools should still be registered
             expect(registeredNames).toContain('move_issue');
+        });
+
+        it('should skip tools with disabledByDefault when not explicitly enabled', () => {
+            const mockServer = {
+                registerTool: vi.fn(),
+            };
+            const mockContext = {
+                ensureAuthenticated: vi.fn(),
+                getRepo: vi.fn(),
+                api: {},
+            };
+
+            // Default config - no enabledTools
+            registerEnabledTools(mockServer as any, mockContext as any, {
+                tools: { read: true, action: true },
+                disabledTools: [],
+            });
+
+            const registeredNames = mockServer.registerTool.mock.calls.map(
+                (call) => call[0]
+            );
+
+            // New tools with disabledByDefault should NOT be registered
+            expect(registeredNames).not.toContain('create_pr');
+            expect(registeredNames).not.toContain('merge_pr');
+            expect(registeredNames).not.toContain('list_worktrees');
+            expect(registeredNames).not.toContain('get_issue');
+
+            // Original tools should still be registered
+            expect(registeredNames).toContain('move_issue');
+            expect(registeredNames).toContain('create_issue');
+        });
+
+        it('should enable tools with disabledByDefault when in enabledTools', () => {
+            const mockServer = {
+                registerTool: vi.fn(),
+            };
+            const mockContext = {
+                ensureAuthenticated: vi.fn(),
+                getRepo: vi.fn(),
+                api: {},
+            };
+
+            // Explicitly enable some opt-in tools
+            registerEnabledTools(mockServer as any, mockContext as any, {
+                tools: { read: true, action: true },
+                disabledTools: [],
+                enabledTools: ['create_pr', 'list_worktrees'],
+            });
+
+            const registeredNames = mockServer.registerTool.mock.calls.map(
+                (call) => call[0]
+            );
+
+            // These should now be registered
+            expect(registeredNames).toContain('create_pr');
+            expect(registeredNames).toContain('list_worktrees');
+
+            // These are still disabled by default and not in enabledTools
+            expect(registeredNames).not.toContain('merge_pr');
+            expect(registeredNames).not.toContain('get_issue');
+        });
+    });
+
+    describe('loadMcpConfig with enabledTools', () => {
+        it('should load enabledTools from user config', () => {
+            vi.mocked(existsSync).mockImplementation((path) => {
+                return String(path).includes('.config/ghp-cli');
+            });
+            vi.mocked(readFileSync).mockReturnValue(JSON.stringify({
+                mcp: {
+                    enabledTools: ['create_pr', 'merge_pr'],
+                },
+            }));
+
+            const config = loadMcpConfig();
+
+            expect(config.enabledTools).toEqual(['create_pr', 'merge_pr']);
+        });
+
+        it('should merge enabledTools from user and workspace config', () => {
+            // Reset to ensure clean state
+            vi.mocked(execSync).mockReturnValue('/test/repo');
+            vi.mocked(existsSync).mockReturnValue(true);
+            vi.mocked(readFileSync).mockImplementation((path) => {
+                const pathStr = String(path);
+                if (pathStr.includes('.config/ghp-cli')) {
+                    // User config: /home/testuser/.config/ghp-cli/config.json
+                    return JSON.stringify({
+                        mcp: { enabledTools: ['create_pr'] },
+                    });
+                }
+                // Workspace config: /test/repo/.ghp/config.json
+                return JSON.stringify({
+                    mcp: { enabledTools: ['list_worktrees'] },
+                });
+            });
+
+            const config = loadMcpConfig();
+
+            // Should have both user and workspace enabledTools
+            expect(config.enabledTools).toContain('create_pr');
+            expect(config.enabledTools).toContain('list_worktrees');
+            expect(config.enabledTools).toHaveLength(2);
         });
     });
 });

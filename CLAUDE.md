@@ -114,7 +114,6 @@ gh ssh-key ...    # SSH key management
 - `packages/core/` - Shared library (@bretwardjames/ghp-core)
 - `packages/cli/` - CLI tool (@bretwardjames/ghp-cli)
 - `packages/mcp/` - MCP server (@bretwardjames/ghp-mcp)
-- `packages/memory/` - Memory abstraction (@bretwardjames/ghp-memory)
 - `apps/vscode/` - VS Code extension (gh-projects)
 
 ## Publishing

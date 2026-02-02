@@ -66,15 +66,21 @@ export interface EventHook {
      * - ${issue.number} - Issue number
      * - ${issue.json} - Full issue JSON (escaped for shell)
      * - ${branch} - Branch name
+     * - ${base} - Target base branch (pre-pr, pr-creating, pr-merged)
      * - ${pr.number} - PR number
      * - ${pr.title} - PR title
      * - ${pr.url} - PR URL
      * - ${pr.merged_at} - ISO timestamp when PR was merged (pr-merged only)
      * - ${pr.json} - Full PR JSON (escaped for shell)
-     * - ${base} - Base branch PR was merged into (pr-merged only)
      * - ${repo} - Repository in owner/name format
      * - ${worktree.path} - Absolute path to worktree
      * - ${worktree.name} - Directory name of worktree
+     * - ${changed_files} - JSON array of changed file paths (pre-pr only)
+     * - ${diff_stat.additions} - Number of lines added (pre-pr only)
+     * - ${diff_stat.deletions} - Number of lines deleted (pre-pr only)
+     * - ${diff_stat.files_changed} - Number of files changed (pre-pr only)
+     * - ${title} - Proposed PR title (pr-creating only)
+     * - ${body} - Proposed PR body (pr-creating only)
      */
     command: string;
     /** Whether the hook is enabled (default: true) */

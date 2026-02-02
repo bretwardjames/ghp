@@ -26,6 +26,7 @@ import {
 } from '@bretwardjames/ghp-core';
 import { getConfig } from '../config.js';
 import { exit } from '../exit.js';
+import { validatePositiveNumber } from '../validation.js';
 
 export interface DashboardOptions {
     diff?: boolean;
@@ -230,6 +231,9 @@ function renderHookResults(results: HookExecutionResult[]): void {
  * Main dashboard command
  */
 export async function dashboardCommand(options: DashboardOptions = {}): Promise<void> {
+    // Validate numeric options
+    validatePositiveNumber(options.maxDiffLines, '--max-diff-lines', 1, 100000);
+
     const branch = await getCurrentBranch();
     if (!branch) {
         console.error(chalk.red('Error:'), 'Not in a git repository');

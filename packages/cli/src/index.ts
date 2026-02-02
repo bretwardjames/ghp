@@ -73,7 +73,7 @@ program
     .description('View or set configuration (supports dotted paths like mcp.tools.workflows)')
     .argument('[key]', 'Config key or dotted path to get/set (e.g., mcp.tools.workflows)')
     .argument('[value]', 'Value to set')
-    .option('-s, --show', 'Show config (use with -w/-u to filter by scope, add key for section)')
+    .option('--show', 'Show config (use with -w/-u to filter by scope, add key for section)')
     .option('-e, --edit', 'Open config file in editor (explicit)')
     .option('-w, --workspace', 'Target workspace config (.ghp/config.json)')
     .option('-u, --user', 'Target user config (~/.config/ghp-cli/config.json)')
@@ -104,7 +104,7 @@ program
     .option('-s, --status <status>', 'Filter by status')
     .option('--hide-done', 'Hide completed items')
     .option('-l, --list', 'Output as simple list (one item per line, for pickers)')
-    .option('-f, --flat', 'Output as flat table instead of grouped by status')
+    .option('--flat', 'Output as flat table instead of grouped by status')
     .option('-g, --group <field>', 'Group items by field (status, type, assignee, priority, size, labels)')
     .option('--sort <fields>', 'Sort by fields (comma-separated, prefix with - for ascending)')
     .option('--slice <field=value>', 'Filter by field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
@@ -119,7 +119,7 @@ program
     .option('-p, --project <project>', 'Filter by project name')
     .option('-s, --status <status>', 'Show only items in this status (list view)')
     .option('-a, --all', 'Show all items in table view (overrides board view)')
-    .option('-m, --mine', 'Show only items assigned to me')
+    .option('--mine', 'Show only items assigned to me')
     .option('-u, --unassigned', 'Show only unassigned items')
     .option('-l, --list', 'Output as table view')
     .option('-g, --group <field>', 'Group items by field (status, type, assignee, priority, size, labels)')
@@ -135,7 +135,7 @@ program
     .alias('pg')
     .description('Show feature progress grouped by epic (parent issues with sub-issues)')
     .option('-p, --project <project>', 'Filter by project name')
-    .option('-t, --type <type>', 'Filter parent issues by type (e.g., Epic)')
+    .option('--type <type>', 'Filter parent issues by type (e.g., Epic)')
     .option('-a, --all', 'Show all sub-issues (default: collapse if >10)')
     .action(progressCommand);
 
@@ -316,7 +316,7 @@ program
 program
     .command('pr [issue]')
     .description('Create or view PR for an issue')
-    .option('-c, --create', 'Create a new PR')
+    .option('--create', 'Create a new PR')
     .option('-o, --open', 'Open PR in browser')
     .option('--ai-description', 'Generate PR description using AI (follows CLAUDE.md conventions)')
     .option('-f, --force', 'Force PR creation even if blocking hooks fail')
@@ -364,8 +364,8 @@ addCmd
     .option('--list-templates', 'List available issue templates')
     .option('--ai', 'Expand brief title into full issue using AI')
     .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
-    .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
-    .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
+    .option('-L, --labels <labels>', 'Labels to apply (comma-separated)')
+    .option('--assign [users]', 'Assign users (comma-separated, empty for self)')
     .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
@@ -386,8 +386,8 @@ addCmd
     .option('-c, --context <context>', 'Additional context for AI planning')
     .option('--dry-run', 'Show what would be created without creating')
     .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
-    .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
-    .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
+    .option('-L, --labels <labels>', 'Labels to apply (comma-separated)')
+    .option('--assign [users]', 'Assign users (comma-separated, empty for self)')
     .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
@@ -404,8 +404,8 @@ addCmd
     .option('--list-templates', 'List available issue templates')
     .option('--ai', 'Expand brief title into full issue using AI')
     .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
-    .option('-l, --labels <labels>', 'Labels to apply (comma-separated)')
-    .option('-a, --assign [users]', 'Assign users (comma-separated, empty for self)')
+    .option('-L, --labels <labels>', 'Labels to apply (comma-separated)')
+    .option('--assign [users]', 'Assign users (comma-separated, empty for self)')
     .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
@@ -428,7 +428,7 @@ addCmd
 program
     .command('set-parent <issue>')
     .description('Set or remove parent issue (sub-issue relationship)')
-    .option('-p, --parent <issue>', 'Parent issue number')
+    .option('--parent <issue>', 'Parent issue number')
     .option('--remove', 'Remove current parent')
     .action(setParentCommand);
 
@@ -453,7 +453,7 @@ program
     .command('open <issue>')
     .alias('o')
     .description('View issue details')
-    .option('-b, --browser', 'Open in browser instead of terminal')
+    .option('--browser', 'Open in browser instead of terminal')
     .action(openCommand);
 
 program

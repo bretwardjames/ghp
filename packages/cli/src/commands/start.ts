@@ -35,14 +35,19 @@ import {
     type WorktreeCreatedPayload,
 } from '@bretwardjames/ghp-core';
 import { exit } from '../exit.js';
+import {
+    validateEnum,
+    validateMutualExclusion,
+    ASSIGN_ACTIONS,
+    BRANCH_ACTIONS,
+    type AssignAction,
+    type BranchAction,
+} from '../validation.js';
 
 const execAsync = promisify(exec);
 
-/** Assignment action for non-interactive mode */
-export type AssignAction = 'reassign' | 'add' | 'skip';
-
-/** Branch action for non-interactive mode */
-export type BranchAction = 'create' | 'link' | 'skip';
+// Re-export types for backwards compatibility
+export type { AssignAction, BranchAction };
 
 /** Work mode for the start command */
 export type WorkMode = 'switch' | 'parallel';
@@ -189,6 +194,14 @@ async function createAndLinkBranch(
  * 3. Issue NOT linked + NOT on main → Offer: Switch to main & create, Create from current, Link existing
  */
 export async function startCommand(issue: string, options: StartOptions): Promise<void> {
+    // Validate flag values
+    validateEnum(options.assign, ASSIGN_ACTIONS, '--assign');
+    validateEnum(options.branchAction, BRANCH_ACTIONS, '--branch-action');
+    validateMutualExclusion(
+        ['--nvim', '--claude', '--terminal-only'],
+        [options.nvim, options.claude, options.terminalOnly]
+    );
+
     let inputNumber = parseInt(issue, 10);
     if (isNaN(inputNumber)) {
         console.error(chalk.red('Error:'), 'Input must be a number');

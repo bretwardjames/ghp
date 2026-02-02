@@ -6,6 +6,7 @@ import { displayTable, parseColumns, DEFAULT_COLUMNS, calculateColumnWidths, dis
 import { getBranchForIssue } from '../branch-linker.js';
 import type { ProjectItem, RepoInfo } from '../types.js';
 import { exit } from '../exit.js';
+import { validateEnum, GROUP_FIELDS } from '../validation.js';
 
 interface WorkOptions {
     all?: boolean;
@@ -24,6 +25,9 @@ interface WorkOptions {
 }
 
 export async function workCommand(cliOptions: WorkOptions): Promise<void> {
+    // Validate flag values
+    validateEnum(cliOptions.group, GROUP_FIELDS, '--group');
+
     // Load defaults and merge with CLI options
     // Filter out undefined CLI options so they don't override defaults
     const definedCliOptions = Object.fromEntries(

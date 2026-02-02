@@ -1,5 +1,151 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- 3e202c9: Fix CLI flag collisions and add validation
+
+  ## Breaking Changes: Short Flag Removals
+
+  The following short flags have been removed to fix semantic collisions where the same letter had completely different meanings across commands:
+
+  ### Critical Collisions Fixed
+
+  | Removed | Long Form  | Command          | Reason                                               |
+  | ------- | ---------- | ---------------- | ---------------------------------------------------- |
+  | `-f`    | `--flat`   | `work`           | Conflicted with `--force` in 4 other commands        |
+  | `-a`    | `--assign` | `add issue/epic` | Conflicted with `--all` in 4 other commands          |
+  | `-c`    | `--create` | `pr`             | Conflicted with `--config`, `--context`, `--command` |
+  | `-m`    | `--mine`   | `plan`           | Conflicted with `--message`, `--mode`                |
+
+  ### High Severity Collisions Fixed
+
+  | Removed | Long Form   | Command      | Reason                                    |
+  | ------- | ----------- | ------------ | ----------------------------------------- |
+  | `-t`    | `--type`    | `progress`   | Conflicted with `--template`, `--timeout` |
+  | `-s`    | `--show`    | `config`     | Conflicted with `--status` in 3 commands  |
+  | `-p`    | `--parent`  | `set-parent` | Conflicted with `--project` everywhere    |
+  | `-b`    | `--browser` | `open`       | Conflicted with `--body`                  |
+
+  ### Changed Short Flags
+
+  | Old  | New  | Long Form  | Command          |
+  | ---- | ---- | ---------- | ---------------- |
+  | `-l` | `-L` | `--labels` | `add issue/epic` |
+
+  ## Migration Guide
+
+  Update any scripts or muscle memory:
+
+  ```bash
+  # Before → After
+  ghp work -f          →  ghp work --flat
+  ghp add -a user      →  ghp add --assign user
+  ghp pr -c            →  ghp pr --create
+  ghp plan -m          →  ghp plan --mine
+  ghp progress -t Epic →  ghp progress --type Epic
+  ghp config -s        →  ghp config --show
+  ghp set-parent -p 1  →  ghp set-parent --parent 1
+  ghp open 123 -b      →  ghp open 123 --browser
+  ghp add -l bug       →  ghp add -L bug
+  ```
+
+  ## New Features: Flag Validation
+
+  Commands now validate flag values and provide clear error messages:
+
+  ### Enum Validation
+
+  - `--branch-action` validates: `create`, `link`, `skip`
+  - `--assign` (action mode) validates: `reassign`, `add`, `skip`
+  - `--group` validates: `status`, `type`, `assignee`, `priority`, `size`, `labels`
+  - `--mode` (event hooks) validates: `fire-and-forget`, `blocking`, `interactive`
+
+  ### Mutual Exclusivity
+
+  - `--squash` and `--rebase` cannot be used together (merge)
+  - `--nvim`, `--claude`, `--terminal-only` are mutually exclusive (start/switch)
+
+  ### Numeric Bounds
+
+  - `--max-diff-lines` validates range 1-100000
+
+  Example error messages:
+
+  ```
+  Error: Invalid value for --group: "invalid"
+  Valid values: status, type, assignee, priority, size, labels
+
+  Error: Flags --squash and --rebase cannot be used together
+  These flags are mutually exclusive. Use only one.
+  ```
+
+### Patch Changes
+
+- QA Checkpoint 2026-02-02
+
+  ## @bretwardjames/ghp-core
+
+  ### Security
+
+  - Fix command injection vulnerabilities by using `spawn()` with array arguments instead of `exec()` with string interpolation
+  - Add `shell-utils` module with `shellEscape()`, `validateNumericInput()`, `validateSafeString()`, `validateUrl()`
+
+  ### Error Handling
+
+  - Add `GitError` class that captures command, stderr, exitCode, and cwd for debugging
+  - Remove silent catch blocks from git-utils functions - errors now propagate properly
+
+  ### New Features
+
+  - Add retry logic for transient GitHub API failures (`withRetry`, `isTransientError`, `calculateBackoffDelay`)
+  - Add configurable hook failure behavior (`OnFailureBehavior`: 'fail-fast' | 'continue')
+  - Support per-event hook settings via `eventDefaults` in event-hooks.json
+
+  ### Bug Fixes
+
+  - Fix repository field in GraphQL queries to return full `owner/repo` format
+
+  ## @bretwardjames/ghp-cli
+
+  ### New Features
+
+  - Add centralized exit utility with cleanup handler support (`registerCleanupHandler`, `exit`)
+  - Add validation module for enum flags, mutual exclusion, and numeric bounds
+
+  ### Bug Fixes
+
+  - Fix `deepMergeObjects` to recursively merge nested config at all depths
+  - Fix type safety issues - replace `any` types with `SortableFieldValue` in sorting logic
+  - Fix `planCommand` parameter type from `any` to `Command | PlanOptions`
+
+  ### Documentation
+
+  - Document all hook events (pre-pr, pr-creating) and template variables
+  - Update create-pr command to mention committing ragtime branch context
+
+  ### Test Coverage
+
+  - Add 25 tests for CLI commands (start, add-issue)
+  - Add 21 tests for exit utility
+  - Add 34 tests for config operations
+  - Add 33 tests for validation module
+
+  ## @bretwardjames/ghp-mcp
+
+  ### Security
+
+  - Fix command injection in worktree operations
+
+  ### Test Coverage
+
+  - Add 9 tests for tool registry
+
+- Updated dependencies
+- Updated dependencies [fbe1b3c]
+  - @bretwardjames/ghp-core@0.6.0
+
 ## 0.6.0
 
 ### Minor Changes

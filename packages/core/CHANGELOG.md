@@ -1,5 +1,72 @@
 # @bretwardjames/ghp-core
 
+## 0.6.0
+
+### Minor Changes
+
+- QA Checkpoint 2026-02-02
+
+  ## @bretwardjames/ghp-core
+
+  ### Security
+
+  - Fix command injection vulnerabilities by using `spawn()` with array arguments instead of `exec()` with string interpolation
+  - Add `shell-utils` module with `shellEscape()`, `validateNumericInput()`, `validateSafeString()`, `validateUrl()`
+
+  ### Error Handling
+
+  - Add `GitError` class that captures command, stderr, exitCode, and cwd for debugging
+  - Remove silent catch blocks from git-utils functions - errors now propagate properly
+
+  ### New Features
+
+  - Add retry logic for transient GitHub API failures (`withRetry`, `isTransientError`, `calculateBackoffDelay`)
+  - Add configurable hook failure behavior (`OnFailureBehavior`: 'fail-fast' | 'continue')
+  - Support per-event hook settings via `eventDefaults` in event-hooks.json
+
+  ### Bug Fixes
+
+  - Fix repository field in GraphQL queries to return full `owner/repo` format
+
+  ## @bretwardjames/ghp-cli
+
+  ### New Features
+
+  - Add centralized exit utility with cleanup handler support (`registerCleanupHandler`, `exit`)
+  - Add validation module for enum flags, mutual exclusion, and numeric bounds
+
+  ### Bug Fixes
+
+  - Fix `deepMergeObjects` to recursively merge nested config at all depths
+  - Fix type safety issues - replace `any` types with `SortableFieldValue` in sorting logic
+  - Fix `planCommand` parameter type from `any` to `Command | PlanOptions`
+
+  ### Documentation
+
+  - Document all hook events (pre-pr, pr-creating) and template variables
+  - Update create-pr command to mention committing ragtime branch context
+
+  ### Test Coverage
+
+  - Add 25 tests for CLI commands (start, add-issue)
+  - Add 21 tests for exit utility
+  - Add 34 tests for config operations
+  - Add 33 tests for validation module
+
+  ## @bretwardjames/ghp-mcp
+
+  ### Security
+
+  - Fix command injection in worktree operations
+
+  ### Test Coverage
+
+  - Add 9 tests for tool registry
+
+### Patch Changes
+
+- fbe1b3c: Remove duplicate "Types" section header in core/index.ts
+
 ## 0.5.0
 
 ### Minor Changes

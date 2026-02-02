@@ -1,5 +1,55 @@
 # @bretwardjames/ghp-mcp
 
+## 0.2.0
+
+### Minor Changes
+
+- ## MCP Feature Parity Release
+
+  ### @bretwardjames/ghp-mcp (minor)
+
+  Added 12 new MCP tools for feature parity with CLI:
+
+  **Opt-in tools (disabled by default):**
+
+  - `create_pr` - Create pull requests
+  - `merge_pr` - Merge pull requests (squash/merge/rebase)
+  - `list_worktrees` - List active git worktrees
+  - `remove_worktree` - Remove git worktrees
+  - `stop_work` - Stop working on an issue
+  - `set_parent` - Set/remove parent issue relationships
+  - `add_label` - Add labels to issues
+  - `remove_label` - Remove labels from issues
+  - `get_progress` - Get epic/parent issue progress
+  - `link_branch` - Link git branches to issues
+  - `unlink_branch` - Remove branch links
+  - `get_issue` - Get full issue details with relationships
+
+  New tools use `disabledByDefault: true` to keep the default toolset lean. Enable via config:
+
+  ```json
+  {
+    "mcp": {
+      "enabledTools": ["create_pr", "merge_pr", "list_worktrees"]
+    }
+  }
+  ```
+
+  ### @bretwardjames/ghp-cli (patch)
+
+  - Fixed `--no-template` flag not working in `ghp add` command
+  - Fixed `--no-hooks` flag not working in `ghp pr --create` command
+
+  ### @bretwardjames/ghp-core (patch)
+
+  - Added `extractIssueNumberFromBranch` utility export
+  - Added `OnFailureBehavior` type export
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.6.1
+
 ## 0.1.5
 
 ### Patch Changes

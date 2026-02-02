@@ -15,6 +15,8 @@
 export type EventType =
     | 'issue-created'     // After ghp add creates an issue
     | 'issue-started'     // After ghp start creates/switches to branch
+    | 'pre-pr'            // Before PR creation begins (validation/linting)
+    | 'pr-creating'       // Just before GitHub API call (suggest title/body)
     | 'pr-created'        // After ghp pr --create
     | 'pr-merged'         // After ghp merge completes
     | 'worktree-created'  // After ghp start --parallel creates a worktree
@@ -64,15 +66,21 @@ export interface EventHook {
      * - ${issue.number} - Issue number
      * - ${issue.json} - Full issue JSON (escaped for shell)
      * - ${branch} - Branch name
+     * - ${base} - Target base branch (pre-pr, pr-creating, pr-merged)
      * - ${pr.number} - PR number
      * - ${pr.title} - PR title
      * - ${pr.url} - PR URL
      * - ${pr.merged_at} - ISO timestamp when PR was merged (pr-merged only)
      * - ${pr.json} - Full PR JSON (escaped for shell)
-     * - ${base} - Base branch PR was merged into (pr-merged only)
      * - ${repo} - Repository in owner/name format
      * - ${worktree.path} - Absolute path to worktree
      * - ${worktree.name} - Directory name of worktree
+     * - ${changed_files} - JSON array of changed file paths (pre-pr only)
+     * - ${diff_stat.additions} - Number of lines added (pre-pr only)
+     * - ${diff_stat.deletions} - Number of lines deleted (pre-pr only)
+     * - ${diff_stat.files_changed} - Number of files changed (pre-pr only)
+     * - ${title} - Proposed PR title (pr-creating only)
+     * - ${body} - Proposed PR body (pr-creating only)
      */
     command: string;
     /** Whether the hook is enabled (default: true) */
@@ -215,11 +223,47 @@ export interface WorktreeRemovedPayload extends BaseEventPayload {
 }
 
 /**
+ * Payload for pre-pr event
+ * Fired before PR creation begins, for validation/linting
+ */
+export interface PrePrPayload extends BaseEventPayload {
+    /** Source branch for the PR */
+    branch: string;
+    /** Target base branch */
+    base: string;
+    /** List of changed file paths */
+    changed_files: string[];
+    /** Diff statistics */
+    diff_stat: {
+        additions: number;
+        deletions: number;
+        files_changed: number;
+    };
+}
+
+/**
+ * Payload for pr-creating event
+ * Fired just before GitHub API call, allows suggesting title/body
+ */
+export interface PrCreatingPayload extends BaseEventPayload {
+    /** Source branch for the PR */
+    branch: string;
+    /** Target base branch */
+    base: string;
+    /** Proposed PR title */
+    title: string;
+    /** Proposed PR body/description */
+    body: string;
+}
+
+/**
  * Union of all event payloads
  */
 export type EventPayload =
     | IssueCreatedPayload
     | IssueStartedPayload
+    | PrePrPayload
+    | PrCreatingPayload
     | PrCreatedPayload
     | PrMergedPayload
     | WorktreeCreatedPayload

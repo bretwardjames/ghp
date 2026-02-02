@@ -413,6 +413,8 @@ export type {
     BaseEventPayload,
     IssueCreatedPayload,
     IssueStartedPayload,
+    PrePrPayload,
+    PrCreatingPayload,
     PrCreatedPayload,
     PrMergedPayload,
     WorktreeCreatedPayload,

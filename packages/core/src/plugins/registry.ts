@@ -42,6 +42,8 @@ function ensureConfigDir(): void {
 const VALID_EVENTS: EventType[] = [
     'issue-created',
     'issue-started',
+    'pre-pr',
+    'pr-creating',
     'pr-created',
     'pr-merged',
     'worktree-created',

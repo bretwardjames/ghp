@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 
 export interface UpdateOptions {
@@ -28,10 +28,13 @@ const PACKAGES = [
 
 function getInstalledVersion(packageName: string): string | null {
     try {
-        const result = execSync(`npm list -g ${packageName} --json 2>/dev/null`, {
+        // Use spawnSync with array args to prevent command injection
+        const result = spawnSync('npm', ['list', '-g', packageName, '--json'], {
             encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
         });
-        const data = JSON.parse(result);
+        if (result.status !== 0) return null;
+        const data = JSON.parse(result.stdout);
         return data.dependencies?.[packageName]?.version || null;
     } catch {
         return null;
@@ -40,10 +43,13 @@ function getInstalledVersion(packageName: string): string | null {
 
 function getLatestVersion(packageName: string, tag: 'latest' | 'beta'): string | null {
     try {
-        const result = execSync(`npm view ${packageName}@${tag} version 2>/dev/null`, {
+        // Use spawnSync with array args to prevent command injection
+        const result = spawnSync('npm', ['view', `${packageName}@${tag}`, 'version'], {
             encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
         });
-        return result.trim() || null;
+        if (result.status !== 0) return null;
+        return result.stdout.trim() || null;
     } catch {
         return null;
     }
@@ -72,10 +78,17 @@ function getPackageInfo(): PackageInfo[] {
 function installPackage(packageName: string, version: string): boolean {
     try {
         console.log(chalk.dim(`  Installing ${packageName}@${version}...`));
-        execSync(`npm install -g ${packageName}@${version}`, {
+        // Use spawnSync with array args to prevent command injection
+        const result = spawnSync('npm', ['install', '-g', `${packageName}@${version}`], {
             encoding: 'utf-8',
             stdio: 'pipe',
         });
+        if (result.status !== 0) {
+            const errorMsg = result.stderr?.trim() || 'Unknown error';
+            console.error(chalk.red(`  Failed to install ${packageName}@${version}`));
+            console.error(chalk.dim(`  ${errorMsg}`));
+            return false;
+        }
         return true;
     } catch (error) {
         console.error(chalk.red(`  Failed to install ${packageName}@${version}`));

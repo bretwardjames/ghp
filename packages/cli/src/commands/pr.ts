@@ -23,7 +23,7 @@ interface PrOptions {
     open?: boolean;
     aiDescription?: boolean;
     force?: boolean;
-    noHooks?: boolean;
+    hooks?: boolean;  // --no-hooks sets this to false
 }
 
 export async function prCommand(issue: string | undefined, options: PrOptions): Promise<void> {
@@ -79,7 +79,7 @@ async function createPr(
     issueTitle: string | undefined,
     options: PrOptions
 ): Promise<void> {
-    const { aiDescription: useAiDescription, force, noHooks } = options;
+    const { aiDescription: useAiDescription, force, hooks = true } = options;
 
     try {
         // Build title from issue if available
@@ -114,7 +114,7 @@ async function createPr(
             issueNumber: issueNumber ?? undefined,
             issueTitle,
             openInBrowser: false, // We'll handle browser opening ourselves
-            skipHooks: noHooks,
+            skipHooks: !hooks,
             force,
             onFailure: hooksConfig.onFailure,
         });

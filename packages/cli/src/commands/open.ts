@@ -3,6 +3,7 @@ import { api, type IssueDetails } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import { parseBranchLink } from '@bretwardjames/ghp-core';
 import type { ProjectItem } from '../types.js';
+import { exit } from '../exit.js';
 
 interface OpenOptions {
     browser?: boolean;
@@ -12,19 +13,19 @@ export async function openCommand(issue: string, options: OpenOptions): Promise<
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const issueNumber = parseInt(issue.replace(/^#/, ''), 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Invalid issue number:'), issue);
-        process.exit(1);
+        exit(1);
     }
 
     // Fetch both project item data and full issue details in parallel
@@ -35,7 +36,7 @@ export async function openCommand(issue: string, options: OpenOptions): Promise<
 
     if (!details) {
         console.error(chalk.red('Issue not found:'), `#${issueNumber}`);
-        process.exit(1);
+        exit(1);
     }
 
     // Open in browser if --browser flag

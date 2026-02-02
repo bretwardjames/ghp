@@ -4,6 +4,7 @@ import { homedir, platform } from 'os';
 import { join, dirname } from 'path';
 import { installClaudeCommandsQuiet } from './install-commands.js';
 import { getMcpConfig } from '../config.js';
+import { exit } from '../exit.js';
 
 interface McpOptions {
     config?: boolean;
@@ -115,7 +116,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
         if (!configPath) {
             console.error(chalk.red('Error:'), 'Unsupported operating system');
             console.log('Please manually add the config shown by', chalk.cyan('ghp mcp --config'));
-            process.exit(1);
+            exit(1);
         }
 
         console.log(chalk.dim(`Config path: ${configPath}`));
@@ -131,7 +132,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             } catch (err) {
                 console.error(chalk.red('Error:'), 'Failed to parse existing config file');
                 console.log('Please manually add the config shown by', chalk.cyan('ghp mcp --config'));
-                process.exit(1);
+                exit(1);
             }
         } else {
             console.log(chalk.dim('Creating new config file'));
@@ -212,7 +213,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             console.error(err instanceof Error ? err.message : String(err));
             console.log();
             console.log('Please manually add the config shown by', chalk.cyan('ghp mcp --config'));
-            process.exit(1);
+            exit(1);
         }
     }
 }

@@ -5,6 +5,7 @@ import { getConfig, getWorkDefaults } from '../config.js';
 import { displayTable, parseColumns, DEFAULT_COLUMNS, calculateColumnWidths, displayTableWithWidths, type ColumnName } from '../table.js';
 import { getBranchForIssue } from '../branch-linker.js';
 import type { ProjectItem, RepoInfo } from '../types.js';
+import { exit } from '../exit.js';
 
 interface WorkOptions {
     all?: boolean;
@@ -45,14 +46,14 @@ export async function workCommand(cliOptions: WorkOptions): Promise<void> {
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     if (!options.json) {

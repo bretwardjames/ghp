@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import type { ProjectItem } from '../types.js';
+import { exit } from '../exit.js';
 
 interface SliceOptions {
     field?: string;
@@ -13,13 +14,13 @@ export async function sliceCommand(options: SliceOptions): Promise<void> {
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const projects = await api.getProjects(repo);

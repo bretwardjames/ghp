@@ -14,6 +14,7 @@ import {
     claudePrompts,
     createPRWorkflow,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 const execAsync = promisify(exec);
 
@@ -30,20 +31,20 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const currentBranch = await getCurrentBranch();
     if (!currentBranch) {
         console.error(chalk.red('Error:'), 'Could not determine current branch');
-        process.exit(1);
+        exit(1);
     }
 
     // If issue not specified, try to find linked issue for current branch
@@ -54,7 +55,7 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
         issueNumber = parseInt(issue, 10);
         if (isNaN(issueNumber)) {
             console.error(chalk.red('Error:'), 'Issue must be a number');
-            process.exit(1);
+            exit(1);
         }
     } else if (linkedIssue) {
         issueNumber = linkedIssue.issueNumber;
@@ -127,7 +128,7 @@ async function createPr(
             if (force) {
                 console.log(chalk.dim('Use --force to bypass blocking hooks.'));
             }
-            process.exit(1);
+            exit(1);
         }
 
         // Handle other errors
@@ -138,7 +139,7 @@ async function createPr(
                 return;
             }
             console.error(chalk.red('Error creating PR:'), result.error);
-            process.exit(1);
+            exit(1);
         }
 
         // Success!
@@ -178,7 +179,7 @@ async function createPr(
     } catch (error: unknown) {
         const err = error as { stderr?: string; message?: string };
         console.error(chalk.red('Error creating PR:'), err.stderr || err.message || error);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -322,7 +323,7 @@ async function openPr(): Promise<void> {
         await execAsync('gh pr view --web');
     } catch {
         console.error(chalk.red('Error:'), 'No PR found for current branch');
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -333,6 +334,6 @@ async function showPrStatus(issueNumber: number | null): Promise<void> {
     } catch (error: unknown) {
         const err = error as { stderr?: string };
         console.error(chalk.red('Error:'), err.stderr || 'Failed to get PR status');
-        process.exit(1);
+        exit(1);
     }
 }

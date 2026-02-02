@@ -15,6 +15,7 @@ import {
     type TokenProvider,
     type AuthError,
 } from '@bretwardjames/ghp-core';
+import { exit } from './exit.js';
 
 const execAsync = promisify(exec);
 
@@ -59,7 +60,7 @@ function handleAuthError(error: AuthError): void {
     } else {
         console.error(chalk.red('\nError:'), error.message);
     }
-    process.exit(1);
+    exit(1);
 }
 
 /**

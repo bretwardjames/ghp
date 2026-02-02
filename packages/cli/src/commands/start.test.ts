@@ -105,10 +105,9 @@ import { api } from '../github-api.js';
 // Import after mocks are set up
 import { startCommand } from './start.js';
 
-// Mock process.exit
-const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
-    throw new Error('process.exit called');
-});
+// Mock process.exit - use undefined as never to satisfy TypeScript's 'never' return type
+// without throwing an error that would cause unhandled rejections
+const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as () => never);
 
 // Mock console methods
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -129,7 +128,7 @@ describe('startCommand', () => {
 
     describe('input validation', () => {
         it('should reject non-numeric issue input', async () => {
-            await expect(startCommand('invalid', {})).rejects.toThrow('process.exit called');
+            await expect(startCommand('invalid', {})).rejects.toThrow('Process exit pending');
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
                 'Input must be a number'
@@ -139,7 +138,7 @@ describe('startCommand', () => {
         it('should require being in a git repository', async () => {
             vi.mocked(detectRepository).mockResolvedValue(null);
 
-            await expect(startCommand('123', {})).rejects.toThrow('process.exit called');
+            await expect(startCommand('123', {})).rejects.toThrow('Process exit pending');
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
                 'Not in a git repository with a GitHub remote'
@@ -149,7 +148,7 @@ describe('startCommand', () => {
         it('should require authentication', async () => {
             vi.mocked(api.authenticate).mockResolvedValue(false);
 
-            await expect(startCommand('123', {})).rejects.toThrow('process.exit called');
+            await expect(startCommand('123', {})).rejects.toThrow('Process exit pending');
             // Error is split across multiple arguments: "Error:", "Not authenticated. Run", "ghp auth"
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
@@ -164,7 +163,7 @@ describe('startCommand', () => {
             vi.mocked(api.findItemByNumber).mockResolvedValue(null);
             vi.mocked(api.getIssueDetails).mockResolvedValue(null);
 
-            await expect(startCommand('123', {})).rejects.toThrow('process.exit called');
+            await expect(startCommand('123', {})).rejects.toThrow('Process exit pending');
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
                 'Issue #123 does not exist'

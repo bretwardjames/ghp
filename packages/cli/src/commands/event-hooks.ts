@@ -19,6 +19,7 @@ import {
     type EventType,
     type HookMode,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 // =============================================================================
 // List Hooks
@@ -125,18 +126,18 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
     if (!options.event) {
         console.error(chalk.red('Error:'), 'Event is required. Use --event <event>');
         console.log('Valid events:', validEvents.join(', '));
-        process.exit(1);
+        exit(1);
     }
 
     if (!validEvents.includes(options.event as EventType)) {
         console.error(chalk.red('Error:'), `Invalid event: ${options.event}`);
         console.log('Valid events:', validEvents.join(', '));
-        process.exit(1);
+        exit(1);
     }
 
     if (!options.command) {
         console.error(chalk.red('Error:'), 'Command is required. Use --command "<cmd>"');
-        process.exit(1);
+        exit(1);
     }
 
     // Validate timeout if provided
@@ -145,7 +146,7 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
         timeout = parseInt(options.timeout, 10);
         if (isNaN(timeout) || timeout <= 0) {
             console.error(chalk.red('Error:'), 'Timeout must be a positive number');
-            process.exit(1);
+            exit(1);
         }
     }
 
@@ -154,7 +155,7 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
     if (!validModes.includes(mode)) {
         console.error(chalk.red('Error:'), `Invalid mode: ${options.mode}`);
         console.log('Valid modes:', validModes.join(', '));
-        process.exit(1);
+        exit(1);
     }
 
     // Security warning
@@ -182,7 +183,7 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
         console.log(chalk.dim('  ${branch}, ${repo}, ${pr.number}, ${pr.json}'));
     } catch (error) {
         console.error(chalk.red('Error:'), (error as Error).message);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -197,7 +198,7 @@ export function hooksRemoveCommand(name: string): void {
     const hook = getEventHook(name);
     if (!hook) {
         console.error(chalk.red('Error:'), `Hook "${name}" not found`);
-        process.exit(1);
+        exit(1);
     }
 
     const removed = removeEventHook(name);
@@ -205,7 +206,7 @@ export function hooksRemoveCommand(name: string): void {
         console.log(chalk.green('✓'), `Removed hook "${name}"`);
     } else {
         console.error(chalk.red('Error:'), `Failed to remove hook "${name}"`);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -222,7 +223,7 @@ export function hooksEnableCommand(name: string): void {
         console.log(chalk.green('✓'), `Enabled hook "${hook.name}"`);
     } catch (error) {
         console.error(chalk.red('Error:'), (error as Error).message);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -235,7 +236,7 @@ export function hooksDisableCommand(name: string): void {
         console.log(chalk.yellow('○'), `Disabled hook "${hook.name}"`);
     } catch (error) {
         console.error(chalk.red('Error:'), (error as Error).message);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -250,7 +251,7 @@ export function hooksShowCommand(name: string): void {
     const hook = getEventHook(name);
     if (!hook) {
         console.error(chalk.red('Error:'), `Hook "${name}" not found`);
-        process.exit(1);
+        exit(1);
     }
 
     printHookDetails(hook);

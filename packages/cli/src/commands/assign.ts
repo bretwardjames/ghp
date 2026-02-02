@@ -3,6 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
+import { exit } from '../exit.js';
 
 const execAsync = promisify(exec);
 
@@ -18,21 +19,21 @@ export async function assignCommand(
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Default to self if no users specified
@@ -50,6 +51,6 @@ export async function assignCommand(
     } catch (error: unknown) {
         const err = error as { stderr?: string };
         console.error(chalk.red('Error:'), err.stderr || 'Failed to update assignees');
-        process.exit(1);
+        exit(1);
     }
 }

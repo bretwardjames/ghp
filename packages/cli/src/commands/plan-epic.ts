@@ -14,6 +14,7 @@ import {
     type ToolHandlers,
     type StreamCallbacks,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 interface PlanEpicOptions {
     project?: string;
@@ -179,7 +180,7 @@ export async function planEpicCommand(title: string, options: PlanEpicOptions): 
     if (!title) {
         console.error(chalk.red('Error:'), 'Epic title is required');
         console.log(chalk.dim('Usage: ghp plan-epic "Epic title" [options]'));
-        process.exit(1);
+        exit(1);
     }
 
     // Check Claude configuration
@@ -190,26 +191,26 @@ export async function planEpicCommand(title: string, options: PlanEpicOptions): 
         console.log('Set your API key using one of these methods:');
         console.log(`  ${chalk.cyan('export ANTHROPIC_API_KEY=sk-ant-...')}`);
         console.log(`  ${chalk.cyan('ghp config claude.apiKey sk-ant-...')}`);
-        process.exit(1);
+        exit(1);
     }
 
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Get projects
     const projects = await api.getProjects(repo);
     if (projects.length === 0) {
         console.error(chalk.red('Error:'), 'No GitHub Projects found for this repository');
-        process.exit(1);
+        exit(1);
     }
 
     // Select project
@@ -222,7 +223,7 @@ export async function planEpicCommand(title: string, options: PlanEpicOptions): 
         if (!found) {
             console.error(chalk.red('Error:'), `Project "${projectName}" not found`);
             console.log('Available projects:', projects.map(p => p.title).join(', '));
-            process.exit(1);
+            exit(1);
         }
         project = found;
     }
@@ -305,7 +306,7 @@ export async function planEpicCommand(title: string, options: PlanEpicOptions): 
         } catch (error) {
             console.error();
             console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error');
-            process.exit(1);
+            exit(1);
         }
     } else {
         // Planning mode - output markdown plan
@@ -336,7 +337,7 @@ export async function planEpicCommand(title: string, options: PlanEpicOptions): 
         } catch (error) {
             console.error();
             console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error');
-            process.exit(1);
+            exit(1);
         }
     }
 }

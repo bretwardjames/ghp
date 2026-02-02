@@ -2,20 +2,21 @@ import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository, getCurrentBranch } from '../git-utils.js';
 import { getIssueForBranch } from '../branch-linker.js';
+import { exit } from '../exit.js';
 
 export async function syncCommand(): Promise<void> {
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const activeLabel = api.getActiveLabelName();

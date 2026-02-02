@@ -1,24 +1,25 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
+import { exit } from '../exit.js';
 
 export async function setFieldCommand(issue: string, field: string, value: string): Promise<void> {
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Handle issue type separately (it's an issue property, not a project field)
@@ -28,7 +29,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
 
         if (issueTypes.length === 0) {
             console.error(chalk.red('Error:'), 'Issue types are not enabled for this repository');
-            process.exit(1);
+            exit(1);
         }
 
         const targetType = issueTypes.find(t =>
@@ -38,7 +39,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
         if (!targetType) {
             console.error(chalk.red('Error:'), `Invalid issue type "${value}"`);
             console.log('Available types:', issueTypes.map(t => t.name).join(', '));
-            process.exit(1);
+            exit(1);
         }
 
         const success = await api.setIssueType(repo, issueNumber, targetType.id);
@@ -46,7 +47,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
             console.log(chalk.green('Updated:'), `#${issueNumber} Type = ${targetType.name}`);
         } else {
             console.error(chalk.red('Error:'), 'Failed to update issue type');
-            process.exit(1);
+            exit(1);
         }
         return;
     }
@@ -55,7 +56,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
     const item = await api.findItemByNumber(repo, issueNumber);
     if (!item) {
         console.error(chalk.red('Error:'), `Issue #${issueNumber} not found in any project`);
-        process.exit(1);
+        exit(1);
     }
 
     // Get project fields
@@ -67,7 +68,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
     if (!targetField) {
         console.error(chalk.red('Error:'), `Field "${field}" not found`);
         console.log('Available fields:', fields.map(f => f.name).join(', '));
-        process.exit(1);
+        exit(1);
     }
 
     // Build the value object based on field type
@@ -80,7 +81,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
         if (!option) {
             console.error(chalk.red('Error:'), `Invalid value "${value}" for field "${field}"`);
             console.log('Available options:', targetField.options.map(o => o.name).join(', '));
-            process.exit(1);
+            exit(1);
         }
         fieldValue = { singleSelectOptionId: option.id };
     } else if (targetField.type === '' || targetField.type === 'Text') {
@@ -89,12 +90,12 @@ export async function setFieldCommand(issue: string, field: string, value: strin
         const num = parseFloat(value);
         if (isNaN(num)) {
             console.error(chalk.red('Error:'), 'Value must be a number for this field');
-            process.exit(1);
+            exit(1);
         }
         fieldValue = { number: num };
     } else {
         console.error(chalk.red('Error:'), `Unsupported field type: ${targetField.type}`);
-        process.exit(1);
+        exit(1);
     }
 
     const success = await api.setFieldValue(item.projectId, item.id, targetField.id, fieldValue);
@@ -103,6 +104,6 @@ export async function setFieldCommand(issue: string, field: string, value: strin
         console.log(chalk.green('Updated:'), `#${issueNumber} ${targetField.name} = ${value}`);
     } else {
         console.error(chalk.red('Error:'), 'Failed to update field');
-        process.exit(1);
+        exit(1);
     }
 }

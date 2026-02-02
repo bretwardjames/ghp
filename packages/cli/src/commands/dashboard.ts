@@ -25,6 +25,7 @@ import {
     type HookItem,
 } from '@bretwardjames/ghp-core';
 import { getConfig } from '../config.js';
+import { exit } from '../exit.js';
 
 export interface DashboardOptions {
     diff?: boolean;
@@ -232,7 +233,7 @@ export async function dashboardCommand(options: DashboardOptions = {}): Promise<
     const branch = await getCurrentBranch();
     if (!branch) {
         console.error(chalk.red('Error:'), 'Not in a git repository');
-        process.exit(1);
+        exit(1);
     }
 
     // Get base branch from options, config, or detect
@@ -258,7 +259,7 @@ export async function dashboardCommand(options: DashboardOptions = {}): Promise<
 
     if (!data) {
         console.error(chalk.red('Error:'), 'Failed to gather dashboard data');
-        process.exit(1);
+        exit(1);
     }
 
     // Clear the "Gathering..." line (only in TTY)

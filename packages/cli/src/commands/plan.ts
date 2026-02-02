@@ -4,6 +4,7 @@ import { detectRepository } from '../git-utils.js';
 import { getShortcut, getPlanDefaults, listShortcuts, getConfig } from '../config.js';
 import { displayTable, parseColumns, DEFAULT_COLUMNS, calculateColumnWidths, displayTableWithWidths, type ColumnName } from '../table.js';
 import type { ProjectItem } from '../types.js';
+import { exit } from '../exit.js';
 
 interface PlanOptions {
     project?: string;
@@ -138,7 +139,7 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
             } else {
                 console.log(chalk.dim('No shortcuts configured. Add them to ~/.config/ghp-cli/config.json'));
             }
-            process.exit(1);
+            exit(1);
         }
         // Merge: defaults < shortcut < CLI options
         options = {
@@ -164,13 +165,13 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const projects = await api.getProjects(repo);
@@ -226,7 +227,7 @@ export async function planCommand(shortcut?: string, command?: any): Promise<voi
                     console.log(`  ${chalk.cyan(v.name)}`);
                 }
             }
-            process.exit(1);
+            exit(1);
         }
     }
 

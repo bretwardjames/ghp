@@ -14,6 +14,7 @@ import {
     removeWorktreeWorkflow,
     type HookResult,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 interface WorktreeRemoveOptions {
     force?: boolean;
@@ -62,28 +63,28 @@ export async function worktreeRemoveCommand(
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate (needed for branch linker)
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Find linked branch
     const branchName = await getBranchForIssue(repo, issueNumber);
     if (!branchName) {
         console.error(chalk.red('Error:'), `No branch linked to issue #${issueNumber}`);
-        process.exit(1);
+        exit(1);
     }
 
     // Find worktree for this branch
@@ -125,7 +126,7 @@ export async function worktreeRemoveCommand(
             console.error(chalk.red('Error:'), 'Failed to remove worktree.');
             console.log(chalk.dim('You may have uncommitted changes. Use --force to remove anyway.'));
         }
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.green('✓'), `Removed worktree: ${result.worktree?.path}`);
@@ -145,7 +146,7 @@ export async function worktreeListCommand(options: WorktreeListOptions = {}): Pr
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate (needed for branch linker)

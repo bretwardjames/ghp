@@ -15,6 +15,7 @@ import {
     getHooksConfigPath,
     type DashboardHook,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 /**
  * List all registered hooks
@@ -75,7 +76,7 @@ export interface HooksAddOptions {
 export function hooksAddCommand(name: string, options: HooksAddOptions): void {
     if (!options.command) {
         console.error(chalk.red('Error:'), 'Command is required. Use --command "<cmd>"');
-        process.exit(1);
+        exit(1);
     }
 
     // Validate timeout if provided
@@ -84,7 +85,7 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
         timeout = parseInt(options.timeout, 10);
         if (isNaN(timeout) || timeout <= 0) {
             console.error(chalk.red('Error:'), 'Timeout must be a positive number');
-            process.exit(1);
+            exit(1);
         }
     }
 
@@ -106,7 +107,7 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
         printHookDetails(hook);
     } catch (error) {
         console.error(chalk.red('Error:'), (error as Error).message);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -117,7 +118,7 @@ export function hooksRemoveCommand(name: string): void {
     const hook = getHook(name);
     if (!hook) {
         console.error(chalk.red('Error:'), `Hook "${name}" not found`);
-        process.exit(1);
+        exit(1);
     }
 
     const removed = removeHook(name);
@@ -125,7 +126,7 @@ export function hooksRemoveCommand(name: string): void {
         console.log(chalk.green('✓'), `Removed hook "${name}"`);
     } else {
         console.error(chalk.red('Error:'), `Failed to remove hook "${name}"`);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -138,7 +139,7 @@ export function hooksEnableCommand(name: string): void {
         console.log(chalk.green('✓'), `Enabled hook "${hook.name}"`);
     } catch (error) {
         console.error(chalk.red('Error:'), (error as Error).message);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -151,7 +152,7 @@ export function hooksDisableCommand(name: string): void {
         console.log(chalk.yellow('○'), `Disabled hook "${hook.name}"`);
     } catch (error) {
         console.error(chalk.red('Error:'), (error as Error).message);
-        process.exit(1);
+        exit(1);
     }
 }
 
@@ -162,7 +163,7 @@ export function hooksShowCommand(name: string): void {
     const hook = getHook(name);
     if (!hook) {
         console.error(chalk.red('Error:'), `Hook "${name}" not found`);
-        process.exit(1);
+        exit(1);
     }
 
     printHookDetails(hook);

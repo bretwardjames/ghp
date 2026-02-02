@@ -19,6 +19,7 @@ import {
 } from '@bretwardjames/ghp-core';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
 import { killTmuxWindow, isInsideTmux } from '../terminal-utils.js';
+import { exit, registerCleanupHandler } from '../exit.js';
 
 // Track active session watchers
 const sessionWatchers: Map<string, SessionWatcher> = new Map();
@@ -153,19 +154,19 @@ export async function agentsStopCommand(
         console.error(chalk.red('Error:'), 'Issue number required (or use --all)');
         console.log(chalk.dim('Usage: ghp agents stop <issue> [--force]'));
         console.log(chalk.dim('       ghp agents stop --all [--force]'));
-        process.exit(1);
+        exit(1);
     }
 
     const issueNumber = parseInt(issueArg, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     const agent = getAgentByIssue(issueNumber);
     if (!agent) {
         console.error(chalk.red('Error:'), `No agent found for issue #${issueNumber}`);
-        process.exit(1);
+        exit(1);
     }
 
     // Confirm unless --force
@@ -380,8 +381,8 @@ export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Prom
         });
     }, intervalMs);
 
-    // Handle Ctrl+C gracefully
-    process.on('SIGINT', () => {
+    // Register cleanup handler for graceful shutdown
+    registerCleanupHandler(() => {
         clearInterval(timer);
         // Stop all session watchers
         for (const watcher of sessionWatchers.values()) {
@@ -390,7 +391,11 @@ export async function agentsWatchCommand(options: AgentsWatchOptions = {}): Prom
         sessionWatchers.clear();
         console.log();
         console.log(chalk.dim('Stopped watching.'));
-        process.exit(0);
+    });
+
+    // Handle Ctrl+C gracefully
+    process.on('SIGINT', () => {
+        exit(0);
     });
 
     // Keep process alive

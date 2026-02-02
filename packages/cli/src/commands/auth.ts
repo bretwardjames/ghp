@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
+import { exit } from '../exit.js';
 
 interface AuthOptions {
     status?: boolean;
@@ -30,6 +31,6 @@ export async function authCommand(options: AuthOptions): Promise<void> {
         console.log('Run', chalk.cyan('gh auth login'), 'to authenticate.');
         console.log();
         console.log('Alternatively, set the', chalk.cyan('GITHUB_TOKEN'), 'environment variable.');
-        process.exit(1);
+        exit(1);
     }
 }

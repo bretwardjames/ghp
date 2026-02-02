@@ -81,6 +81,8 @@ export interface EventHook {
      * - ${diff_stat.files_changed} - Number of files changed (pre-pr only)
      * - ${title} - Proposed PR title (pr-creating only)
      * - ${body} - Proposed PR body (pr-creating only)
+     * - ${_event_file} - Path to temp file containing full event payload as JSON
+     *                    (useful for complex data with arrays/nested objects)
      */
     command: string;
     /** Whether the hook is enabled (default: true) */

@@ -263,8 +263,8 @@ Integrate external tools by registering hooks that run on lifecycle events:
 ```bash
 ghp hooks list                      # List registered hooks
 ghp hooks add <name>                # Register a new hook
-  --event <event>                   # Event: issue-created, issue-started, pr-created, pr-merged,
-                                    #        worktree-created, worktree-removed
+  --event <event>                   # Event: issue-created, issue-started, pre-pr, pr-creating,
+                                    #        pr-created, pr-merged, worktree-created, worktree-removed
   --command <cmd>                   # Shell command with ${var} templates
   --timeout <ms>                    # Timeout in milliseconds (default: 30000)
   --mode <mode>                     # Execution mode (see below)
@@ -287,12 +287,16 @@ ghp hooks show <name>               # Show hook details
 
 | Event | Trigger | Variables |
 |-------|---------|-----------|
-| `issue-created` | After `ghp add` | `${issue.number}`, `${issue.json}`, `${issue.title}`, `${repo}` |
-| `issue-started` | After `ghp start` | `${issue.number}`, `${issue.json}`, `${branch}`, `${repo}` |
-| `pr-created` | After `ghp pr --create` | `${pr.number}`, `${pr.json}`, `${branch}`, `${repo}` |
-| `pr-merged` | After PR merge | `${pr.number}`, `${pr.json}`, `${branch}`, `${repo}` |
-| `worktree-created` | After `ghp start --parallel` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${repo}` |
-| `worktree-removed` | After `ghp worktree remove` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${repo}` |
+| `issue-created` | After `ghp add` | `${issue.number}`, `${issue.title}`, `${issue.body}`, `${issue.url}`, `${issue.json}`, `${repo}`, `${_event_file}` |
+| `issue-started` | After `ghp start` | `${issue.number}`, `${issue.title}`, `${issue.body}`, `${issue.url}`, `${issue.json}`, `${branch}`, `${repo}`, `${_event_file}` |
+| `pre-pr` | Before PR creation | `${branch}`, `${base}`, `${changed_files}`, `${diff_stat.additions}`, `${diff_stat.deletions}`, `${diff_stat.files_changed}`, `${repo}`, `${_event_file}` |
+| `pr-creating` | Just before GitHub API call | `${title}`, `${body}`, `${branch}`, `${base}`, `${repo}`, `${_event_file}` |
+| `pr-created` | After `ghp pr --create` | `${pr.number}`, `${pr.title}`, `${pr.body}`, `${pr.url}`, `${pr.json}`, `${branch}`, `${repo}`, `${_event_file}` |
+| `pr-merged` | After `ghp merge` | `${pr.number}`, `${pr.title}`, `${pr.url}`, `${pr.merged_at}`, `${pr.json}`, `${branch}`, `${base}`, `${repo}`, `${_event_file}` |
+| `worktree-created` | After `ghp start --parallel` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${issue.title}`, `${issue.url}`, `${issue.json}`, `${repo}`, `${_event_file}` |
+| `worktree-removed` | After `ghp worktree remove` | `${worktree.path}`, `${worktree.name}`, `${branch}`, `${issue.number}`, `${issue.title}`, `${issue.url}`, `${issue.json}`, `${repo}`, `${_event_file}` |
+
+> **Note:** `${_event_file}` is a path to a temporary JSON file containing the full event payload. Use this for complex data like arrays or when shell escaping becomes problematic.
 
 **Example: Ragtime Integration**
 
@@ -307,12 +311,12 @@ ghp hooks add ragtime-context \
 # 2. Run ragtime to generate context in .claude/memory/
 ```
 
-**Example: Pre-commit Validation (Blocking)**
+**Example: Pre-PR Validation (Blocking)**
 
 ```bash
-# Block PR creation if tests fail
+# Block PR creation if tests fail (runs BEFORE the PR is created)
 ghp hooks add run-tests \
-  --event pr-created \
+  --event pre-pr \
   --mode blocking \
   --command "npm test"
 ```
@@ -322,10 +326,19 @@ ghp hooks add run-tests \
 ```bash
 # Prompt for review before PR creation
 ghp hooks add ai-review \
-  --event pr-created \
+  --event pre-pr \
   --mode interactive \
   --continue-prompt "AI review complete. Proceed with PR?" \
   --command "ai-review check --branch \${branch}"
+```
+
+**Example: AI-Generated PR Description**
+
+```bash
+# Use pr-creating to suggest PR title/body (hook can modify them)
+ghp hooks add ai-description \
+  --event pr-creating \
+  --command "ai-pr-helper suggest --branch \${branch} --base \${base}"
 ```
 
 **Example: Tailscale Funnel Integration**

@@ -65,13 +65,14 @@ The server uses the same GitHub authentication as the CLI. Run `ghp auth` to aut
 
 | Tool | Description |
 |------|-------------|
-| `work` | View items assigned to you |
+| `get_my_work` | View items assigned to you |
 | `get_project_board` | View project board/items (with optional status/assignee filters) |
 | `create_issue` | Create a new issue and add to project |
 | `update_issue` | Update an issue's title and/or body |
 | `move` | Move an issue to a different status |
 | `done` | Mark an issue as done |
 | `start` | Start working on an issue |
+| `create_worktree` | Create a worktree for parallel development |
 | `assign` | Assign users to an issue |
 | `comment` | Add a comment to an issue |
 | `set_field` | Set a field value on an issue |
@@ -80,7 +81,7 @@ The server uses the same GitHub authentication as the CLI. Run `ghp auth` to aut
 
 ```
 AI: "Show me my current work items"
-→ Uses the `work` tool
+→ Uses the `get_my_work` tool
 
 AI: "Create a bug report for the login timeout issue"
 → Uses `create_issue` with appropriate title/body

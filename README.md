@@ -92,9 +92,9 @@ Each worktree gets automatic setup: copies `.env` files and runs your install co
 ### AI-Assisted Features
 
 ```bash
-ghp add "Fix login" --ai      # Expand brief title into full issue
-ghp plan-epic "Auth system"   # Break down epic into actionable issues
-ghp pr --ai-description       # Generate PR description from changes
+ghp add "Fix login" --ai           # Expand brief title into full issue
+ghp add epic "Auth system" --ai    # Break down epic into actionable issues
+ghp pr --ai-description            # Generate PR description from changes
 ```
 
 ### Branch Dashboard
@@ -173,7 +173,6 @@ These options work in both CLI config and VS Code settings (with `ghProjects.` p
 | `branchPattern` | `"{user}/{number}-{title}"` | Branch naming pattern. Tokens: `{user}`, `{number}`, `{title}` |
 | `startWorkingStatus` | `"In Progress"` | Status when starting work on an issue |
 | `doneStatus` | `"Done"` | Status when marking issue as done |
-| `prMergedStatus` | `"Done"` | Status when PR is merged |
 | `worktreePath` | `"~/.ghp/worktrees"` | Base directory for parallel worktrees |
 | `worktreeCopyFiles` | `[".env", ".env.local"]` | Files to copy from main repo to new worktrees |
 | `worktreeSetupCommand` | `"pnpm install"` | Command to run in new worktrees |

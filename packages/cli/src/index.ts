@@ -211,7 +211,7 @@ eventHooksCmd
 eventHooksCmd
     .command('add <name>')
     .description('Add a new event hook')
-    .option('-e, --event <event>', 'Event to trigger on (issue-created, issue-started, pr-created, pr-merged, worktree-created, worktree-removed)')
+    .option('-e, --event <event>', 'Event to trigger on (issue-created, issue-started, pre-pr, pr-creating, pr-created, pr-merged, worktree-created, worktree-removed)')
     .option('-c, --command <cmd>', 'Shell command to execute (supports ${var} templates)')
     .option('-d, --display-name <name>', 'Human-readable display name')
     .option('-t, --timeout <ms>', 'Timeout in milliseconds (default: 30000)')

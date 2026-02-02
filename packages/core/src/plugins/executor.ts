@@ -4,6 +4,10 @@
 
 import { spawn } from 'child_process';
 import * as readline from 'readline';
+import { writeFileSync, unlinkSync } from 'fs';
+import { randomBytes } from 'crypto';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import type { EventHook, EventType, EventPayload, HookResult, HookOutcome, HookExitCodes } from './types.js';
 import { getHooksForEvent } from './registry.js';
 
@@ -22,6 +26,47 @@ function shellEscape(str: string): string {
     return "'" + str.replace(/'/g, "'\\''") + "'";
 }
 
+// =============================================================================
+// Event File Handling
+// =============================================================================
+
+/**
+ * Write the event payload to a temporary JSON file.
+ * Returns the file path for use in ${_event_file} substitution.
+ *
+ * The file is created with 0600 permissions (owner read/write only)
+ * for security, as payloads may contain sensitive data.
+ */
+function writeEventFile(payload: EventPayload): string {
+    const id = randomBytes(8).toString('hex');
+    const filePath = join(tmpdir(), `ghp-event-${id}.json`);
+    const content = JSON.stringify(payload, null, 2);
+
+    writeFileSync(filePath, content, { mode: 0o600 });
+
+    return filePath;
+}
+
+/**
+ * Clean up the temporary event file.
+ * Silently ignores errors (file may already be deleted).
+ */
+function cleanupEventFile(filePath: string): void {
+    try {
+        unlinkSync(filePath);
+    } catch {
+        // Ignore - file may already be deleted
+    }
+}
+
+/**
+ * Options for template variable substitution
+ */
+interface SubstitutionOptions {
+    /** Path to the event file containing full payload JSON */
+    eventFilePath?: string;
+}
+
 /**
  * Substitute template variables in a command string
  *
@@ -37,9 +82,19 @@ function shellEscape(str: string): string {
  * - ${repo} - Repository in owner/name format
  * - ${worktree.path} - Absolute path to worktree
  * - ${worktree.name} - Directory name of worktree
+ * - ${_event_file} - Path to temp file containing full event payload as JSON
  */
-export function substituteTemplateVariables(command: string, payload: EventPayload): string {
+export function substituteTemplateVariables(
+    command: string,
+    payload: EventPayload,
+    options: SubstitutionOptions = {}
+): string {
     let result = command;
+
+    // Event file path (system-generated, underscore prefix)
+    if (options.eventFilePath) {
+        result = result.replace(/\$\{_event_file\}/g, shellEscape(options.eventFilePath));
+    }
 
     // Repository
     result = result.replace(/\$\{repo\}/g, shellEscape(payload.repo));
@@ -290,78 +345,86 @@ export async function executeEventHook(
     const startTime = Date.now();
     const mode = hook.mode || 'fire-and-forget';
 
-    // Substitute template variables
-    const command = substituteTemplateVariables(hook.command, payload);
+    // Write event payload to temp file for ${_event_file} access
+    const eventFilePath = writeEventFile(payload);
 
-    // Run the command
-    const { stdout, stderr, exitCode, timedOut } = await runCommand(
-        command,
-        hook.timeout || 30000,
-        options.cwd
-    );
+    try {
+        // Substitute template variables (including ${_event_file})
+        const command = substituteTemplateVariables(hook.command, payload, { eventFilePath });
 
-    const duration = Date.now() - startTime;
+        // Run the command
+        const { stdout, stderr, exitCode, timedOut } = await runCommand(
+            command,
+            hook.timeout || 30000,
+            options.cwd
+        );
 
-    // Determine outcome based on exit code
-    const outcome = timedOut ? 'abort' : classifyExitCode(exitCode, hook.exitCodes);
-    const success = outcome === 'success' || outcome === 'warn';
+        const duration = Date.now() - startTime;
 
-    // Build base result
-    const result: HookResult = {
-        hookName: hook.name,
-        success,
-        output: stdout,
-        stderr,
-        duration,
-        exitCode,
-        mode,
-        outcome,
-        aborted: false,
-    };
+        // Determine outcome based on exit code
+        const outcome = timedOut ? 'abort' : classifyExitCode(exitCode, hook.exitCodes);
+        const success = outcome === 'success' || outcome === 'warn';
 
-    // Handle timeout
-    if (timedOut) {
-        result.error = `Hook timed out after ${hook.timeout || 30000}ms`;
-        result.outcome = 'abort';
-        result.success = false;
-    }
+        // Build base result
+        const result: HookResult = {
+            hookName: hook.name,
+            success,
+            output: stdout,
+            stderr,
+            duration,
+            exitCode,
+            mode,
+            outcome,
+            aborted: false,
+        };
 
-    // Mode-specific behavior
-    switch (mode) {
-        case 'fire-and-forget':
-            // Silent - just return the result, never abort
-            result.aborted = false;
-            break;
-
-        case 'blocking':
-            // Show output on failure, abort on non-success
-            if (!success) {
-                console.error(formatOutputBox(hook.displayName || hook.name, stderr || stdout));
-                result.aborted = true;
-            }
-            break;
-
-        case 'interactive': {
-            // Always show output, prompt user
-            const displayOutput = stderr || stdout || '(no output)';
-            console.log(formatOutputBox(hook.displayName || hook.name, displayOutput));
-
-            const promptText = hook.continuePrompt || 'Continue?';
-            let decision = await promptUser(promptText);
-
-            // Handle view option - show in pager then re-prompt
-            while (decision === 'view') {
-                await showInPager(stderr || stdout || '(no output)');
-                decision = await promptUser(promptText);
-            }
-
-            result.aborted = decision === 'abort';
-            result.outcome = decision === 'continue' ? 'continue' : 'abort';
-            break;
+        // Handle timeout
+        if (timedOut) {
+            result.error = `Hook timed out after ${hook.timeout || 30000}ms`;
+            result.outcome = 'abort';
+            result.success = false;
         }
-    }
 
-    return result;
+        // Mode-specific behavior
+        switch (mode) {
+            case 'fire-and-forget':
+                // Silent - just return the result, never abort
+                result.aborted = false;
+                break;
+
+            case 'blocking':
+                // Show output on failure, abort on non-success
+                if (!success) {
+                    console.error(formatOutputBox(hook.displayName || hook.name, stderr || stdout));
+                    result.aborted = true;
+                }
+                break;
+
+            case 'interactive': {
+                // Always show output, prompt user
+                const displayOutput = stderr || stdout || '(no output)';
+                console.log(formatOutputBox(hook.displayName || hook.name, displayOutput));
+
+                const promptText = hook.continuePrompt || 'Continue?';
+                let decision = await promptUser(promptText);
+
+                // Handle view option - show in pager then re-prompt
+                while (decision === 'view') {
+                    await showInPager(stderr || stdout || '(no output)');
+                    decision = await promptUser(promptText);
+                }
+
+                result.aborted = decision === 'abort';
+                result.outcome = decision === 'continue' ? 'continue' : 'abort';
+                break;
+            }
+        }
+
+        return result;
+    } finally {
+        // Always clean up the event file
+        cleanupEventFile(eventFilePath);
+    }
 }
 
 /**

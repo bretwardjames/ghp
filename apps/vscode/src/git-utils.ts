@@ -21,8 +21,12 @@ import {
     removeWorktree as coreRemoveWorktree,
     listWorktrees as coreListWorktrees,
     getWorktreeForBranch as coreGetWorktreeForBranch,
+    // Error class for catching git-specific errors
+    GitError,
 } from '@bretwardjames/ghp-core';
 import type { WorktreeInfo } from '@bretwardjames/ghp-core';
+
+export { GitError };
 
 // Re-export pure functions that don't need cwd
 export { sanitizeForBranchName, extractIssueNumberFromBranch } from '@bretwardjames/ghp-core';

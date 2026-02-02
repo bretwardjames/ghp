@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
-import { detectRepository, listWorktrees, removeWorktree } from '../git-utils.js';
+import { detectRepository, listWorktrees, removeWorktree, GitError } from '../git-utils.js';
 import { removeActiveLabelSafely } from '../active-label.js';
 import { getBranchForIssue, unlinkBranch } from '../branch-linker.js';
 
@@ -17,7 +17,17 @@ export async function stopCommand(issue: string, options: StopOptions): Promise<
     }
 
     // Detect repository
-    const repo = await detectRepository();
+    let repo;
+    try {
+        repo = await detectRepository();
+    } catch (error) {
+        if (error instanceof GitError) {
+            console.error(chalk.red('Error:'), 'Git command failed:', error.stderr || error.message);
+        } else {
+            console.error(chalk.red('Error:'), 'Failed to detect repository');
+        }
+        process.exit(1);
+    }
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
         process.exit(1);
@@ -69,8 +79,16 @@ export async function stopCommand(issue: string, options: StopOptions): Promise<
                 try {
                     await removeWorktree(worktree.path);
                     console.log(chalk.green('✓'), 'Removed worktree:', worktree.path);
-                } catch {
-                    console.log(chalk.yellow('⚠'), 'Could not remove worktree (may have uncommitted changes)');
+                } catch (error) {
+                    console.log(chalk.yellow('⚠'), 'Could not remove worktree');
+                    if (error instanceof GitError) {
+                        // Provide specific guidance based on the error
+                        if (error.stderr.includes('uncommitted changes') || error.stderr.includes('modified files')) {
+                            console.log(chalk.dim('Reason: Uncommitted changes in worktree'));
+                        } else {
+                            console.log(chalk.dim(`Git error: ${error.stderr.trim()}`));
+                        }
+                    }
                     console.log(chalk.dim('Run:'), `git worktree remove --force "${worktree.path}"`);
                 }
             } else {

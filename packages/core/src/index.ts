@@ -66,6 +66,8 @@ export {
     getWorktreeForBranch,
     worktreeExists,
     generateWorktreePath,
+    // Error class
+    GitError,
 } from './git-utils.js';
 
 export type { WorktreeInfo } from './git-utils.js';

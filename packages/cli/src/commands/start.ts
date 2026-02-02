@@ -14,6 +14,7 @@ import {
     generateBranchName,
     getAllBranches,
     getWorktreeForBranch,
+    GitError,
     type RepoInfo,
 } from '../git-utils.js';
 import { getConfig, getParallelWorkConfig, type TerminalMode } from '../config.js';
@@ -480,9 +481,15 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                             await execAsync(`git fetch origin ${linkedBranch}`);
                             await execAsync(`git checkout -b ${linkedBranch} origin/${linkedBranch}`);
                             console.log(chalk.green('✓'), `Checked out branch from remote: ${linkedBranch}`);
-                        } catch {
-                            console.error(chalk.red('Error:'), `Branch "${linkedBranch}" no longer exists locally or remotely`);
-                            console.log(chalk.dim('You may want to unlink and create a new branch.'));
+                        } catch (error) {
+                            console.error(chalk.red('Error:'), `Failed to checkout branch "${linkedBranch}"`);
+                            if (error instanceof GitError) {
+                                if (error.stderr.includes("couldn't find remote ref")) {
+                                    console.log(chalk.dim('Branch no longer exists on remote. You may want to unlink and create a new branch.'));
+                                } else if (error.stderr) {
+                                    console.log(chalk.dim(`Git error: ${error.stderr.trim()}`));
+                                }
+                            }
                             process.exit(1);
                         }
                     }

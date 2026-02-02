@@ -12,6 +12,7 @@ import {
     createWorktree as gitCreateWorktree,
     removeWorktree as gitRemoveWorktree,
     listWorktrees,
+    GitError,
 } from '../git-utils.js';
 import { executeHooksForEvent, hasHooksForEvent } from '../plugins/executor.js';
 import type {
@@ -120,9 +121,13 @@ export async function createWorktreeWorkflow(
             hookResults,
         };
     } catch (error) {
+        // Include stderr from GitError for better diagnostics
+        const errorMessage = error instanceof GitError && error.stderr
+            ? `${error.message}\n${error.stderr}`
+            : error instanceof Error ? error.message : String(error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage,
             hookResults,
         };
     }
@@ -239,9 +244,13 @@ export async function removeWorktreeWorkflow(
             hookResults,
         };
     } catch (error) {
+        // Include stderr from GitError for better diagnostics
+        const errorMessage = error instanceof GitError && error.stderr
+            ? `${error.message}\n${error.stderr}`
+            : error instanceof Error ? error.message : String(error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage,
             hookResults,
         };
     }

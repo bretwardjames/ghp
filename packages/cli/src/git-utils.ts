@@ -34,6 +34,8 @@ export {
     getWorktreeForBranch,
     worktreeExists,
     generateWorktreePath,
+    // Error class for handling git failures
+    GitError,
 } from '@bretwardjames/ghp-core';
 
 // Re-export the RepoInfo and WorktreeInfo types

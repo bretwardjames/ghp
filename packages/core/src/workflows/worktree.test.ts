@@ -5,13 +5,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWorktreeWorkflow, removeWorktreeWorkflow } from './worktree.js';
 import type { RepoInfo } from '../types.js';
+import { GitError } from '../types.js';
 
-// Mock git-utils
-vi.mock('../git-utils.js', () => ({
-    createWorktree: vi.fn(),
-    removeWorktree: vi.fn(),
-    listWorktrees: vi.fn(),
-}));
+// Mock git-utils, but preserve the real GitError class for instanceof checks
+vi.mock('../git-utils.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../git-utils.js')>();
+    return {
+        ...actual,
+        createWorktree: vi.fn(),
+        removeWorktree: vi.fn(),
+        listWorktrees: vi.fn(),
+        // Preserve the real GitError for instanceof checks
+        GitError: actual.GitError,
+    };
+});
 
 // Mock hook executor
 vi.mock('../plugins/executor.js', () => ({
@@ -19,7 +26,7 @@ vi.mock('../plugins/executor.js', () => ({
     hasHooksForEvent: vi.fn(),
 }));
 
-import { createWorktree, removeWorktree, listWorktrees } from '../git-utils.js';
+import { createWorktree, removeWorktree, listWorktrees, GitError as GitErrorFromUtils } from '../git-utils.js';
 import { executeHooksForEvent, hasHooksForEvent } from '../plugins/executor.js';
 
 const mockRepo: RepoInfo = {
@@ -132,6 +139,33 @@ describe('createWorktreeWorkflow', () => {
         expect(result.success).toBe(false);
         expect(result.error).toBe('Git error');
     });
+
+    it('should include stderr in error message when GitError is thrown', async () => {
+        vi.mocked(listWorktrees).mockResolvedValue([]);
+
+        // Use the GitError from git-utils (same class workflow checks instanceof against)
+        const gitError = new GitErrorFromUtils({
+            message: 'fatal: branch already exists',
+            command: 'git worktree add /path branch',
+            stderr: "fatal: 'branch' is already checked out at '/other/path'",
+            exitCode: 128,
+            cwd: '/repo',
+        });
+        vi.mocked(createWorktree).mockRejectedValue(gitError);
+
+        const result = await createWorktreeWorkflow({
+            repo: mockRepo,
+            issueNumber: 123,
+            issueTitle: 'Test Issue',
+            branch: 'testowner/123-test-issue',
+            path: '/tmp/worktrees/testrepo/123-test-issue',
+        });
+
+        expect(result.success).toBe(false);
+        // Error should include both message and stderr
+        expect(result.error).toContain('fatal: branch already exists');
+        expect(result.error).toContain("'branch' is already checked out");
+    });
 });
 
 describe('removeWorktreeWorkflow', () => {
@@ -227,5 +261,34 @@ describe('removeWorktreeWorkflow', () => {
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('Uncommitted changes');
+    });
+
+    it('should include stderr in error message when GitError is thrown during removal', async () => {
+        vi.mocked(listWorktrees).mockResolvedValue([
+            {
+                path: '/worktrees/testrepo/123-test',
+                branch: 'user/123-test',
+                isMain: false,
+            },
+        ]);
+
+        // Use the GitError from git-utils (same class workflow checks instanceof against)
+        const gitError = new GitErrorFromUtils({
+            message: 'Worktree contains uncommitted changes',
+            command: 'git worktree remove /path',
+            stderr: "error: '/worktrees/testrepo/123-test' contains modified or untracked files",
+            exitCode: 1,
+            cwd: '/repo',
+        });
+        vi.mocked(removeWorktree).mockRejectedValue(gitError);
+
+        const result = await removeWorktreeWorkflow({
+            repo: mockRepo,
+            issueNumber: 123,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Worktree contains uncommitted changes');
+        expect(result.error).toContain('modified or untracked files');
     });
 });

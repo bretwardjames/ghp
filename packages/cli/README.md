@@ -267,11 +267,21 @@ ghp hooks add <name>                # Register a new hook
                                     #        worktree-created, worktree-removed
   --command <cmd>                   # Shell command with ${var} templates
   --timeout <ms>                    # Timeout in milliseconds (default: 30000)
+  --mode <mode>                     # Execution mode (see below)
+  --continue-prompt <text>          # Custom prompt for interactive mode
 ghp hooks remove <name>             # Remove a hook
 ghp hooks enable <name>             # Enable a hook
 ghp hooks disable <name>            # Disable a hook
 ghp hooks show <name>               # Show hook details
 ```
+
+**Hook Modes:**
+
+| Mode | Behavior |
+|------|----------|
+| `fire-and-forget` | Silent execution, logged only, never aborts (default) |
+| `blocking` | Shows output on failure, non-zero exit aborts workflow |
+| `interactive` | Always shows output, prompts user to continue/abort/view |
 
 **Events and Template Variables:**
 
@@ -295,6 +305,27 @@ ghp hooks add ragtime-context \
 # Now `ghp start 42` will:
 # 1. Create/switch to branch
 # 2. Run ragtime to generate context in .claude/memory/
+```
+
+**Example: Pre-commit Validation (Blocking)**
+
+```bash
+# Block PR creation if tests fail
+ghp hooks add run-tests \
+  --event pr-created \
+  --mode blocking \
+  --command "npm test"
+```
+
+**Example: Interactive Code Review**
+
+```bash
+# Prompt for review before PR creation
+ghp hooks add ai-review \
+  --event pr-created \
+  --mode interactive \
+  --continue-prompt "AI review complete. Proceed with PR?" \
+  --command "ai-review check --branch \${branch}"
 ```
 
 **Example: Tailscale Funnel Integration**

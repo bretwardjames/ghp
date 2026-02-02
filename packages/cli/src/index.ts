@@ -215,6 +215,8 @@ eventHooksCmd
     .option('-c, --command <cmd>', 'Shell command to execute (supports ${var} templates)')
     .option('-d, --display-name <name>', 'Human-readable display name')
     .option('-t, --timeout <ms>', 'Timeout in milliseconds (default: 30000)')
+    .option('-m, --mode <mode>', 'Execution mode: fire-and-forget, blocking, or interactive (default: fire-and-forget)')
+    .option('--continue-prompt <text>', 'Custom prompt text for interactive mode (default: "Continue?")')
     .action(eventHooksAddCommand);
 
 eventHooksCmd

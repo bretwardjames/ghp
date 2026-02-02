@@ -394,15 +394,20 @@ export {
     enableEventHook,
     disableEventHook,
     getValidEventTypes,
+    getValidModes,
     // Executor
     substituteTemplateVariables,
     executeEventHook,
     executeHooksForEvent,
     hasHooksForEvent,
+    shouldAbort,
 } from './plugins/index.js';
 
 export type {
     EventType,
+    HookMode,
+    HookExitCodes,
+    HookOutcome,
     EventHook,
     EventHooksConfig,
     BaseEventPayload,

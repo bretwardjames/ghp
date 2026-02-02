@@ -21,6 +21,31 @@ export type EventType =
     | 'worktree-removed'; // After ghp worktree remove removes a worktree
 
 // =============================================================================
+// Hook Modes
+// =============================================================================
+
+/**
+ * Hook execution modes that control behavior on completion
+ *
+ * - fire-and-forget: Silent execution, logged only, never aborts workflow (default)
+ * - blocking: Output shown on failure, non-zero exit aborts workflow
+ * - interactive: Always show output, prompt user to continue/abort/view
+ */
+export type HookMode = 'fire-and-forget' | 'blocking' | 'interactive';
+
+/**
+ * Exit code classification for determining hook outcome
+ */
+export interface HookExitCodes {
+    /** Exit codes that indicate success (default: [0]) */
+    success?: number[];
+    /** Exit codes that should abort the workflow (default: [1]) */
+    abort?: number[];
+    /** Exit codes that warn but continue (default: []) */
+    warn?: number[];
+}
+
+// =============================================================================
 // Event Hook
 // =============================================================================
 
@@ -54,6 +79,12 @@ export interface EventHook {
     enabled: boolean;
     /** Maximum execution time in milliseconds (default: 30000) */
     timeout?: number;
+    /** Execution mode controlling behavior on completion (default: 'fire-and-forget') */
+    mode?: HookMode;
+    /** Custom exit code classification (defaults: success=[0], abort=[1], warn=[]) */
+    exitCodes?: HookExitCodes;
+    /** Custom prompt text for interactive mode (default: 'Continue?') */
+    continuePrompt?: string;
 }
 
 // =============================================================================
@@ -199,17 +230,32 @@ export type EventPayload =
 // =============================================================================
 
 /**
+ * Outcome of hook execution based on mode and exit code
+ */
+export type HookOutcome = 'success' | 'warn' | 'abort' | 'continue';
+
+/**
  * Result of executing an event hook
  */
 export interface HookResult {
     /** Hook name */
     hookName: string;
-    /** Whether the hook executed successfully */
+    /** Whether the hook executed successfully (exit code 0 or in success list) */
     success: boolean;
     /** Output from the command (stdout) */
     output?: string;
+    /** Error output from the command (stderr) */
+    stderr?: string;
     /** Error message if the hook failed */
     error?: string;
     /** Execution time in milliseconds */
     duration?: number;
+    /** Process exit code (null if killed by signal) */
+    exitCode?: number | null;
+    /** The hook's execution mode */
+    mode?: HookMode;
+    /** Outcome based on mode and exit code classification */
+    outcome?: HookOutcome;
+    /** Whether the workflow should be aborted (for blocking/interactive modes) */
+    aborted?: boolean;
 }

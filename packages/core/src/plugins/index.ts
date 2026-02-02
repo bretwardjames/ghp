@@ -5,6 +5,9 @@
 // Types
 export type {
     EventType,
+    HookMode,
+    HookExitCodes,
+    HookOutcome,
     EventHook,
     EventHooksConfig,
     BaseEventPayload,
@@ -33,6 +36,7 @@ export {
     enableEventHook,
     disableEventHook,
     getValidEventTypes,
+    getValidModes,
 } from './registry.js';
 
 // Executor
@@ -41,6 +45,7 @@ export {
     executeEventHook,
     executeHooksForEvent,
     hasHooksForEvent,
+    shouldAbort,
 } from './executor.js';
 
 export type { HookExecutionOptions } from './executor.js';

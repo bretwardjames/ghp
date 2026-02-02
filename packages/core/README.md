@@ -53,7 +53,7 @@ addEventHook({
 // Execute hooks for an event
 const payload: IssueStartedPayload = {
   repo: 'owner/repo',
-  issue: { number: 123, title: 'Fix bug', body: '', url: '...' },
+  issue: { number: 123, title: 'Fix bug', body: 'Issue description here...', url: '...' },
   branch: 'feature/123-fix-bug',
 };
 const results = await executeHooksForEvent('issue-started', payload);

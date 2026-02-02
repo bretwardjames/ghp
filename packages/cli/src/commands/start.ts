@@ -723,13 +723,15 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         console.log();
         console.log(chalk.dim('Running issue-started hooks...'));
 
-        // Note: ProjectItem doesn't include body, but hooks can fetch it if needed
+        // Fetch full issue details for hooks (ProjectItem doesn't include body)
+        const issueDetails = await api.getIssueDetails(repo, issueNumber);
+
         const payload: IssueStartedPayload = {
             repo: `${repo.owner}/${repo.name}`,
             issue: {
                 number: issueNumber,
                 title: item.title,
-                body: '', // Body not available from ProjectItem, hooks can fetch via API
+                body: issueDetails?.body || '',
                 url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
             },
             branch: finalBranch,

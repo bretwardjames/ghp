@@ -8,8 +8,14 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { getCurrentBranch } from '../git-utils.js';
-import { executeHooksForEvent, hasHooksForEvent } from '../plugins/executor.js';
-import type { PrCreatedPayload, HookResult } from '../plugins/types.js';
+import { executeHooksForEvent, hasHooksForEvent, shouldAbort } from '../plugins/executor.js';
+import type {
+    PrePrPayload,
+    PrCreatingPayload,
+    PrCreatedPayload,
+    HookResult,
+} from '../plugins/types.js';
+import { getDiffStats, getChangedFiles } from '../dashboard/index.js';
 import type {
     CreatePROptions,
     CreatePRResult,
@@ -24,11 +30,21 @@ const execAsync = promisify(exec);
 // =============================================================================
 
 /**
- * Create a pull request and fire the pr-created hook.
+ * Create a pull request with full lifecycle hook support.
  *
  * This workflow:
- * 1. Creates the PR using gh CLI
- * 2. Fires the pr-created hook
+ * 1. Fires pre-pr hooks (validation/linting) - can abort if blocking
+ * 2. Fires pr-creating hooks (suggest title/body) - can abort if blocking
+ * 3. Creates the PR using gh CLI
+ * 4. Fires pr-created hooks (fire-and-forget)
+ *
+ * Hook behavior:
+ * - pre-pr: Receives changed files and diff stats for validation
+ * - pr-creating: Receives proposed title/body for review
+ * - pr-created: Receives final PR info after creation
+ *
+ * Use `skipHooks: true` to skip all hooks (--no-hooks flag).
+ * Use `force: true` to continue even if blocking hooks fail (--force flag).
  *
  * Note: This workflow uses the `gh` CLI for PR creation since the GitHub
  * GraphQL API for PR creation is more complex and gh handles edge cases well.
@@ -44,6 +60,8 @@ const execAsync = promisify(exec);
  *
  * if (result.success) {
  *   console.log(`Created PR #${result.pr.number}: ${result.pr.url}`);
+ * } else if (result.abortedByHook) {
+ *   console.log(`Aborted by ${result.abortedAtEvent} hook: ${result.abortedByHook}`);
  * }
  * ```
  */
@@ -57,10 +75,14 @@ export async function createPRWorkflow(
         baseBranch = 'main',
         headBranch,
         issueNumber,
+        issueTitle,
         openInBrowser = false,
+        skipHooks = false,
+        force = false,
     } = options;
 
     const hookResults: HookResult[] = [];
+    const repoFullName = `${repo.owner}/${repo.name}`;
 
     try {
         // Get current branch if head branch not specified
@@ -73,6 +95,78 @@ export async function createPRWorkflow(
             };
         }
 
+        // =================================================================
+        // Fire pre-pr hooks (validation/linting before PR creation)
+        // =================================================================
+        if (!skipHooks && hasHooksForEvent('pre-pr')) {
+            // Gather diff stats and changed files for the payload
+            const [diffStats, changedFiles] = await Promise.all([
+                getDiffStats(baseBranch),
+                getChangedFiles(baseBranch),
+            ]);
+
+            const prePrPayload: PrePrPayload = {
+                repo: repoFullName,
+                branch: head,
+                base: baseBranch,
+                changed_files: changedFiles.map(f => f.path),
+                diff_stat: {
+                    additions: diffStats.insertions,
+                    deletions: diffStats.deletions,
+                    files_changed: diffStats.filesChanged,
+                },
+            };
+
+            const prePrResults = await executeHooksForEvent('pre-pr', prePrPayload);
+            hookResults.push(...prePrResults);
+
+            // Check if any hook signaled abort (unless --force)
+            if (!force && shouldAbort(prePrResults)) {
+                const abortingHook = prePrResults.find(r => r.aborted);
+                return {
+                    success: false,
+                    error: `PR creation aborted by pre-pr hook "${abortingHook?.hookName}"`,
+                    hookResults,
+                    abortedByHook: abortingHook?.hookName,
+                    abortedAtEvent: 'pre-pr',
+                };
+            }
+        }
+
+        // =================================================================
+        // Fire pr-creating hooks (suggest title/body modifications)
+        // =================================================================
+        const bodyContent = body || (issueNumber ? `Relates to #${issueNumber}` : '');
+
+        if (!skipHooks && hasHooksForEvent('pr-creating')) {
+            const prCreatingPayload: PrCreatingPayload = {
+                repo: repoFullName,
+                branch: head,
+                base: baseBranch,
+                title,
+                body: bodyContent,
+            };
+
+            const prCreatingResults = await executeHooksForEvent('pr-creating', prCreatingPayload);
+            hookResults.push(...prCreatingResults);
+
+            // Check if any hook signaled abort (unless --force)
+            if (!force && shouldAbort(prCreatingResults)) {
+                const abortingHook = prCreatingResults.find(r => r.aborted);
+                return {
+                    success: false,
+                    error: `PR creation aborted by pr-creating hook "${abortingHook?.hookName}"`,
+                    hookResults,
+                    abortedByHook: abortingHook?.hookName,
+                    abortedAtEvent: 'pr-creating',
+                };
+            }
+        }
+
+        // =================================================================
+        // Create the PR via GitHub API
+        // =================================================================
+
         // Build gh pr create command
         const args: string[] = ['gh', 'pr', 'create'];
 
@@ -82,7 +176,7 @@ export async function createPRWorkflow(
         args.push('--title', `"${escapeShell(title)}"`);
 
         // Use heredoc for body to handle multi-line content safely
-        const bodyContent = body || (issueNumber ? `Relates to #${issueNumber}` : '');
+        // (bodyContent already defined above for pr-creating hooks)
 
         args.push('--base', baseBranch);
         args.push('--head', head);
@@ -133,15 +227,17 @@ export async function createPRWorkflow(
         if (issueNumber) {
             issueInfo = {
                 number: issueNumber,
-                title: '', // We don't have the issue title here
+                title: issueTitle || '',
                 url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
             };
         }
 
-        // Fire pr-created hook
-        if (hasHooksForEvent('pr-created')) {
+        // =================================================================
+        // Fire pr-created hooks (fire-and-forget, after successful creation)
+        // =================================================================
+        if (!skipHooks && hasHooksForEvent('pr-created')) {
             const payload: PrCreatedPayload = {
-                repo: `${repo.owner}/${repo.name}`,
+                repo: repoFullName,
                 pr: {
                     number: prNumber,
                     title,
@@ -155,7 +251,7 @@ export async function createPRWorkflow(
             if (issueNumber) {
                 payload.issue = {
                     number: issueNumber,
-                    title: '', // Not available without additional API call
+                    title: issueTitle || '',
                     body: '',
                     url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
                 };
@@ -163,6 +259,8 @@ export async function createPRWorkflow(
 
             const results = await executeHooksForEvent('pr-created', payload);
             hookResults.push(...results);
+            // Note: pr-created hooks are typically fire-and-forget, so we don't
+            // check for abort here - the PR has already been created
         }
 
         return {

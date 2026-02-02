@@ -316,9 +316,11 @@ program
 program
     .command('pr [issue]')
     .description('Create or view PR for an issue')
-    .option('--create', 'Create a new PR')
-    .option('--open', 'Open PR in browser')
+    .option('-c, --create', 'Create a new PR')
+    .option('-o, --open', 'Open PR in browser')
     .option('--ai-description', 'Generate PR description using AI (follows CLAUDE.md conventions)')
+    .option('-f, --force', 'Force PR creation even if blocking hooks fail')
+    .option('--no-hooks', 'Skip all hooks (pre-pr, pr-creating, pr-created)')
     .action(prCommand);
 
 program

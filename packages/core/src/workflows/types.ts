@@ -152,8 +152,14 @@ export interface CreatePROptions {
     headBranch?: string;
     /** Linked issue number (optional) */
     issueNumber?: number;
+    /** Linked issue title (optional, for hooks) */
+    issueTitle?: string;
     /** Whether to open in browser after creation */
     openInBrowser?: boolean;
+    /** Skip all hooks (--no-hooks flag) */
+    skipHooks?: boolean;
+    /** Force PR creation even if blocking hooks fail (--force flag) */
+    force?: boolean;
 }
 
 /**
@@ -174,6 +180,10 @@ export interface CreatePRResult extends WorkflowResult {
     pr?: PRInfo;
     /** Linked issue info (if any) */
     issue?: IssueInfo;
+    /** Hook name that aborted the workflow (if any) */
+    abortedByHook?: string;
+    /** Hook event that caused the abort (pre-pr or pr-creating) */
+    abortedAtEvent?: 'pre-pr' | 'pr-creating';
 }
 
 // =============================================================================

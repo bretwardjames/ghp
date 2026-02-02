@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { EventHook, EventHooksConfig, EventType } from './types.js';
+import type { EventHook, EventHooksConfig, EventType, HookMode } from './types.js';
 
 // =============================================================================
 // Configuration
@@ -49,6 +49,15 @@ const VALID_EVENTS: EventType[] = [
 ];
 
 /**
+ * Valid hook execution modes
+ */
+const VALID_MODES: HookMode[] = [
+    'fire-and-forget',
+    'blocking',
+    'interactive',
+];
+
+/**
  * Validate hook name: alphanumeric, dash, underscore only
  */
 function isValidHookName(name: string): boolean {
@@ -63,6 +72,13 @@ function isValidEventType(event: string): event is EventType {
 }
 
 /**
+ * Validate hook mode
+ */
+function isValidMode(mode: string): mode is HookMode {
+    return VALID_MODES.includes(mode as HookMode);
+}
+
+/**
  * Normalize a hook to ensure all fields have defaults
  */
 function normalizeHook(hook: Partial<EventHook>): EventHook {
@@ -73,6 +89,9 @@ function normalizeHook(hook: Partial<EventHook>): EventHook {
         command: hook.command || '',
         enabled: hook.enabled !== false, // Default to true
         timeout: hook.timeout ?? 30000,
+        mode: hook.mode || 'fire-and-forget',
+        exitCodes: hook.exitCodes,
+        continuePrompt: hook.continuePrompt,
     };
 }
 
@@ -80,11 +99,28 @@ function normalizeHook(hook: Partial<EventHook>): EventHook {
  * Validate that a hook has required fields
  */
 function isValidHook(hook: EventHook): boolean {
-    return Boolean(
-        isValidHookName(hook.name) &&
-        isValidEventType(hook.event) &&
-        hook.command
-    );
+    // Basic required field validation
+    if (!isValidHookName(hook.name) || !isValidEventType(hook.event) || !hook.command) {
+        return false;
+    }
+
+    // Validate mode if present
+    if (hook.mode && !isValidMode(hook.mode)) {
+        return false;
+    }
+
+    // Validate exitCodes structure if present
+    if (hook.exitCodes) {
+        const { success, abort, warn } = hook.exitCodes;
+        const isValidCodeArray = (arr: unknown): boolean =>
+            arr === undefined || (Array.isArray(arr) && arr.every((n) => typeof n === 'number'));
+
+        if (!isValidCodeArray(success) || !isValidCodeArray(abort) || !isValidCodeArray(warn)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // =============================================================================
@@ -188,6 +224,10 @@ export function addEventHook(hook: Omit<EventHook, 'enabled'> & { enabled?: bool
         throw new Error(`Invalid event type: ${normalizedHook.event}. Valid events: ${VALID_EVENTS.join(', ')}`);
     }
 
+    if (normalizedHook.mode && !isValidMode(normalizedHook.mode)) {
+        throw new Error(`Invalid mode: ${normalizedHook.mode}. Valid modes: ${VALID_MODES.join(', ')}`);
+    }
+
     if (!normalizedHook.command) {
         throw new Error('Hook must have a command');
     }
@@ -219,6 +259,11 @@ export function updateEventHook(name: string, updates: Partial<EventHook>): Even
     // Validate event type if provided
     if (updates.event && !isValidEventType(updates.event)) {
         throw new Error(`Invalid event type: ${updates.event}. Valid events: ${VALID_EVENTS.join(', ')}`);
+    }
+
+    // Validate mode if provided
+    if (updates.mode && !isValidMode(updates.mode)) {
+        throw new Error(`Invalid mode: ${updates.mode}. Valid modes: ${VALID_MODES.join(', ')}`);
     }
 
     config.hooks[index] = {
@@ -265,4 +310,11 @@ export function disableEventHook(name: string): EventHook {
  */
 export function getValidEventTypes(): EventType[] {
     return [...VALID_EVENTS];
+}
+
+/**
+ * Get list of valid hook modes
+ */
+export function getValidModes(): HookMode[] {
+    return [...VALID_MODES];
 }

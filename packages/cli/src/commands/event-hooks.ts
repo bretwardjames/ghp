@@ -14,8 +14,10 @@ import {
     disableEventHook,
     getEventHooksConfigPath,
     getValidEventTypes,
+    getValidModes,
     type EventHook,
     type EventType,
+    type HookMode,
 } from '@bretwardjames/ghp-core';
 
 // =============================================================================
@@ -74,13 +76,29 @@ export function hooksListCommand(): void {
 }
 
 /**
+ * Get mode badge for display
+ */
+function getModeBadge(mode: HookMode | undefined): string {
+    switch (mode) {
+        case 'blocking':
+            return chalk.yellow('[blocking]');
+        case 'interactive':
+            return chalk.cyan('[interactive]');
+        case 'fire-and-forget':
+        default:
+            return ''; // Don't show badge for default mode
+    }
+}
+
+/**
  * Print a hook summary line
  */
 function printHookSummary(hook: EventHook): void {
     const statusIcon = hook.enabled ? chalk.green('●') : chalk.dim('○');
     const name = hook.enabled ? chalk.white(hook.name) : chalk.dim(hook.name);
+    const modeBadge = getModeBadge(hook.mode);
 
-    console.log(`  ${statusIcon} ${name}`);
+    console.log(`  ${statusIcon} ${name} ${modeBadge}`);
     console.log(chalk.dim(`    ${hook.command}`));
 }
 
@@ -93,6 +111,8 @@ export interface HooksAddOptions {
     command?: string;
     displayName?: string;
     timeout?: string;
+    mode?: string;
+    continuePrompt?: string;
 }
 
 /**
@@ -100,6 +120,7 @@ export interface HooksAddOptions {
  */
 export function hooksAddCommand(name: string, options: HooksAddOptions): void {
     const validEvents = getValidEventTypes();
+    const validModes = getValidModes();
 
     if (!options.event) {
         console.error(chalk.red('Error:'), 'Event is required. Use --event <event>');
@@ -128,6 +149,14 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
         }
     }
 
+    // Validate mode if provided
+    const mode = (options.mode || 'fire-and-forget') as HookMode;
+    if (!validModes.includes(mode)) {
+        console.error(chalk.red('Error:'), `Invalid mode: ${options.mode}`);
+        console.log('Valid modes:', validModes.join(', '));
+        process.exit(1);
+    }
+
     // Security warning
     console.log(chalk.yellow('Note:'), 'Hooks execute shell commands. Only add commands from trusted sources.');
     console.log();
@@ -139,6 +168,8 @@ export function hooksAddCommand(name: string, options: HooksAddOptions): void {
             event: options.event as EventType,
             command: options.command,
             timeout,
+            mode,
+            continuePrompt: options.continuePrompt,
         });
 
         console.log(chalk.green('✓'), `Added hook "${hook.name}"`);
@@ -230,11 +261,17 @@ export function hooksShowCommand(name: string): void {
  */
 function printHookDetails(hook: EventHook): void {
     const status = hook.enabled ? chalk.green('enabled') : chalk.dim('disabled');
+    const mode = hook.mode || 'fire-and-forget';
 
     console.log(chalk.bold(hook.displayName || hook.name), chalk.dim(`(${hook.name})`));
     console.log();
     console.log('  Status: ', status);
     console.log('  Event:  ', hook.event);
+    console.log('  Mode:   ', mode);
     console.log('  Command:', chalk.cyan(hook.command));
     console.log('  Timeout:', `${hook.timeout || 30000}ms`);
+
+    if (hook.continuePrompt) {
+        console.log('  Prompt: ', hook.continuePrompt);
+    }
 }

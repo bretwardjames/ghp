@@ -340,6 +340,42 @@ export type {
 } from './dashboard/hooks.js';
 
 // =============================================================================
+// Workflows (Centralized Operations + Hook Firing)
+// =============================================================================
+
+export {
+    // Issue workflows
+    createIssueWorkflow,
+    startIssueWorkflow,
+    // PR workflows
+    createPRWorkflow,
+    // Worktree workflows
+    createWorktreeWorkflow,
+    removeWorktreeWorkflow,
+} from './workflows/index.js';
+
+export type {
+    // Common types
+    WorkflowResult,
+    IssueInfo as WorkflowIssueInfo,
+    WorktreeInfo as WorkflowWorktreeInfo,
+    // Issue workflow types
+    CreateIssueOptions,
+    CreateIssueResult,
+    StartIssueOptions,
+    StartIssueResult,
+    // PR workflow types
+    CreatePROptions,
+    CreatePRResult,
+    PRInfo,
+    // Worktree workflow types
+    CreateWorktreeOptions,
+    CreateWorktreeResult,
+    RemoveWorktreeOptions,
+    RemoveWorktreeResult,
+} from './workflows/index.js';
+
+// =============================================================================
 // Event Hooks System
 // =============================================================================
 
@@ -378,4 +414,5 @@ export type {
     WorktreeRemovedPayload,
     EventPayload,
     HookResult,
+    HookExecutionOptions,
 } from './plugins/index.js';

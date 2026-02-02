@@ -7,9 +7,16 @@ import {
     createBranch,
     branchExists,
     generateBranchName,
+    getCurrentBranch,
 } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 import { getBranchLinker } from './extension';
+import {
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type IssueStartedPayload,
+    type HookResult,
+} from '@bretwardjames/ghp-core';
 
 export interface StartWorkingContext {
     item: NormalizedProjectItem;
@@ -222,6 +229,33 @@ export async function executeStartWorking(
     // ═══════════════════════════════════════════════════════════════════════════
     await applyActiveLabel(api, item);
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Step 5: Fire issue-started hook
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (item.number && item.repository && hasHooksForEvent('issue-started')) {
+        const currentBranchName = await getCurrentBranch();
+        if (currentBranchName) {
+            const payload: IssueStartedPayload = {
+                repo: item.repository,
+                issue: {
+                    number: item.number,
+                    title: item.title,
+                    body: '',
+                    url: item.url || `https://github.com/${item.repository}/issues/${item.number}`,
+                },
+                branch: currentBranchName,
+            };
+
+            try {
+                const results = await executeHooksForEvent('issue-started', payload);
+                logHookResults(results);
+            } catch (error) {
+                // Non-fatal - just log it
+                console.warn('Failed to execute issue-started hooks:', error);
+            }
+        }
+    }
+
     return true;
 }
 
@@ -421,6 +455,19 @@ function getBranchRelevanceScore(branch: string, issueNumber: string, titleWords
     }
 
     return score;
+}
+
+/**
+ * Log hook execution results
+ */
+function logHookResults(results: HookResult[]): void {
+    for (const result of results) {
+        if (result.success) {
+            console.log(`Hook "${result.hookName}" completed successfully`);
+        } else {
+            console.warn(`Hook "${result.hookName}" failed:`, result.error);
+        }
+    }
 }
 
 /**

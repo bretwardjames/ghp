@@ -42,3 +42,5 @@ export {
     executeHooksForEvent,
     hasHooksForEvent,
 } from './executor.js';
+
+export type { HookExecutionOptions } from './executor.js';

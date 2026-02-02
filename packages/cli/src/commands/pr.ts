@@ -2,14 +2,20 @@ import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { api } from '../github-api.js';
-import { detectRepository, getCurrentBranch } from '../git-utils.js';
+import { detectRepository, getCurrentBranch, type RepoInfo } from '../git-utils.js';
 import { getIssueForBranch } from '../branch-linker.js';
 import { getConfig, getClaudeConfig } from '../config.js';
 import { loadProjectConventions, buildConventionsContext } from '../conventions.js';
 import { runFeedbackLoop, UserCancelledError } from '../ai-feedback.js';
 import { generateWithClaude } from '../claude-runner.js';
 import { openEditor } from '../editor.js';
-import { ClaudeClient, claudePrompts } from '@bretwardjames/ghp-core';
+import {
+    ClaudeClient,
+    claudePrompts,
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type PrCreatedPayload,
+} from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
@@ -56,7 +62,7 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
     }
 
     if (options.create) {
-        await createPr(repo.fullName, issueNumber, linkedIssue?.issueTitle, options.aiDescription);
+        await createPr(repo, currentBranch, issueNumber, linkedIssue?.issueTitle, options.aiDescription);
     } else if (options.open) {
         await openPr();
     } else {
@@ -66,7 +72,8 @@ export async function prCommand(issue: string | undefined, options: PrOptions): 
 }
 
 async function createPr(
-    repoFullName: string,
+    repo: RepoInfo,
+    currentBranch: string,
     issueNumber: number | null,
     issueTitle: string | undefined,
     useAiDescription?: boolean
@@ -98,8 +105,86 @@ async function createPr(
 
         console.log(chalk.dim('Creating PR...'));
 
-        const { stdout } = await execAsync(`gh pr create ${titleArg} ${bodyArg} --web`);
-        console.log(stdout);
+        // Create PR without --web to capture the URL, then open in browser
+        const { stdout } = await execAsync(`gh pr create ${titleArg} ${bodyArg}`);
+
+        // Parse PR URL from output
+        const prUrlMatch = stdout.match(/https:\/\/github\.com\/[^\s]+\/pull\/(\d+)/);
+        let prNumber = 0;
+        let prUrl = '';
+
+        if (prUrlMatch) {
+            prUrl = prUrlMatch[0];
+            prNumber = parseInt(prUrlMatch[1], 10);
+            console.log(chalk.green('Created PR:'), prUrl);
+        } else {
+            // Try to get PR info from gh pr view
+            try {
+                const { stdout: viewOutput } = await execAsync('gh pr view --json number,url');
+                const prData = JSON.parse(viewOutput);
+                prNumber = prData.number;
+                prUrl = prData.url;
+                console.log(chalk.green('Created PR:'), prUrl);
+            } catch {
+                console.log(stdout);
+            }
+        }
+
+        // Fire pr-created hook
+        if (prNumber && hasHooksForEvent('pr-created')) {
+            console.log();
+            console.log(chalk.dim('Running pr-created hooks...'));
+
+            const payload: PrCreatedPayload = {
+                repo: `${repo.owner}/${repo.name}`,
+                pr: {
+                    number: prNumber,
+                    title: title || '',
+                    body,
+                    url: prUrl,
+                },
+                branch: currentBranch,
+            };
+
+            // Add issue info if linked
+            if (issueNumber) {
+                payload.issue = {
+                    number: issueNumber,
+                    title: issueTitle || '',
+                    body: '',
+                    url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+                };
+            }
+
+            const results = await executeHooksForEvent('pr-created', payload);
+
+            for (const result of results) {
+                if (result.success) {
+                    console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                    if (result.output) {
+                        const lines = result.output.split('\n').slice(0, 3);
+                        for (const line of lines) {
+                            console.log(chalk.dim(`  ${line}`));
+                        }
+                        if (result.output.split('\n').length > 3) {
+                            console.log(chalk.dim('  ...'));
+                        }
+                    }
+                } else {
+                    console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                    if (result.error) {
+                        console.log(chalk.dim(`  ${result.error}`));
+                    }
+                }
+            }
+        }
+
+        // Open PR in browser
+        if (prUrl) {
+            console.log();
+            console.log(chalk.dim('Opening in browser...'));
+            await execAsync(`gh pr view --web`);
+        }
 
         // Update issue status if configured
         if (issueNumber) {

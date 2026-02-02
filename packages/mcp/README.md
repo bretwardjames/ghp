@@ -63,19 +63,54 @@ The server uses the same GitHub authentication as the CLI. Run `ghp auth` to aut
 
 ## Tools
 
+### Default Tools (Always Enabled)
+
 | Tool | Description |
 |------|-------------|
 | `get_my_work` | View items assigned to you |
 | `get_project_board` | View project board/items (with optional status/assignee filters) |
 | `create_issue` | Create a new issue and add to project |
 | `update_issue` | Update an issue's title and/or body |
-| `move` | Move an issue to a different status |
-| `done` | Mark an issue as done |
-| `start` | Start working on an issue |
+| `move_issue` | Move an issue to a different status |
+| `mark_done` | Mark an issue as done |
+| `start_work` | Start working on an issue |
 | `create_worktree` | Create a worktree for parallel development |
-| `assign` | Assign users to an issue |
-| `comment` | Add a comment to an issue |
+| `assign_issue` | Assign users to an issue |
+| `add_comment` | Add a comment to an issue |
 | `set_field` | Set a field value on an issue |
+
+### Opt-in Tools (Disabled by Default)
+
+These tools are available but disabled by default to keep the tool set lean. Enable them via configuration (see below).
+
+| Tool | Description |
+|------|-------------|
+| `create_pr` | Create a pull request for the current branch |
+| `merge_pr` | Merge a pull request (squash/merge/rebase) |
+| `list_worktrees` | List all active git worktrees |
+| `remove_worktree` | Remove a git worktree |
+| `stop_work` | Stop working on an issue (removes active label) |
+| `set_parent` | Set or remove parent issue (sub-issues) |
+| `add_label` | Add a label to an issue |
+| `remove_label` | Remove a label from an issue |
+| `get_progress` | Get progress summary for an epic/parent issue |
+| `link_branch` | Link a git branch to an issue |
+| `unlink_branch` | Remove branch link from an issue |
+| `get_issue` | Get full issue details with relationships |
+
+### Enabling Opt-in Tools
+
+Add to your config file (`~/.config/ghp-cli/config.json`):
+
+```json
+{
+  "mcp": {
+    "enabledTools": ["create_pr", "merge_pr", "list_worktrees"]
+  }
+}
+```
+
+Or in your workspace config (`.ghp/config.json`) for project-specific tools.
 
 ### Example Usage
 

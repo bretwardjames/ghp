@@ -19,6 +19,21 @@ import * as assignTool from './tools/assign.js';
 import * as commentTool from './tools/comment.js';
 import * as setFieldTool from './tools/set-field.js';
 import * as worktreeTool from './tools/worktree.js';
+// Phase 1: High Priority Tools
+import * as createPrTool from './tools/create-pr.js';
+import * as mergePrTool from './tools/merge-pr.js';
+import * as listWorktreesTool from './tools/list-worktrees.js';
+import * as removeWorktreeTool from './tools/remove-worktree.js';
+import * as stopWorkTool from './tools/stop-work.js';
+// Phase 2: Medium Priority Tools
+import * as setParentTool from './tools/set-parent.js';
+import * as addLabelTool from './tools/add-label.js';
+import * as removeLabelTool from './tools/remove-label.js';
+import * as getProgressTool from './tools/get-progress.js';
+import * as linkBranchTool from './tools/link-branch.js';
+import * as unlinkBranchTool from './tools/unlink-branch.js';
+// Phase 3: Lower Priority Tools
+import * as getIssueTool from './tools/get-issue.js';
 
 // Re-export types
 export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
@@ -27,7 +42,7 @@ export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
  * Tool module with metadata and registration function
  */
 interface ToolModule {
-    meta: { name: string; category: ToolCategory };
+    meta: { name: string; category: ToolCategory; disabledByDefault?: boolean };
     register: (server: McpServer, context: ServerContext) => void;
 }
 
@@ -35,17 +50,33 @@ interface ToolModule {
  * All available tools collected from individual modules
  */
 const TOOLS: ToolModule[] = [
+    // Read tools
     workTool,
     planTool,
+    listWorktreesTool,
+    getProgressTool,
+    getIssueTool,
+    // Action tools
     moveTool,
     doneTool,
     startTool,
+    stopWorkTool,
     addIssueTool,
     updateIssueTool,
     assignTool,
     commentTool,
     setFieldTool,
+    addLabelTool,
+    removeLabelTool,
+    setParentTool,
+    linkBranchTool,
+    unlinkBranchTool,
+    // PR tools
+    createPrTool,
+    mergePrTool,
+    // Worktree tools
     worktreeTool,
+    removeWorktreeTool,
 ];
 
 /**
@@ -123,6 +154,9 @@ export function loadMcpConfig(): McpConfig {
         if (userMcp.disabledTools) {
             result.disabledTools = userMcp.disabledTools;
         }
+        if (userMcp.enabledTools) {
+            result.enabledTools = userMcp.enabledTools;
+        }
     }
 
     // Apply workspace config (takes precedence)
@@ -136,6 +170,13 @@ export function loadMcpConfig(): McpConfig {
             result.disabledTools = [
                 ...(result.disabledTools || []),
                 ...workspaceMcp.disabledTools,
+            ];
+        }
+        if (workspaceMcp.enabledTools) {
+            // Workspace enabled tools extend user enabled tools
+            result.enabledTools = [
+                ...(result.enabledTools || []),
+                ...workspaceMcp.enabledTools,
             ];
         }
     }
@@ -198,6 +239,7 @@ export function getToolList(): Array<{ name: string; category: ToolCategory }> {
 function isToolEnabled(tool: ToolModule, config: McpConfig): boolean {
     const toolsConfig = config.tools || DEFAULT_MCP_CONFIG.tools!;
     const disabledTools = new Set(config.disabledTools || []);
+    const enabledTools = new Set(config.enabledTools || []);
 
     // Check if category is enabled
     const categoryEnabled = toolsConfig[tool.meta.category] !== false;
@@ -207,6 +249,11 @@ function isToolEnabled(tool: ToolModule, config: McpConfig): boolean {
 
     // Check if specifically disabled
     if (disabledTools.has(tool.meta.name)) {
+        return false;
+    }
+
+    // Check if tool is disabled by default and not explicitly enabled
+    if (tool.meta.disabledByDefault && !enabledTools.has(tool.meta.name)) {
         return false;
     }
 

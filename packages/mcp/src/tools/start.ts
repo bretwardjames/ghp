@@ -2,6 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
+import {
+    getCurrentBranch,
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type IssueStartedPayload,
+} from '@bretwardjames/ghp-core';
 
 /** Tool metadata for registry */
 export const meta: ToolMeta = {
@@ -129,16 +135,7 @@ export function register(server: McpServer, context: ServerContext): void {
                     inProgressOption.id
                 );
 
-                if (success) {
-                    return {
-                        content: [
-                            {
-                                type: 'text',
-                                text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${blockingWarning}`,
-                            },
-                        ],
-                    };
-                } else {
+                if (!success) {
                     return {
                         content: [
                             {
@@ -149,6 +146,42 @@ export function register(server: McpServer, context: ServerContext): void {
                         isError: true,
                     };
                 }
+
+                // Fire issue-started hook
+                let hookInfo = '';
+                if (hasHooksForEvent('issue-started')) {
+                    const branch = await getCurrentBranch() || '';
+                    const payload: IssueStartedPayload = {
+                        repo: `${repo.owner}/${repo.name}`,
+                        issue: {
+                            number: issue,
+                            title: item.title,
+                            body: '', // Body not available from ProjectItem
+                            url: `https://github.com/${repo.owner}/${repo.name}/issues/${issue}`,
+                        },
+                        branch,
+                    };
+
+                    const hookResults = await executeHooksForEvent('issue-started', payload);
+                    const successCount = hookResults.filter(r => r.success).length;
+                    const failCount = hookResults.length - successCount;
+
+                    if (hookResults.length > 0) {
+                        hookInfo = `\n\nHooks: ${successCount} succeeded`;
+                        if (failCount > 0) {
+                            hookInfo += `, ${failCount} failed`;
+                        }
+                    }
+                }
+
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${blockingWarning}${hookInfo}`,
+                        },
+                    ],
+                };
             } catch (error) {
                 return {
                     content: [

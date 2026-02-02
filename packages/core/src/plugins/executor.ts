@@ -85,15 +85,37 @@ export function substituteTemplateVariables(command: string, payload: EventPaylo
 }
 
 // =============================================================================
+// Hook Execution Options
+// =============================================================================
+
+/**
+ * Options for hook execution
+ */
+export interface HookExecutionOptions {
+    /**
+     * Working directory for hook execution.
+     * If not specified, uses the current working directory.
+     * Use this to run hooks from inside a worktree so plugins create files
+     * in the correct location.
+     */
+    cwd?: string;
+}
+
+// =============================================================================
 // Hook Execution
 // =============================================================================
 
 /**
  * Execute a single event hook
+ *
+ * @param hook - The hook to execute
+ * @param payload - Event payload with template variables
+ * @param options - Execution options (e.g., working directory)
  */
 export async function executeEventHook(
     hook: EventHook,
-    payload: EventPayload
+    payload: EventPayload,
+    options: HookExecutionOptions = {}
 ): Promise<HookResult> {
     const startTime = Date.now();
 
@@ -106,6 +128,7 @@ export async function executeEventHook(
         const { stdout } = await execAsync(command, {
             timeout: hook.timeout || 30000,
             shell: '/bin/sh',
+            cwd: options.cwd,
         });
 
         return {
@@ -134,16 +157,21 @@ export async function executeEventHook(
  *
  * Returns results for each hook that was executed.
  * Hooks are executed sequentially (not in parallel) to avoid race conditions.
+ *
+ * @param event - The event type to fire hooks for
+ * @param payload - Event payload with template variables
+ * @param options - Execution options (e.g., working directory)
  */
 export async function executeHooksForEvent(
     event: EventType,
-    payload: EventPayload
+    payload: EventPayload,
+    options: HookExecutionOptions = {}
 ): Promise<HookResult[]> {
     const hooks = getHooksForEvent(event);
     const results: HookResult[] = [];
 
     for (const hook of hooks) {
-        const result = await executeEventHook(hook, payload);
+        const result = await executeEventHook(hook, payload, options);
         results.push(result);
     }
 

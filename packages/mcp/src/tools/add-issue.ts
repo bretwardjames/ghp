@@ -2,6 +2,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
+import {
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type IssueCreatedPayload,
+} from '@bretwardjames/ghp-core';
 
 /** Tool metadata for registry */
 export const meta: ToolMeta = {
@@ -111,6 +116,30 @@ export function register(server: McpServer, context: ServerContext): void {
                                     message += `\n\nWarning: Status "${status}" not found. Valid options: ${validStatuses}`;
                                 }
                             }
+                        }
+                    }
+                }
+
+                // Fire issue-created hook
+                if (hasHooksForEvent('issue-created')) {
+                    const payload: IssueCreatedPayload = {
+                        repo: `${repo.owner}/${repo.name}`,
+                        issue: {
+                            number: result.number,
+                            title,
+                            body: body || '',
+                            url: issueUrl,
+                        },
+                    };
+
+                    const hookResults = await executeHooksForEvent('issue-created', payload);
+                    const successCount = hookResults.filter(r => r.success).length;
+                    const failCount = hookResults.length - successCount;
+
+                    if (hookResults.length > 0) {
+                        message += `\n\nHooks: ${successCount} succeeded`;
+                        if (failCount > 0) {
+                            message += `, ${failCount} failed`;
                         }
                     }
                 }

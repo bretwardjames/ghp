@@ -717,51 +717,14 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         console.log(chalk.green.bold('Ready to work on:'), item.title);
     }
 
-    // Fire issue-started event hooks (skip in review mode)
+    // Determine branch and hook execution directory
+    // If a worktree was created, hooks should fire from INSIDE the worktree
+    // so plugins like Ragtime create files in the correct location
     const finalBranch = worktreeBranch || linkedBranch || await getCurrentBranch() || '';
-    if (!options.review && hasHooksForEvent('issue-started')) {
-        console.log();
-        console.log(chalk.dim('Running issue-started hooks...'));
+    const hookCwd = worktreeWasCreated && worktreePath ? worktreePath : undefined;
 
-        // Fetch full issue details for hooks (ProjectItem doesn't include body)
-        const issueDetails = await api.getIssueDetails(repo, issueNumber);
-
-        const payload: IssueStartedPayload = {
-            repo: `${repo.owner}/${repo.name}`,
-            issue: {
-                number: issueNumber,
-                title: item.title,
-                body: issueDetails?.body || '',
-                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
-            },
-            branch: finalBranch,
-        };
-
-        const results = await executeHooksForEvent('issue-started', payload);
-
-        for (const result of results) {
-            if (result.success) {
-                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
-                if (result.output) {
-                    // Show first few lines of output
-                    const lines = result.output.split('\n').slice(0, 3);
-                    for (const line of lines) {
-                        console.log(chalk.dim(`  ${line}`));
-                    }
-                    if (result.output.split('\n').length > 3) {
-                        console.log(chalk.dim('  ...'));
-                    }
-                }
-            } else {
-                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
-                if (result.error) {
-                    console.log(chalk.dim(`  ${result.error}`));
-                }
-            }
-        }
-    }
-
-    // Fire worktree-created hooks if a NEW worktree was created (not for existing worktrees)
+// Fire worktree-created hooks FIRST if a NEW worktree was created
+    // (not for existing worktrees)
     if (worktreeWasCreated && worktreePath && hasHooksForEvent('worktree-created')) {
         console.log();
         console.log(chalk.dim('Running worktree-created hooks...'));
@@ -781,12 +744,61 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             },
         };
 
-        const worktreeResults = await executeHooksForEvent('worktree-created', worktreePayload);
+        // Fire from inside the worktree
+        const worktreeResults = await executeHooksForEvent('worktree-created', worktreePayload, {
+            cwd: hookCwd,
+        });
 
         for (const result of worktreeResults) {
             if (result.success) {
                 console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
                 if (result.output) {
+                    const lines = result.output.split('\n').slice(0, 3);
+                    for (const line of lines) {
+                        console.log(chalk.dim(`  ${line}`));
+                    }
+                    if (result.output.split('\n').length > 3) {
+                        console.log(chalk.dim('  ...'));
+                    }
+                }
+            } else {
+                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+                if (result.error) {
+                    console.log(chalk.dim(`  ${result.error}`));
+                }
+            }
+        }
+    }
+
+    // Fire issue-started event hooks AFTER worktree-created (skip in review mode)
+    if (!options.review && hasHooksForEvent('issue-started')) {
+        console.log();
+        console.log(chalk.dim('Running issue-started hooks...'));
+
+        // Fetch full issue details for hooks (ProjectItem doesn't include body)
+        const issueDetails = await api.getIssueDetails(repo, issueNumber);
+
+        const payload: IssueStartedPayload = {
+            repo: `${repo.owner}/${repo.name}`,
+            issue: {
+                number: issueNumber,
+                title: item.title,
+                body: issueDetails?.body || '',
+                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
+            },
+            branch: finalBranch,
+        };
+
+        // Fire from inside the worktree if one was created
+        const results = await executeHooksForEvent('issue-started', payload, {
+            cwd: hookCwd,
+        });
+
+        for (const result of results) {
+            if (result.success) {
+                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+                if (result.output) {
+                    // Show first few lines of output
                     const lines = result.output.split('\n').slice(0, 3);
                     for (const line of lines) {
                         console.log(chalk.dim(`  ${line}`));

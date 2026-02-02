@@ -7,14 +7,12 @@ import { api } from '../github-api.js';
 import {
     detectRepository,
     listWorktrees,
-    removeWorktree,
 } from '../git-utils.js';
 import { getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
 import {
-    executeHooksForEvent,
-    hasHooksForEvent,
-    type WorktreeRemovedPayload,
+    removeWorktreeWorkflow,
+    type HookResult,
 } from '@bretwardjames/ghp-core';
 
 interface WorktreeRemoveOptions {
@@ -23,6 +21,35 @@ interface WorktreeRemoveOptions {
 
 interface WorktreeListOptions {
     json?: boolean;
+}
+
+/**
+ * Display hook results in CLI format
+ */
+function displayHookResults(results: HookResult[], eventName: string): void {
+    if (results.length === 0) return;
+
+    console.log(chalk.dim(`Running ${eventName} hooks...`));
+
+    for (const result of results) {
+        if (result.success) {
+            console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
+            if (result.output) {
+                const lines = result.output.split('\n').slice(0, 3);
+                for (const line of lines) {
+                    console.log(chalk.dim(`  ${line}`));
+                }
+                if (result.output.split('\n').length > 3) {
+                    console.log(chalk.dim('  ...'));
+                }
+            }
+        } else {
+            console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
+            if (result.error) {
+                console.log(chalk.dim(`  ${result.error}`));
+            }
+        }
+    }
 }
 
 /**
@@ -82,16 +109,18 @@ export async function worktreeRemoveCommand(
         }
     }
 
-    // Remove the worktree
-    const worktreePath = worktree.path;
-    const worktreeName = worktreePath.split('/').pop() || '';
+    // Use the workflow to remove worktree and fire hooks
+    const result = await removeWorktreeWorkflow({
+        repo,
+        issueNumber,
+        branch: branchName,
+        worktreePath: worktree.path,
+        force: options.force,
+    });
 
-    try {
-        await removeWorktree(worktreePath, {}, options.force);
-        console.log(chalk.green('✓'), `Removed worktree: ${worktreePath}`);
-    } catch (error) {
+    if (!result.success) {
         if (options.force) {
-            console.error(chalk.red('Error:'), 'Failed to remove worktree:', error);
+            console.error(chalk.red('Error:'), 'Failed to remove worktree:', result.error);
         } else {
             console.error(chalk.red('Error:'), 'Failed to remove worktree.');
             console.log(chalk.dim('You may have uncommitted changes. Use --force to remove anyway.'));
@@ -99,45 +128,12 @@ export async function worktreeRemoveCommand(
         process.exit(1);
     }
 
-    // Fire worktree-removed hooks (only after successful removal)
-    if (hasHooksForEvent('worktree-removed')) {
-        console.log(chalk.dim('Running worktree-removed hooks...'));
+    console.log(chalk.green('✓'), `Removed worktree: ${result.worktree?.path}`);
 
-        const payload: WorktreeRemovedPayload = {
-            repo: `${repo.owner}/${repo.name}`,
-            issue: {
-                number: issueNumber,
-                title: '', // Title not fetched to avoid extra API call
-                url: `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`,
-            },
-            branch: branchName,
-            worktree: {
-                path: worktreePath,
-                name: worktreeName,
-            },
-        };
-
-        const results = await executeHooksForEvent('worktree-removed', payload);
-
-        for (const result of results) {
-            if (result.success) {
-                console.log(chalk.green('✓'), `Hook "${result.hookName}" completed`);
-                if (result.output) {
-                    const lines = result.output.split('\n').slice(0, 3);
-                    for (const line of lines) {
-                        console.log(chalk.dim(`  ${line}`));
-                    }
-                    if (result.output.split('\n').length > 3) {
-                        console.log(chalk.dim('  ...'));
-                    }
-                }
-            } else {
-                console.log(chalk.yellow('⚠'), `Hook "${result.hookName}" failed`);
-                if (result.error) {
-                    console.log(chalk.dim(`  ${result.error}`));
-                }
-            }
-        }
+    // Display hook results
+    if (result.hookResults.length > 0) {
+        console.log();
+        displayHookResults(result.hookResults, 'worktree-removed');
     }
 }
 

@@ -21,6 +21,13 @@ import {
 import type { WorktreeInfo } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 import { getBranchLinker } from './extension';
+import {
+    executeHooksForEvent,
+    hasHooksForEvent,
+    type WorktreeCreatedPayload,
+    type IssueStartedPayload,
+    type HookResult,
+} from '@bretwardjames/ghp-core';
 
 const execAsync = promisify(exec);
 
@@ -722,6 +729,17 @@ export async function executeStartInWorktree(
             isNew: true, // Mark as new so auto-run works
         };
         writeWorktreeContext(worktreePath, worktreeContext);
+
+        // Fire hooks from inside the worktree so plugins create files there
+        await fireWorktreeHooks({
+            repo: item.repository,
+            branch: branchName,
+            worktreePath,
+            worktreeName: worktreePath.split('/').pop() || '',
+            issueNumber: item.number,
+            issueTitle: item.title,
+            issueUrl: worktreeContext.issue.url,
+        });
     }
 
     return { success: true, worktreePath };
@@ -750,6 +768,94 @@ async function applyActiveLabelNonExclusive(api: GitHubAPI, item: NormalizedProj
         await api.addLabelToIssue(owner, repo, item.number, labelName);
     } catch (error) {
         console.warn('Failed to apply active label:', error);
+    }
+}
+
+interface FireWorktreeHooksOptions {
+    repo: string;
+    branch: string;
+    worktreePath: string;
+    worktreeName: string;
+    issueNumber: number;
+    issueTitle: string;
+    issueUrl: string;
+}
+
+/**
+ * Fire worktree-created and issue-started hooks from inside the worktree.
+ * Hooks fire in order: worktree-created first, then issue-started.
+ */
+async function fireWorktreeHooks(options: FireWorktreeHooksOptions): Promise<void> {
+    const {
+        repo,
+        branch,
+        worktreePath,
+        worktreeName,
+        issueNumber,
+        issueTitle,
+        issueUrl,
+    } = options;
+
+    // Fire worktree-created hook first
+    if (hasHooksForEvent('worktree-created')) {
+        const payload: WorktreeCreatedPayload = {
+            repo,
+            branch,
+            worktree: {
+                path: worktreePath,
+                name: worktreeName,
+            },
+            issue: {
+                number: issueNumber,
+                title: issueTitle,
+                url: issueUrl,
+            },
+        };
+
+        try {
+            const results = await executeHooksForEvent('worktree-created', payload, {
+                cwd: worktreePath,
+            });
+            logHookResults('worktree-created', results);
+        } catch (error) {
+            console.warn('Failed to execute worktree-created hooks:', error);
+        }
+    }
+
+    // Fire issue-started hook second
+    if (hasHooksForEvent('issue-started')) {
+        const payload: IssueStartedPayload = {
+            repo,
+            issue: {
+                number: issueNumber,
+                title: issueTitle,
+                body: '',
+                url: issueUrl,
+            },
+            branch,
+        };
+
+        try {
+            const results = await executeHooksForEvent('issue-started', payload, {
+                cwd: worktreePath,
+            });
+            logHookResults('issue-started', results);
+        } catch (error) {
+            console.warn('Failed to execute issue-started hooks:', error);
+        }
+    }
+}
+
+/**
+ * Log hook execution results
+ */
+function logHookResults(event: string, results: HookResult[]): void {
+    for (const result of results) {
+        if (result.success) {
+            console.log(`[${event}] Hook "${result.hookName}" completed successfully`);
+        } else {
+            console.warn(`[${event}] Hook "${result.hookName}" failed:`, result.error);
+        }
     }
 }
 

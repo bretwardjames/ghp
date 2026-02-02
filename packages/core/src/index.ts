@@ -234,6 +234,19 @@ export type {
 } from './agents/index.js';
 
 // =============================================================================
+// Retry Utilities (exponential backoff for transient failures)
+// =============================================================================
+
+export {
+    withRetry,
+    wrapWithRetry,
+    isTransientError,
+    parseRateLimitDelay,
+    calculateBackoffDelay,
+    DEFAULT_RETRY_CONFIG,
+} from './retry.js';
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -242,6 +255,7 @@ export type {
     TokenProvider,
     GitHubAPIOptions,
     AuthError,
+    RetryConfig,
 
     // Git
     GitOptions,

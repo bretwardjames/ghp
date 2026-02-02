@@ -19,6 +19,20 @@ export interface TokenProvider {
 }
 
 /**
+ * Configuration for retry behavior on transient API failures
+ */
+export interface RetryConfig {
+    /** Maximum number of retry attempts (default: 3) */
+    maxRetries: number;
+    /** Base delay in milliseconds (default: 1000) */
+    baseDelayMs: number;
+    /** Maximum delay in milliseconds (default: 30000) */
+    maxDelayMs: number;
+    /** Optional callback for retry events (logging, metrics) */
+    onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
+}
+
+/**
  * Options for GitHubAPI constructor
  */
 export interface GitHubAPIOptions {
@@ -26,6 +40,8 @@ export interface GitHubAPIOptions {
     tokenProvider: TokenProvider;
     /** Callback for authentication errors (scope issues, SSO, etc.) */
     onAuthError?: (error: AuthError) => void;
+    /** Configuration for retry behavior on transient failures (optional) */
+    retryConfig?: Partial<RetryConfig>;
 }
 
 /**

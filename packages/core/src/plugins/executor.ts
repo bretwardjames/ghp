@@ -8,8 +8,8 @@ import { writeFileSync, unlinkSync } from 'fs';
 import { randomBytes } from 'crypto';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import type { EventHook, EventType, EventPayload, HookResult, HookOutcome, HookExitCodes } from './types.js';
-import { getHooksForEvent } from './registry.js';
+import type { EventHook, EventType, EventPayload, HookResult, HookOutcome, HookExitCodes, OnFailureBehavior } from './types.js';
+import { getHooksForEvent, getEventSettings } from './registry.js';
 
 // =============================================================================
 // Template Variable Substitution
@@ -152,6 +152,15 @@ export interface HookExecutionOptions {
      * in the correct location.
      */
     cwd?: string;
+
+    /**
+     * Behavior when a hook fails (aborts).
+     * - 'fail-fast': Stop executing hooks on first failure (default)
+     * - 'continue': Run all hooks, collect all failures
+     *
+     * Note: Per-event settings in event-hooks.json take precedence over this.
+     */
+    onFailure?: OnFailureBehavior;
 }
 
 // =============================================================================
@@ -441,13 +450,15 @@ export async function executeEventHook(
  * Returns results for each hook that was executed.
  * Hooks are executed sequentially (not in parallel) to avoid race conditions.
  *
- * If a hook with blocking or interactive mode signals abort, execution stops
- * and the aborted result is included. Check result.aborted on the last item
- * to determine if the workflow should be aborted.
+ * The behavior when a hook fails depends on the onFailure setting:
+ * - 'fail-fast' (default): Stop on first failure, return results so far
+ * - 'continue': Run all hooks, return all results
+ *
+ * Precedence for onFailure: per-event setting > options.onFailure > 'fail-fast'
  *
  * @param event - The event type to fire hooks for
  * @param payload - Event payload with template variables
- * @param options - Execution options (e.g., working directory)
+ * @param options - Execution options (e.g., working directory, onFailure behavior)
  */
 export async function executeHooksForEvent(
     event: EventType,
@@ -457,12 +468,16 @@ export async function executeHooksForEvent(
     const hooks = getHooksForEvent(event);
     const results: HookResult[] = [];
 
+    // Resolve onFailure behavior: per-event override > options > default
+    const eventSettings = getEventSettings(event);
+    const onFailure: OnFailureBehavior = eventSettings?.onFailure ?? options.onFailure ?? 'fail-fast';
+
     for (const hook of hooks) {
         const result = await executeEventHook(hook, payload, options);
         results.push(result);
 
-        // Stop processing if a hook signals abort
-        if (result.aborted) {
+        // Stop processing if fail-fast and a hook signals abort
+        if (result.aborted && onFailure === 'fail-fast') {
             break;
         }
     }

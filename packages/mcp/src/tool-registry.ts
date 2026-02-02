@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerContext } from './server.js';
 import type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
+import type { OnFailureBehavior } from '@bretwardjames/ghp-core';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -137,6 +138,45 @@ export function loadMcpConfig(): McpConfig {
                 ...workspaceMcp.disabledTools,
             ];
         }
+    }
+
+    return result;
+}
+
+/**
+ * Hooks configuration for onFailure behavior
+ */
+export interface HooksConfig {
+    onFailure: OnFailureBehavior;
+}
+
+/**
+ * Load hooks configuration from user and workspace config files.
+ * Workspace config takes precedence over user config.
+ */
+export function loadHooksConfig(): HooksConfig {
+    // User config: ~/.config/ghp-cli/config.json
+    const userConfigPath = join(homedir(), '.config', 'ghp-cli', 'config.json');
+    const userConfig = loadConfigFile(userConfigPath);
+
+    // Workspace config: <repo-root>/.ghp/config.json
+    const repoRoot = getRepoRoot();
+    const workspaceConfigPath = repoRoot ? join(repoRoot, '.ghp', 'config.json') : null;
+    const workspaceConfig = workspaceConfigPath ? loadConfigFile(workspaceConfigPath) : null;
+
+    // Default
+    const result: HooksConfig = { onFailure: 'fail-fast' };
+
+    // Apply user config
+    const userHooks = userConfig?.hooks as { onFailure?: string } | undefined;
+    if (userHooks?.onFailure === 'fail-fast' || userHooks?.onFailure === 'continue') {
+        result.onFailure = userHooks.onFailure;
+    }
+
+    // Apply workspace config (takes precedence)
+    const workspaceHooks = workspaceConfig?.hooks as { onFailure?: string } | undefined;
+    if (workspaceHooks?.onFailure === 'fail-fast' || workspaceHooks?.onFailure === 'continue') {
+        result.onFailure = workspaceHooks.onFailure;
     }
 
     return result;

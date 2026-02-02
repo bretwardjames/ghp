@@ -16,7 +16,19 @@ import {
     hasHooksForEvent,
     type IssueStartedPayload,
     type HookResult,
+    type OnFailureBehavior,
 } from '@bretwardjames/ghp-core';
+
+/**
+ * Get hooks configuration from VS Code settings
+ */
+function getHooksConfig(): { onFailure: OnFailureBehavior } {
+    const config = vscode.workspace.getConfiguration('ghProjects');
+    const onFailure = config.get<string>('hooksOnFailure', 'fail-fast');
+    return {
+        onFailure: onFailure === 'continue' ? 'continue' : 'fail-fast',
+    };
+}
 
 export interface StartWorkingContext {
     item: NormalizedProjectItem;
@@ -247,7 +259,10 @@ export async function executeStartWorking(
             };
 
             try {
-                const results = await executeHooksForEvent('issue-started', payload);
+                const hooksConfig = getHooksConfig();
+                const results = await executeHooksForEvent('issue-started', payload, {
+                    onFailure: hooksConfig.onFailure,
+                });
                 logHookResults(results);
             } catch (error) {
                 // Non-fatal - just log it

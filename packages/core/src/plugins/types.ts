@@ -106,6 +106,8 @@ export interface EventHook {
  */
 export interface EventHooksConfig {
     hooks: EventHook[];
+    /** Per-event execution settings (overrides global defaults) */
+    eventDefaults?: Partial<Record<EventType, EventHookSettings>>;
 }
 
 // =============================================================================
@@ -279,6 +281,21 @@ export type EventPayload =
  * Outcome of hook execution based on mode and exit code
  */
 export type HookOutcome = 'success' | 'warn' | 'abort' | 'continue';
+
+/**
+ * Behavior when a hook fails (aborts)
+ * - 'fail-fast': Stop executing hooks on first failure (default)
+ * - 'continue': Run all hooks, collect all failures
+ */
+export type OnFailureBehavior = 'fail-fast' | 'continue';
+
+/**
+ * Per-event hook execution settings
+ */
+export interface EventHookSettings {
+    /** Behavior when a hook fails for this event */
+    onFailure?: OnFailureBehavior;
+}
 
 /**
  * Result of executing an event hook

@@ -89,7 +89,8 @@ describe('createIssueWorkflow', () => {
                     title: 'Test Issue',
                     body: 'Issue body',
                 }),
-            })
+            }),
+            expect.objectContaining({})
         );
     });
 
@@ -213,7 +214,7 @@ describe('startIssueWorkflow', () => {
                 }),
                 branch: 'testuser/123-test-issue',
             }),
-            { cwd: undefined }
+            expect.objectContaining({ cwd: undefined })
         );
     });
 
@@ -276,7 +277,7 @@ describe('startIssueWorkflow', () => {
         expect(executeHooksForEvent).toHaveBeenCalledWith(
             'issue-started',
             expect.any(Object),
-            { cwd: '/worktrees/testrepo/123-test-issue' }
+            expect.objectContaining({ cwd: '/worktrees/testrepo/123-test-issue' })
         );
     });
 

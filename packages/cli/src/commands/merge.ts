@@ -5,6 +5,7 @@ import { detectRepository, removeWorktree } from '../git-utils.js';
 import { api } from '../github-api.js';
 import { getBranchWorktree } from '../worktree-utils.js';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
+import { getHooksConfig } from '../config.js';
 import {
     executeHooksForEvent,
     hasHooksForEvent,
@@ -187,6 +188,9 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
         exit(1);
     }
 
+    // Load hooks config once for all hooks
+    const hooksConfig = getHooksConfig();
+
     // Fire worktree-removed hook if we removed a worktree
     if (removedWorktree && hasHooksForEvent('worktree-removed')) {
         console.log();
@@ -204,7 +208,9 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
             worktree: removedWorktree,
         };
 
-        const worktreeResults = await executeHooksForEvent('worktree-removed', worktreePayload);
+        const worktreeResults = await executeHooksForEvent('worktree-removed', worktreePayload, {
+            onFailure: hooksConfig.onFailure,
+        });
 
         for (const result of worktreeResults) {
             if (result.success) {
@@ -244,7 +250,9 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
             base: prInfo.baseRefName,
         };
 
-        const results = await executeHooksForEvent('pr-merged', payload);
+        const results = await executeHooksForEvent('pr-merged', payload, {
+            onFailure: hooksConfig.onFailure,
+        });
 
         for (const result of results) {
             if (result.success) {

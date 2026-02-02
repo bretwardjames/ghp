@@ -17,7 +17,7 @@ import {
     GitError,
     type RepoInfo,
 } from '../git-utils.js';
-import { getConfig, getParallelWorkConfig, type TerminalMode } from '../config.js';
+import { getConfig, getParallelWorkConfig, getHooksConfig, type TerminalMode } from '../config.js';
 import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
@@ -731,7 +731,10 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     const finalBranch = worktreeBranch || linkedBranch || await getCurrentBranch() || '';
     const hookCwd = worktreeWasCreated && worktreePath ? worktreePath : undefined;
 
-// Fire worktree-created hooks FIRST if a NEW worktree was created
+    // Load hooks config once for all hooks
+    const hooksConfig = getHooksConfig();
+
+    // Fire worktree-created hooks FIRST if a NEW worktree was created
     // (not for existing worktrees)
     if (worktreeWasCreated && worktreePath && hasHooksForEvent('worktree-created')) {
         console.log();
@@ -755,6 +758,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         // Fire from inside the worktree
         const worktreeResults = await executeHooksForEvent('worktree-created', worktreePayload, {
             cwd: hookCwd,
+            onFailure: hooksConfig.onFailure,
         });
 
         for (const result of worktreeResults) {
@@ -800,6 +804,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         // Fire from inside the worktree if one was created
         const results = await executeHooksForEvent('issue-started', payload, {
             cwd: hookCwd,
+            onFailure: hooksConfig.onFailure,
         });
 
         for (const result of results) {

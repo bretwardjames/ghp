@@ -79,7 +79,7 @@ describe('createWorktreeWorkflow', () => {
                     url: 'https://github.com/testowner/testrepo/issues/123',
                 },
             }),
-            { cwd: '/tmp/worktrees/testrepo/123-test-issue' }
+            expect.objectContaining({ cwd: '/tmp/worktrees/testrepo/123-test-issue' })
         );
     });
 
@@ -203,7 +203,8 @@ describe('removeWorktreeWorkflow', () => {
             expect.objectContaining({
                 repo: 'testowner/testrepo',
                 branch: 'testowner/123-test',
-            })
+            }),
+            expect.objectContaining({})
         );
     });
 

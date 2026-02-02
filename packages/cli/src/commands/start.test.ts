@@ -51,6 +51,7 @@ vi.mock('../git-utils.js', () => ({
 vi.mock('../config.js', () => ({
     getConfig: vi.fn(),
     getParallelWorkConfig: vi.fn(() => ({ openTerminal: false })),
+    getHooksConfig: vi.fn(() => ({ onFailure: 'fail-fast' })),
 }));
 
 // Mock branch-linker

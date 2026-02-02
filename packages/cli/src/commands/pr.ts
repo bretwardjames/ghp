@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import { api } from '../github-api.js';
 import { detectRepository, getCurrentBranch, type RepoInfo } from '../git-utils.js';
 import { getIssueForBranch } from '../branch-linker.js';
-import { getConfig, getClaudeConfig } from '../config.js';
+import { getConfig, getClaudeConfig, getHooksConfig } from '../config.js';
 import { loadProjectConventions, buildConventionsContext } from '../conventions.js';
 import { runFeedbackLoop, UserCancelledError } from '../ai-feedback.js';
 import { generateWithClaude } from '../claude-runner.js';
@@ -103,6 +103,7 @@ async function createPr(
 
         // Use the workflow to handle PR creation and all hooks
         const baseBranch = getConfig('mainBranch') || 'main';
+        const hooksConfig = getHooksConfig();
 
         const result = await createPRWorkflow({
             repo,
@@ -115,6 +116,7 @@ async function createPr(
             openInBrowser: false, // We'll handle browser opening ourselves
             skipHooks: noHooks,
             force,
+            onFailure: hooksConfig.onFailure,
         });
 
         // Handle abort by hook

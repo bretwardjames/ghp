@@ -494,6 +494,15 @@
           "default": true,
           "description": "Automatically run setup command in new worktrees"
         },
+        "ghProjects.hooksOnFailure": {
+          "type": "string",
+          "enum": [
+            "fail-fast",
+            "continue"
+          ],
+          "default": "fail-fast",
+          "description": "Behavior when a hook fails: 'fail-fast' stops on first failure, 'continue' runs all hooks and collects failures"
+        },
         "ghProjects.worktree.defaultBaseBranch": {
           "type": "string",
           "enum": [

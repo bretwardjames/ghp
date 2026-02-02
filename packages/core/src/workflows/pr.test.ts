@@ -97,7 +97,8 @@ describe('createPRWorkflow', () => {
                     deletions: 50,
                     files_changed: 3,
                 }),
-            })
+            }),
+            expect.objectContaining({})
         );
 
         // Verify pr-creating hooks were called with title/body
@@ -107,7 +108,8 @@ describe('createPRWorkflow', () => {
                 repo: 'testowner/testrepo',
                 title: 'Add new feature',
                 body: 'This PR adds a new feature',
-            })
+            }),
+            expect.objectContaining({})
         );
 
         // Verify pr-created hooks were called
@@ -120,7 +122,8 @@ describe('createPRWorkflow', () => {
                     title: 'Add new feature',
                 }),
                 branch: 'feature/test-branch',
-            })
+            }),
+            expect.objectContaining({})
         );
     });
 
@@ -150,7 +153,8 @@ describe('createPRWorkflow', () => {
                 issue: expect.objectContaining({
                     number: 123,
                 }),
-            })
+            }),
+            expect.objectContaining({})
         );
     });
 

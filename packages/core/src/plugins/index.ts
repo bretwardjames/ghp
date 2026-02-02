@@ -8,6 +8,8 @@ export type {
     HookMode,
     HookExitCodes,
     HookOutcome,
+    OnFailureBehavior,
+    EventHookSettings,
     EventHook,
     EventHooksConfig,
     BaseEventPayload,
@@ -39,6 +41,8 @@ export {
     disableEventHook,
     getValidEventTypes,
     getValidModes,
+    getValidOnFailureBehaviors,
+    getEventSettings,
 } from './registry.js';
 
 // Executor

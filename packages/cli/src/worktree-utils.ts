@@ -15,6 +15,7 @@ import {
     getWorktreeForBranch,
     getRepositoryRoot,
     checkoutBranch,
+    GitError,
     type WorktreeInfo,
     type RepoInfo,
 } from './git-utils.js';
@@ -153,9 +154,13 @@ export async function createParallelWorktree(
                 alreadyExisted: true,
             };
         }
+        // Include stderr from GitError for better diagnostics
+        const errorMessage = error instanceof GitError && error.stderr
+            ? `${error.message}\n${error.stderr}`
+            : error instanceof Error ? error.message : String(error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage,
         };
     }
 

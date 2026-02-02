@@ -38,7 +38,7 @@ export interface AuthError extends Error {
 }
 
 // =============================================================================
-// Git Utilities Options
+// Git Utilities Options & Errors
 // =============================================================================
 
 /**
@@ -47,6 +47,57 @@ export interface AuthError extends Error {
 export interface GitOptions {
     /** Working directory for git commands. Defaults to process.cwd() */
     cwd?: string;
+}
+
+/**
+ * Error class for git command failures.
+ * Captures full context to enable debugging and appropriate error handling.
+ */
+export class GitError extends Error {
+    /** The git command that was executed */
+    readonly command: string;
+    /** The stderr output from the git command */
+    readonly stderr: string;
+    /** The exit code from the git command (null if process was killed) */
+    readonly exitCode: number | null;
+    /** The working directory where the command was run */
+    readonly cwd: string;
+
+    constructor(options: {
+        message: string;
+        command: string;
+        stderr: string;
+        exitCode: number | null;
+        cwd: string;
+    }) {
+        super(options.message);
+        this.name = 'GitError';
+        this.command = options.command;
+        this.stderr = options.stderr;
+        this.exitCode = options.exitCode;
+        this.cwd = options.cwd;
+
+        // Maintains proper stack trace for where error was thrown (V8 engines)
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, GitError);
+        }
+    }
+
+    /**
+     * Returns a detailed string representation for logging
+     */
+    toDetailedString(): string {
+        const parts = [
+            `GitError: ${this.message}`,
+            `  Command: ${this.command}`,
+            `  CWD: ${this.cwd}`,
+            `  Exit code: ${this.exitCode}`,
+        ];
+        if (this.stderr) {
+            parts.push(`  Stderr: ${this.stderr}`);
+        }
+        return parts.join('\n');
+    }
 }
 
 // =============================================================================

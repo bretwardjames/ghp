@@ -10,7 +10,10 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { homedir } from 'os';
 import type { RepoInfo, GitOptions } from './types.js';
+import { GitError } from './types.js';
 import { parseGitHubUrl } from './url-parser.js';
+
+export { GitError };
 
 /**
  * Sanitize a string for safe use in file paths and git commands.
@@ -62,55 +65,71 @@ function validateBranchName(branch: string): void {
 const execAsync = promisify(exec);
 
 /**
- * Execute a git command in the specified directory
+ * Error type from child_process.exec with additional properties
+ */
+interface ExecError extends Error {
+    code?: number;
+    stderr?: string;
+    stdout?: string;
+}
+
+/**
+ * Execute a git command in the specified directory.
+ * Throws GitError with full context on failure.
  */
 async function execGit(
     command: string,
     options: GitOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
     const cwd = options.cwd || process.cwd();
-    return execAsync(command, { cwd });
+    try {
+        return await execAsync(command, { cwd });
+    } catch (error) {
+        const execError = error as ExecError;
+        throw new GitError({
+            message: execError.message || 'Git command failed',
+            command,
+            stderr: execError.stderr || '',
+            exitCode: execError.code ?? null,
+            cwd,
+        });
+    }
 }
 
 /**
- * Detect the GitHub repository from the current directory's git remote
+ * Detect the GitHub repository from the current directory's git remote.
+ * @returns Repository info, or null if the remote URL is not a GitHub URL
+ * @throws {GitError} If the git command fails (e.g., not a git repo, no origin remote)
  */
 export async function detectRepository(options: GitOptions = {}): Promise<RepoInfo | null> {
-    try {
-        const { stdout } = await execGit('git remote get-url origin', options);
-        const url = stdout.trim();
-        return parseGitHubUrl(url);
-    } catch {
-        return null;
-    }
+    const { stdout } = await execGit('git remote get-url origin', options);
+    const url = stdout.trim();
+    return parseGitHubUrl(url);
 }
 
 /**
- * Get the current git branch
+ * Get the current git branch.
+ * Returns null if in detached HEAD state.
+ * @throws {GitError} If the git command fails (e.g., not a git repo)
  */
 export async function getCurrentBranch(options: GitOptions = {}): Promise<string | null> {
-    try {
-        const { stdout } = await execGit('git branch --show-current', options);
-        return stdout.trim() || null;
-    } catch {
-        return null;
-    }
+    const { stdout } = await execGit('git branch --show-current', options);
+    return stdout.trim() || null;
 }
 
 /**
- * Check if there are uncommitted changes
+ * Check if there are uncommitted changes.
+ * @throws {GitError} If the git command fails (e.g., not a git repo)
  */
 export async function hasUncommittedChanges(options: GitOptions = {}): Promise<boolean> {
-    try {
-        const { stdout } = await execGit('git status --porcelain', options);
-        return stdout.trim().length > 0;
-    } catch {
-        return false;
-    }
+    const { stdout } = await execGit('git status --porcelain', options);
+    return stdout.trim().length > 0;
 }
 
 /**
- * Check if a branch exists locally
+ * Check if a branch exists locally.
+ * Returns false if branch doesn't exist; throws on other git errors.
+ * @throws {GitError} If the git command fails for reasons other than branch not existing
  */
 export async function branchExists(
     branchName: string,
@@ -119,13 +138,19 @@ export async function branchExists(
     try {
         await execGit(`git show-ref --verify --quiet refs/heads/${branchName}`, options);
         return true;
-    } catch {
-        return false;
+    } catch (error) {
+        // Exit code 1 means branch doesn't exist (expected)
+        // Other errors should propagate
+        if (error instanceof GitError && error.exitCode === 1) {
+            return false;
+        }
+        throw error;
     }
 }
 
 /**
- * Create and checkout a new branch
+ * Create and checkout a new branch.
+ * @throws {GitError} If the branch cannot be created (e.g., already exists, invalid name)
  */
 export async function createBranch(
     branchName: string,
@@ -135,7 +160,8 @@ export async function createBranch(
 }
 
 /**
- * Checkout an existing branch
+ * Checkout an existing branch.
+ * @throws {GitError} If the branch cannot be checked out (e.g., doesn't exist, uncommitted changes)
  */
 export async function checkoutBranch(
     branchName: string,
@@ -145,79 +171,78 @@ export async function checkoutBranch(
 }
 
 /**
- * Pull latest from origin
+ * Pull latest from origin.
+ * @throws {GitError} If the pull fails (e.g., merge conflicts, no remote, network issues)
  */
 export async function pullLatest(options: GitOptions = {}): Promise<void> {
     await execGit('git pull', options);
 }
 
 /**
- * Fetch from origin
+ * Fetch from origin.
+ * @throws {GitError} If the fetch fails (e.g., no remote, network issues)
  */
 export async function fetchOrigin(options: GitOptions = {}): Promise<void> {
     await execGit('git fetch origin', options);
 }
 
 /**
- * Get number of commits behind origin
+ * Get number of commits behind origin.
+ * @throws {GitError} If the git command fails (e.g., no network, branch doesn't exist)
  */
 export async function getCommitsBehind(
     branch: string,
     options: GitOptions = {}
 ): Promise<number> {
-    try {
-        await fetchOrigin(options);
-        const { stdout } = await execGit(
-            `git rev-list --count ${branch}..origin/${branch}`,
-            options
-        );
-        return parseInt(stdout.trim(), 10) || 0;
-    } catch {
-        return 0;
-    }
+    await fetchOrigin(options);
+    const { stdout } = await execGit(
+        `git rev-list --count ${branch}..origin/${branch}`,
+        options
+    );
+    return parseInt(stdout.trim(), 10) || 0;
 }
 
 /**
- * Get number of commits ahead of origin
+ * Get number of commits ahead of origin.
+ * @throws {GitError} If the git command fails (e.g., no network, branch doesn't exist)
  */
 export async function getCommitsAhead(
     branch: string,
     options: GitOptions = {}
 ): Promise<number> {
-    try {
-        await fetchOrigin(options);
-        const { stdout } = await execGit(
-            `git rev-list --count origin/${branch}..${branch}`,
-            options
-        );
-        return parseInt(stdout.trim(), 10) || 0;
-    } catch {
-        return 0;
-    }
+    await fetchOrigin(options);
+    const { stdout } = await execGit(
+        `git rev-list --count origin/${branch}..${branch}`,
+        options
+    );
+    return parseInt(stdout.trim(), 10) || 0;
 }
 
 /**
- * Check if working directory is a git repository
+ * Check if working directory is a git repository.
+ * Returns false if not a git repo; throws on other git errors.
+ * @throws {GitError} If the git command fails for reasons other than not being a repo
  */
 export async function isGitRepository(options: GitOptions = {}): Promise<boolean> {
     try {
         await execGit('git rev-parse --git-dir', options);
         return true;
-    } catch {
-        return false;
+    } catch (error) {
+        // Exit code 128 means not a git repository (expected)
+        if (error instanceof GitError && error.exitCode === 128) {
+            return false;
+        }
+        throw error;
     }
 }
 
 /**
- * Get the root directory of the git repository
+ * Get the root directory of the git repository.
+ * @throws {GitError} If the git command fails (e.g., not a git repo)
  */
-export async function getRepositoryRoot(options: GitOptions = {}): Promise<string | null> {
-    try {
-        const { stdout } = await execGit('git rev-parse --show-toplevel', options);
-        return stdout.trim();
-    } catch {
-        return null;
-    }
+export async function getRepositoryRoot(options: GitOptions = {}): Promise<string> {
+    const { stdout } = await execGit('git rev-parse --show-toplevel', options);
+    return stdout.trim();
 }
 
 /**
@@ -283,37 +308,31 @@ export function extractIssueNumberFromBranch(branchName: string): number | null 
 }
 
 /**
- * Get all local branches
+ * Get all local branches.
+ * @throws {GitError} If the git command fails (e.g., not a git repo)
  */
 export async function getLocalBranches(options: GitOptions = {}): Promise<string[]> {
-    try {
-        const { stdout } = await execGit('git branch --format="%(refname:short)"', options);
-        return stdout
-            .split('\n')
-            .map(b => b.trim())
-            .filter(b => b.length > 0);
-    } catch {
-        return [];
-    }
+    const { stdout } = await execGit('git branch --format="%(refname:short)"', options);
+    return stdout
+        .split('\n')
+        .map(b => b.trim())
+        .filter(b => b.length > 0);
 }
 
 /**
- * Get all remote branches (excluding HEAD), stripped of origin/ prefix
+ * Get all remote branches (excluding HEAD), stripped of origin/ prefix.
+ * @throws {GitError} If the git command fails (e.g., not a git repo, network issues)
  */
 export async function getRemoteBranches(options: GitOptions = {}): Promise<string[]> {
-    try {
-        // Fetch to get latest remote branches
-        await execGit('git fetch --prune', options);
+    // Fetch to get latest remote branches
+    await execGit('git fetch --prune', options);
 
-        const { stdout } = await execGit('git branch -r --format="%(refname:short)"', options);
-        return stdout
-            .split('\n')
-            .map(b => b.trim())
-            .filter(b => b.length > 0 && !b.includes('HEAD'))
-            .map(b => b.replace(/^origin\//, '')); // Strip origin/ prefix
-    } catch {
-        return [];
-    }
+    const { stdout } = await execGit('git branch -r --format="%(refname:short)"', options);
+    return stdout
+        .split('\n')
+        .map(b => b.trim())
+        .filter(b => b.length > 0 && !b.includes('HEAD'))
+        .map(b => b.replace(/^origin\//, '')); // Strip origin/ prefix
 }
 
 /**
@@ -334,7 +353,9 @@ export async function getAllBranches(options: GitOptions = {}): Promise<string[]
 }
 
 /**
- * Get the default branch name (main or master)
+ * Get the default branch name (main or master).
+ * Tries remote HEAD first, falls back to checking local branches.
+ * @throws {GitError} If all detection methods fail (e.g., not a git repo)
  */
 export async function getDefaultBranch(options: GitOptions = {}): Promise<string> {
     try {
@@ -348,8 +369,13 @@ export async function getDefaultBranch(options: GitOptions = {}): Promise<string
         if (match) {
             return match[1];
         }
-    } catch {
-        // Fall back to checking if main or master exists
+    } catch (error) {
+        // Exit code 128 or 1 means symbolic ref doesn't exist - that's expected
+        // for repos without origin or newly initialized repos
+        if (!(error instanceof GitError) || (error.exitCode !== 128 && error.exitCode !== 1)) {
+            throw error;
+        }
+        // Fall through to checking if main or master exists
     }
 
     // Check if 'main' branch exists
@@ -396,10 +422,11 @@ function validatePath(path: string): void {
 }
 
 /**
- * Create a new worktree for a branch
+ * Create a new worktree for a branch.
  * @param worktreePath - Path where the worktree will be created
  * @param branch - Branch to checkout in the worktree
  * @param options - Git options (cwd determines the source repository)
+ * @throws {GitError} If the worktree cannot be created
  */
 export async function createWorktree(
     worktreePath: string,
@@ -420,18 +447,23 @@ export async function createWorktree(
         // Try to create from remote tracking branch
         try {
             await execGit(`git worktree add "${worktreePath}" -b "${branch}" "origin/${branch}"`, options);
-        } catch {
-            // If remote branch doesn't exist either, create a new branch from current HEAD
+        } catch (error) {
+            // If remote branch doesn't exist (exit code 128), create a new branch from current HEAD
+            // Other errors should propagate
+            if (!(error instanceof GitError) || error.exitCode !== 128) {
+                throw error;
+            }
             await execGit(`git worktree add -b "${branch}" "${worktreePath}"`, options);
         }
     }
 }
 
 /**
- * Remove a worktree
+ * Remove a worktree.
  * @param worktreePath - Path to the worktree to remove
  * @param options - Git options
  * @param force - Force removal even if worktree has uncommitted changes
+ * @throws {GitError} If the worktree cannot be removed (e.g., uncommitted changes, invalid path)
  */
 export async function removeWorktree(
     worktreePath: string,
@@ -444,54 +476,51 @@ export async function removeWorktree(
 }
 
 /**
- * List all worktrees for the repository
+ * List all worktrees for the repository.
  * @param options - Git options
  * @returns Array of worktree information
+ * @throws {GitError} If the git command fails (e.g., not a git repo)
  */
 export async function listWorktrees(options: GitOptions = {}): Promise<WorktreeInfo[]> {
-    try {
-        const { stdout } = await execGit('git worktree list --porcelain', options);
-        const worktrees: WorktreeInfo[] = [];
+    const { stdout } = await execGit('git worktree list --porcelain', options);
+    const worktrees: WorktreeInfo[] = [];
 
-        // Parse porcelain output - each worktree is separated by a blank line
-        const entries = stdout.trim().split('\n\n');
+    // Parse porcelain output - each worktree is separated by a blank line
+    const entries = stdout.trim().split('\n\n');
 
-        for (const entry of entries) {
-            if (!entry.trim()) continue;
+    for (const entry of entries) {
+        if (!entry.trim()) continue;
 
-            const lines = entry.split('\n');
-            const info: Partial<WorktreeInfo> = {
-                isMain: false,
-                branch: null,
-            };
+        const lines = entry.split('\n');
+        const info: Partial<WorktreeInfo> = {
+            isMain: false,
+            branch: null,
+        };
 
-            for (const line of lines) {
-                if (line.startsWith('worktree ')) {
-                    info.path = line.substring(9);
-                } else if (line.startsWith('HEAD ')) {
-                    info.head = line.substring(5);
-                } else if (line.startsWith('branch ')) {
-                    // Remove refs/heads/ prefix
-                    info.branch = line.substring(7).replace(/^refs\/heads\//, '');
-                } else if (line === 'bare') {
-                    info.isMain = true;
-                }
-            }
-
-            // First worktree is the main one
-            if (worktrees.length === 0) {
+        for (const line of lines) {
+            if (line.startsWith('worktree ')) {
+                info.path = line.substring(9);
+            } else if (line.startsWith('HEAD ')) {
+                info.head = line.substring(5);
+            } else if (line.startsWith('branch ')) {
+                // Remove refs/heads/ prefix
+                info.branch = line.substring(7).replace(/^refs\/heads\//, '');
+            } else if (line === 'bare') {
                 info.isMain = true;
-            }
-
-            if (info.path && info.head) {
-                worktrees.push(info as WorktreeInfo);
             }
         }
 
-        return worktrees;
-    } catch {
-        return [];
+        // First worktree is the main one
+        if (worktrees.length === 0) {
+            info.isMain = true;
+        }
+
+        if (info.path && info.head) {
+            worktrees.push(info as WorktreeInfo);
+        }
     }
+
+    return worktrees;
 }
 
 /**

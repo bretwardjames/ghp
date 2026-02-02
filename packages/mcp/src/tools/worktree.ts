@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
+import { validateNumericInput } from '@bretwardjames/ghp-core';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
 
@@ -102,21 +103,31 @@ export function register(server: McpServer, context: ServerContext): void {
             }
 
             try {
-                // Build the CLI command
-                let cmd = `ghp start ${issue} --parallel -fd --force`;
+                // Validate issue number to prevent injection
+                const safeIssue = validateNumericInput(issue, 'issue');
+
+                // Build CLI args as array to prevent command injection
+                // Using spawnSync with array args avoids shell entirely
+                const args = ['start', String(safeIssue), '--parallel', '-fd', '--force'];
                 if (worktreePath) {
-                    cmd += ` --worktree-path "${worktreePath}"`;
+                    args.push('--worktree-path', worktreePath);
                 }
                 if (spawnSubagent) {
-                    cmd += ' --spawn-subagent';
+                    args.push('--spawn-subagent');
                 }
 
                 // Execute the CLI command
-                const output = execSync(cmd, {
+                const result = spawnSync('ghp', args, {
                     encoding: 'utf-8',
                     cwd: process.cwd(),
                     env: process.env,
                 });
+
+                if (result.status !== 0) {
+                    throw new Error(result.stderr || `ghp start failed with exit code ${result.status}`);
+                }
+
+                const output = result.stdout;
 
                 // Parse the spawn directive if present
                 const directive = spawnSubagent ? parseSpawnDirective(output) : null;

@@ -41,11 +41,18 @@ export async function openCommand(issue: string, options: OpenOptions): Promise<
     // Open in browser if --browser flag
     if (options.browser) {
         const url = item?.url || `https://github.com/${repo.owner}/${repo.name}/issues/${issueNumber}`;
-        const { exec } = await import('child_process');
-        const openCmd = process.platform === 'darwin' ? 'open'
-            : process.platform === 'win32' ? 'start'
-            : 'xdg-open';
-        exec(`${openCmd} "${url}"`);
+        const { spawn } = await import('child_process');
+
+        // Use spawn with array args to prevent command injection
+        // Windows 'start' is a shell builtin, needs special handling
+        if (process.platform === 'win32') {
+            // cmd /c start "" "url" - empty title prevents URL being treated as title
+            // Note: pass empty string '', not literal '""' - spawn doesn't go through shell
+            spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+            const openCmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+            spawn(openCmd, [url], { detached: true, stdio: 'ignore' }).unref();
+        }
         console.log(chalk.green('Opened in browser'));
         return;
     }

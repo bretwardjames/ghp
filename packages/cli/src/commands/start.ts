@@ -34,6 +34,7 @@ import {
     type IssueStartedPayload,
     type WorktreeCreatedPayload,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 const execAsync = promisify(exec);
 
@@ -162,7 +163,7 @@ async function createAndLinkBranch(
             console.log(chalk.green('✓'), `Pushed branch to origin`);
         } catch (error) {
             console.error(chalk.red('Error:'), 'Failed to create branch:', error);
-            process.exit(1);
+            exit(1);
         }
     }
 
@@ -191,7 +192,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     let inputNumber = parseInt(issue, 10);
     if (isNaN(inputNumber)) {
         console.error(chalk.red('Error:'), 'Input must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     // In review mode, default to treating input as PR number (unless --issue flag)
@@ -207,7 +208,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             const prBranch = stdout.trim();
             if (!prBranch) {
                 console.error(chalk.red('Error:'), `PR #${inputNumber} not found or has no branch`);
-                process.exit(1);
+                exit(1);
             }
 
             // Extract issue number from branch name
@@ -215,7 +216,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             if (!extractedIssue) {
                 console.error(chalk.red('Error:'), `Could not extract issue number from branch: ${prBranch}`);
                 console.log(chalk.dim('Use --issue flag to specify an issue number directly'));
-                process.exit(1);
+                exit(1);
             }
 
             issueNumber = extractedIssue;
@@ -223,7 +224,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         } catch (error) {
             console.error(chalk.red('Error:'), `Failed to look up PR #${inputNumber}`);
             console.log(chalk.dim('Use --issue flag if you want to specify an issue number directly'));
-            process.exit(1);
+            exit(1);
         }
     }
 
@@ -231,14 +232,14 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Find the item
@@ -250,7 +251,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         const issueDetails = await api.getIssueDetails(repo, issueNumber);
         if (!issueDetails) {
             console.error(chalk.red('Error:'), `Issue #${issueNumber} does not exist`);
-            process.exit(1);
+            exit(1);
         }
 
         // Issue exists but not in project - handle based on config
@@ -259,13 +260,13 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
         if (projects.length === 0) {
             console.error(chalk.red('Error:'), 'No projects found for this repository');
-            process.exit(1);
+            exit(1);
         }
 
         if (behavior === 'fail') {
             console.error(chalk.red('Error:'), `Issue #${issueNumber} is not in any project`);
             console.log(chalk.dim('Set issueNotInProject to "auto-add" or "ask" in config to handle this'));
-            process.exit(1);
+            exit(1);
         }
 
         console.log(chalk.yellow(`Issue #${issueNumber} is not in any project.`));
@@ -289,7 +290,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             );
             if (!shouldAdd) {
                 console.log(chalk.dim('Aborted.'));
-                process.exit(0);
+                exit(0);
             }
         } else {
             console.log(chalk.dim(`Auto-adding to "${selectedProject.title}"...`));
@@ -299,7 +300,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         const added = await api.addIssueToProject(repo, issueNumber, selectedProject.id);
         if (!added) {
             console.error(chalk.red('Error:'), 'Failed to add issue to project');
-            process.exit(1);
+            exit(1);
         }
         console.log(chalk.green('✓'), `Added to "${selectedProject.title}"`);
 
@@ -307,7 +308,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         item = await api.findItemByNumber(repo, issueNumber);
         if (!item) {
             console.error(chalk.red('Error:'), 'Failed to find item after adding to project');
-            process.exit(1);
+            exit(1);
         }
     }
 
@@ -340,7 +341,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
                 if (!shouldContinue) {
                     console.log('Aborted.');
-                    process.exit(0);
+                    exit(0);
                 }
             } else {
                 console.log(chalk.dim('[--force-defaults] Proceeding despite blocking issues'));
@@ -446,7 +447,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 );
                 if (!result.success) {
                     console.error(chalk.red('Error:'), result.error);
-                    process.exit(1);
+                    exit(1);
                 }
                 worktreePath = result.path;
                 worktreeBranch = linkedBranch;
@@ -468,7 +469,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 } else {
                     // Check for uncommitted changes before switching
                     if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
-                        process.exit(0);
+                        exit(0);
                     }
 
                     // Check if branch exists locally
@@ -490,7 +491,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                                     console.log(chalk.dim(`Git error: ${error.stderr.trim()}`));
                                 }
                             }
-                            process.exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -509,7 +510,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
         // Check for uncommitted changes
         if (!(await handleUncommittedChanges(options.force, options.forceDefaults))) {
-            process.exit(0);
+            exit(0);
         }
 
         if (isOnMain) {
@@ -540,7 +541,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
                     if (nonMainBranches.length === 0) {
                         console.log(chalk.yellow('No other branches to link.'));
-                        process.exit(1);
+                        exit(1);
                     }
 
                     // Sort by relevance to the issue
@@ -608,7 +609,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
                     if (nonMainBranches.length === 0) {
                         console.log(chalk.yellow('No other branches to link.'));
-                        process.exit(1);
+                        exit(1);
                     }
 
                     // Sort by relevance to the issue
@@ -662,7 +663,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 );
                 if (!result.success) {
                     console.error(chalk.red('Error:'), result.error);
-                    process.exit(1);
+                    exit(1);
                 }
                 worktreePath = result.path;
                 worktreeBranch = newBranchName;
@@ -1007,7 +1008,7 @@ async function handlePullIfBehind(branch: string, forceDefaults?: boolean): Prom
                 console.log(chalk.green('✓'), 'Pulled latest changes');
             } catch (error) {
                 console.error(chalk.red('Error:'), 'Failed to pull:', error);
-                process.exit(1);
+                exit(1);
             }
         }
     }

@@ -91,10 +91,12 @@ import { generateWithClaude } from '../claude-runner.js';
 // Import command after mocks
 import { addIssueCommand } from './add-issue.js';
 
-// Mock process.exit
-vi.spyOn(process, 'exit').mockImplementation(() => {
-    throw new Error('process.exit called');
-});
+// Mock process.exit - use undefined as never to satisfy TypeScript's 'never' return type
+// without throwing an error that would cause unhandled rejections
+vi.spyOn(process, 'exit').mockImplementation((() => undefined) as () => never);
+
+// Reset exit state before each test to prevent "process is exiting" errors
+import { _resetForTesting as resetExitState } from '../exit.js';
 
 // Mock console
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -103,6 +105,7 @@ const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 describe('addIssueCommand', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        resetExitState(); // Reset exit state to prevent "process is exiting" errors
 
         // Default mocks
         vi.mocked(detectRepository).mockResolvedValue({
@@ -120,7 +123,7 @@ describe('addIssueCommand', () => {
         it('should require being in a git repository', async () => {
             vi.mocked(detectRepository).mockResolvedValue(null);
 
-            await expect(addIssueCommand('Test Issue', {})).rejects.toThrow('process.exit called');
+            await expect(addIssueCommand('Test Issue', {})).rejects.toThrow('Process exit pending');
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
                 'Not in a git repository with a GitHub remote'
@@ -130,7 +133,7 @@ describe('addIssueCommand', () => {
         it('should require authentication', async () => {
             vi.mocked(api.authenticate).mockResolvedValue(false);
 
-            await expect(addIssueCommand('Test Issue', {})).rejects.toThrow('process.exit called');
+            await expect(addIssueCommand('Test Issue', {})).rejects.toThrow('Process exit pending');
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
                 'Not authenticated. Run',
@@ -141,7 +144,7 @@ describe('addIssueCommand', () => {
         it('should require at least one project', async () => {
             vi.mocked(api.getProjects).mockResolvedValue([]);
 
-            await expect(addIssueCommand('Test Issue', {})).rejects.toThrow('process.exit called');
+            await expect(addIssueCommand('Test Issue', {})).rejects.toThrow('Process exit pending');
             expect(mockConsoleError).toHaveBeenCalledWith(
                 expect.anything(),
                 'No GitHub Projects found for this repository'

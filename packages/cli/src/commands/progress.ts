@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
 import type { ProjectItem } from '../types.js';
+import { exit } from '../exit.js';
 
 interface ProgressOptions {
     project?: string;
@@ -57,20 +58,20 @@ export async function progressCommand(options: ProgressOptions): Promise<void> {
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Get projects
     const projects = await api.getProjects(repo);
     if (projects.length === 0) {
         console.error(chalk.red('Error:'), 'No GitHub Projects found for this repository');
-        process.exit(1);
+        exit(1);
     }
 
     // Select project(s)
@@ -81,7 +82,7 @@ export async function progressCommand(options: ProgressOptions): Promise<void> {
     if (targetProjects.length === 0) {
         console.error(chalk.red('Error:'), `Project "${options.project}" not found`);
         console.log('Available projects:', projects.map(p => p.title).join(', '));
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.dim(`Loading ${targetProjects.map(p => p.title).join(', ')}...\n`));

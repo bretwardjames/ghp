@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
+import { exit } from '../exit.js';
 
 interface LabelOptions {
     remove?: boolean;
@@ -14,27 +15,27 @@ export async function labelCommand(
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     if (labels.length === 0) {
         console.error(chalk.red('Error:'), 'At least one label is required');
         console.log(chalk.dim('Usage: ghp label <issue> <labels...>'));
-        process.exit(1);
+        exit(1);
     }
 
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const applied: string[] = [];
@@ -73,6 +74,6 @@ export async function labelCommand(
     }
 
     if (applied.length === 0) {
-        process.exit(1);
+        exit(1);
     }
 }

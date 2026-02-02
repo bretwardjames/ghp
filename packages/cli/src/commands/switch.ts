@@ -13,6 +13,7 @@ import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js'
 import { getConfig, getParallelWorkConfig, type TerminalMode } from '../config.js';
 import { openParallelWorkTerminal } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
+import { exit } from '../exit.js';
 
 interface SwitchOptions {
     /** Create worktree instead of switching branches (parallel work mode) */
@@ -44,21 +45,21 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     // Detect repository
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate (needed to read issue body)
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Find linked branch
@@ -66,7 +67,7 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
     if (!branchName) {
         console.error(chalk.red('Error:'), `No branch linked to issue #${issueNumber}`);
         console.log(chalk.dim('Use'), chalk.cyan(`ghp link-branch ${issueNumber}`), chalk.dim('to link a branch'));
-        process.exit(1);
+        exit(1);
     }
 
     // Fetch issue details for title (used in worktree path naming)
@@ -76,7 +77,7 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
     // Check if branch exists
     if (!(await branchExists(branchName))) {
         console.error(chalk.red('Error:'), `Branch "${branchName}" no longer exists`);
-        process.exit(1);
+        exit(1);
     }
 
     // Track if we're in parallel mode
@@ -129,7 +130,7 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
         );
         if (!result.success) {
             console.error(chalk.red('Error:'), result.error);
-            process.exit(1);
+            exit(1);
         }
         worktreePath = result.path;
     } else {
@@ -150,7 +151,7 @@ export async function switchCommand(issue: string, options: SwitchOptions = {}):
                 console.log(chalk.green('✓'), `Switched to branch: ${branchName}`);
             } catch (error) {
                 console.error(chalk.red('Error:'), 'Failed to switch branch:', error);
-                process.exit(1);
+                exit(1);
             }
         }
     }

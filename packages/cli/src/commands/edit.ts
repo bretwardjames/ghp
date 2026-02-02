@@ -5,31 +5,32 @@ import { spawn } from 'child_process';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { exit } from '../exit.js';
 
 export async function editCommand(issue: string): Promise<void> {
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const issueNumber = parseInt(issue.replace(/^#/, ''), 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Invalid issue number:'), issue);
-        process.exit(1);
+        exit(1);
     }
 
     // Fetch current issue details
     const details = await api.getIssueDetails(repo, issueNumber);
     if (!details) {
         console.error(chalk.red('Issue not found:'), `#${issueNumber}`);
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.dim(`Editing #${issueNumber}: ${details.title}`));
@@ -52,7 +53,7 @@ export async function editCommand(issue: string): Promise<void> {
     // Check if title is empty
     if (!result.title.trim()) {
         console.error(chalk.red('Error:'), 'Title cannot be empty');
-        process.exit(1);
+        exit(1);
     }
 
     // Update the issue
@@ -69,7 +70,7 @@ export async function editCommand(issue: string): Promise<void> {
         console.log(chalk.green('Updated'), `#${issueNumber}`, chalk.dim(`(${changes.join(', ')})`));
     } else {
         console.error(chalk.red('Failed to update issue'));
-        process.exit(1);
+        exit(1);
     }
 }
 

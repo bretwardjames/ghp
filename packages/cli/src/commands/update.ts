@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { spawnSync } from 'child_process';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
+import { exit } from '../exit.js';
 
 export interface UpdateOptions {
     /** Skip prompts and update all packages */
@@ -103,7 +104,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     // Validate conflicting flags
     if (options.beta && options.stable) {
         console.error(chalk.red('Error:'), 'Cannot specify both --beta and --stable');
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.bold('Checking for updates...\n'));
@@ -114,7 +115,7 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     const hasNetworkIssue = packages.every(p => p.latest === 'unknown' && !p.latestBeta);
     if (hasNetworkIssue) {
         console.error(chalk.red('Error:'), 'Could not fetch package versions. Check your network connection.');
-        process.exit(1);
+        exit(1);
     }
 
     // Determine if we should use beta based on CLI version
@@ -243,6 +244,6 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
         console.log(chalk.green(`Successfully updated ${successCount} package(s)!`));
     } else {
         console.log(chalk.yellow(`Updated ${successCount} package(s), ${failCount} failed.`));
-        process.exit(1);
+        exit(1);
     }
 }

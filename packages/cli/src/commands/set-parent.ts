@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
 import { detectRepository } from '../git-utils.js';
+import { exit } from '../exit.js';
 
 interface SetParentOptions {
     parent?: string;
@@ -14,19 +15,19 @@ export async function setParentCommand(
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), `Invalid issue number: ${issue}`);
-        process.exit(1);
+        exit(1);
     }
 
     // Handle remove
@@ -35,7 +36,7 @@ export async function setParentCommand(
         const relationships = await api.getIssueRelationships(repo, issueNumber);
         if (!relationships) {
             console.error(chalk.red('Error:'), `Issue #${issueNumber} not found`);
-            process.exit(1);
+            exit(1);
         }
 
         if (!relationships.parent) {
@@ -48,7 +49,7 @@ export async function setParentCommand(
             console.log(chalk.green('Removed:'), `#${issueNumber} from parent #${relationships.parent.number}`);
         } else {
             console.error(chalk.red('Error:'), 'Failed to remove parent relationship');
-            process.exit(1);
+            exit(1);
         }
         return;
     }
@@ -56,18 +57,18 @@ export async function setParentCommand(
     // Handle set parent
     if (!options.parent) {
         console.error(chalk.red('Error:'), 'Either --parent <number> or --remove is required');
-        process.exit(1);
+        exit(1);
     }
 
     const parentNumber = parseInt(options.parent, 10);
     if (isNaN(parentNumber)) {
         console.error(chalk.red('Error:'), `Invalid parent issue number: ${options.parent}`);
-        process.exit(1);
+        exit(1);
     }
 
     if (parentNumber === issueNumber) {
         console.error(chalk.red('Error:'), 'An issue cannot be its own parent');
-        process.exit(1);
+        exit(1);
     }
 
     const success = await api.addSubIssue(repo, parentNumber, issueNumber);
@@ -76,6 +77,6 @@ export async function setParentCommand(
     } else {
         console.error(chalk.red('Error:'), 'Failed to set parent issue');
         console.log(chalk.dim('Make sure both issues exist and the sub-issues feature is enabled'));
-        process.exit(1);
+        exit(1);
     }
 }

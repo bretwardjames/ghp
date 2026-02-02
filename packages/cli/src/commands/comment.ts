@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { exit } from '../exit.js';
 
 interface CommentOptions {
     message?: string;
@@ -14,26 +15,26 @@ export async function commentCommand(issue: string, options: CommentOptions): Pr
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     const issueNumber = parseInt(issue.replace(/^#/, ''), 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Invalid issue number:'), issue);
-        process.exit(1);
+        exit(1);
     }
 
     // Get issue details to show context
     const details = await api.getIssueDetails(repo, issueNumber);
     if (!details) {
         console.error(chalk.red('Issue not found:'), `#${issueNumber}`);
-        process.exit(1);
+        exit(1);
     }
 
     let commentBody: string;
@@ -62,7 +63,7 @@ export async function commentCommand(issue: string, options: CommentOptions): Pr
         console.log(chalk.green('Comment added to'), `#${issueNumber}`);
     } else {
         console.error(chalk.red('Failed to add comment'));
-        process.exit(1);
+        exit(1);
     }
 }
 

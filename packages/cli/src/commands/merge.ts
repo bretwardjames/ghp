@@ -12,6 +12,7 @@ import {
     type PrMergedPayload,
     type WorktreeRemovedPayload,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 const execAsync = promisify(exec);
 
@@ -79,21 +80,21 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Parse PR number if provided
     const parsedPrNumber = prNumber ? parseInt(prNumber, 10) : undefined;
     if (prNumber && isNaN(parsedPrNumber!)) {
         console.error(chalk.red('Error:'), 'PR number must be a valid number');
-        process.exit(1);
+        exit(1);
     }
 
     // Get PR info
@@ -107,12 +108,12 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
             console.error(chalk.red('Error:'), 'No PR found for current branch');
             console.log(chalk.dim('Tip: Specify a PR number explicitly: ghp merge 123'));
         }
-        process.exit(1);
+        exit(1);
     }
 
     if (prInfo.state !== 'OPEN') {
         console.error(chalk.red('Error:'), `PR #${prInfo.number} is not open (state: ${prInfo.state})`);
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.green('Found PR:'), `#${prInfo.number} - ${prInfo.title}`);
@@ -142,12 +143,12 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
                 console.error(chalk.red('Error:'), 'Cannot delete branch while worktree exists');
                 console.log(chalk.dim('Use --auto-clean to automatically remove the worktree'));
                 console.log(chalk.dim('Or use --no-delete-branch to keep the branch'));
-                process.exit(1);
+                exit(1);
             }
 
             if (!shouldRemove) {
                 console.log('Aborted.');
-                process.exit(0);
+                exit(0);
             }
 
             // Remove the worktree
@@ -161,7 +162,7 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
                 removedWorktree = { path: worktreePath, name: worktreeName };
             } catch (error) {
                 console.error(chalk.red('Error:'), 'Failed to remove worktree:', error);
-                process.exit(1);
+                exit(1);
             }
         }
     }
@@ -183,7 +184,7 @@ export async function mergeCommand(prNumber: string | undefined, options: MergeO
         const err = error as { stderr?: string; message?: string };
         console.error(chalk.red('Error:'), 'Failed to merge PR');
         if (err.stderr) console.error(chalk.dim(err.stderr));
-        process.exit(1);
+        exit(1);
     }
 
     // Fire worktree-removed hook if we removed a worktree

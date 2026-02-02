@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { exit } from '../exit.js';
 
 interface InstallCommandsOptions {
     claude?: boolean;
@@ -111,7 +112,7 @@ async function installClaudeCommands(options: InstallCommandsOptions): Promise<v
     if (commands.size === 0) {
         console.error(chalk.red('Error:'), 'No bundled Claude commands found');
         console.log('This may indicate a packaging issue.');
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.dim(`Found ${commands.size} bundled commands: ${Array.from(commands.keys()).join(', ')}`));

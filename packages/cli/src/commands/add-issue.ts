@@ -17,6 +17,7 @@ import {
     hasHooksForEvent,
     type IssueCreatedPayload,
 } from '@bretwardjames/ghp-core';
+import { exit } from '../exit.js';
 
 const execAsync = promisify(exec);
 
@@ -130,13 +131,13 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Load defaults from config
@@ -146,7 +147,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     const projects = await api.getProjects(repo);
     if (projects.length === 0) {
         console.error(chalk.red('Error:'), 'No GitHub Projects found for this repository');
-        process.exit(1);
+        exit(1);
     }
 
     // Select project (CLI > config default > first project)
@@ -159,7 +160,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         if (!found) {
             console.error(chalk.red('Error:'), `Project "${projectName}" not found`);
             console.log('Available projects:', projects.map(p => p.title).join(', '));
-            process.exit(1);
+            exit(1);
         }
         project = found;
     }
@@ -178,7 +179,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         } catch (error) {
             console.error(chalk.red('Error:'), 'Failed to run epic planning');
             console.error(chalk.dim(error instanceof Error ? error.message : String(error)));
-            process.exit(1);
+            exit(1);
         }
         return;
     }
@@ -224,11 +225,11 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         } else if (templates.length > 0) {
             console.error(chalk.red('Error:'), `Template "${templateName}" not found`);
             console.log('Available templates:', templates.map(t => t.name).join(', '));
-            process.exit(1);
+            exit(1);
         } else {
             console.error(chalk.red('Error:'), `Template "${templateName}" not found`);
             console.log(chalk.dim('No templates in .github/ISSUE_TEMPLATE/'));
-            process.exit(1);
+            exit(1);
         }
     }
 
@@ -279,7 +280,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             }
         } catch (err) {
             console.error(chalk.red('Error:'), 'Editor failed:', err);
-            process.exit(1);
+            exit(1);
         }
     } else if (shouldOpenEditor && !isInteractive()) {
         // Non-interactive mode: skip editor, use template body as-is
@@ -293,7 +294,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     // Validate title
     if (!title || title === 'Issue Title' || title === '<Replace with issue title>') {
         console.error(chalk.red('Error:'), 'Issue title is required');
-        process.exit(1);
+        exit(1);
     }
 
     // Determine status (CLI > config default > interactive picker)
@@ -323,7 +324,7 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     const issue = await api.createIssue(repo, title, body);
     if (!issue) {
         console.error(chalk.red('Error:'), 'Failed to create issue');
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.green('Created:'), `#${issue.number} ${title}`);

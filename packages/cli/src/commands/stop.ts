@@ -3,6 +3,7 @@ import { api } from '../github-api.js';
 import { detectRepository, listWorktrees, removeWorktree, GitError } from '../git-utils.js';
 import { removeActiveLabelSafely } from '../active-label.js';
 import { getBranchForIssue, unlinkBranch } from '../branch-linker.js';
+import { exit } from '../exit.js';
 
 interface StopOptions {
     unlink?: boolean;
@@ -13,7 +14,7 @@ export async function stopCommand(issue: string, options: StopOptions): Promise<
     const issueNumber = parseInt(issue, 10);
     if (isNaN(issueNumber)) {
         console.error(chalk.red('Error:'), 'Issue must be a number');
-        process.exit(1);
+        exit(1);
     }
 
     // Detect repository
@@ -26,25 +27,25 @@ export async function stopCommand(issue: string, options: StopOptions): Promise<
         } else {
             console.error(chalk.red('Error:'), 'Failed to detect repository');
         }
-        process.exit(1);
+        exit(1);
     }
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
-        process.exit(1);
+        exit(1);
     }
 
     // Authenticate
     const authenticated = await api.authenticate();
     if (!authenticated) {
         console.error(chalk.red('Error:'), 'Not authenticated. Run', chalk.cyan('ghp auth'));
-        process.exit(1);
+        exit(1);
     }
 
     // Find the item to verify it exists
     const item = await api.findItemByNumber(repo, issueNumber);
     if (!item) {
         console.error(chalk.red('Error:'), `Issue #${issueNumber} not found in any project`);
-        process.exit(1);
+        exit(1);
     }
 
     console.log(chalk.blue('Stopping work on:'), item.title);

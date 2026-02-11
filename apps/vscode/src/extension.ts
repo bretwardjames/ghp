@@ -12,6 +12,7 @@ import { removeWorktree } from './git-utils';
 import { IssueDetailPanel } from './issue-detail-panel';
 import { PlanningBoardPanel } from './planning-board';
 import { DashboardPanel } from './dashboard-panel';
+import { StandupPanel } from './standup-panel';
 import { executePROpened } from './pr-workflow';
 import { BranchLinker } from './branch-linker';
 import { executeSyncSettings } from './settings-sync';
@@ -981,6 +982,23 @@ function registerCommands(context: vscode.ExtensionContext) {
                 await DashboardPanel.currentPanel.refresh();
             } else {
                 await DashboardPanel.show();
+            }
+        }),
+
+        // Standup commands
+        vscode.commands.registerCommand('ghProjects.openStandup', async () => {
+            if (!currentRepo) {
+                vscode.window.showErrorMessage('Not in a git repository with a GitHub remote');
+                return;
+            }
+            await StandupPanel.show(api, currentRepo);
+        }),
+
+        vscode.commands.registerCommand('ghProjects.refreshStandup', async () => {
+            if (StandupPanel.currentPanel) {
+                await StandupPanel.currentPanel.refresh();
+            } else if (currentRepo) {
+                await StandupPanel.show(api, currentRepo);
             }
         }),
 

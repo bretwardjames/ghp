@@ -223,6 +223,18 @@
         "category": "GitHub Projects"
       },
       {
+        "command": "ghProjects.openStandup",
+        "title": "Open Standup Summary",
+        "icon": "$(checklist)",
+        "category": "GitHub Projects"
+      },
+      {
+        "command": "ghProjects.refreshStandup",
+        "title": "Refresh Standup Summary",
+        "icon": "$(refresh)",
+        "category": "GitHub Projects"
+      },
+      {
         "command": "ghProjects.generateCommitMessage",
         "title": "Generate Commit Message",
         "icon": "$(sparkle)",
@@ -269,14 +281,19 @@
           "group": "navigation@3"
         },
         {
-          "command": "ghProjects.refresh",
+          "command": "ghProjects.openStandup",
           "when": "view == ghProjects.board",
           "group": "navigation@4"
         },
         {
-          "command": "ghProjects.configureProject",
+          "command": "ghProjects.refresh",
           "when": "view == ghProjects.board",
           "group": "navigation@5"
+        },
+        {
+          "command": "ghProjects.configureProject",
+          "when": "view == ghProjects.board",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [

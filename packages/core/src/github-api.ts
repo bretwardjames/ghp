@@ -43,6 +43,8 @@ import type {
     Collaborator,
     IssueReference,
     IssueRelationships,
+    IssueActivity,
+    ActivityEvent,
     RetryConfig,
 } from './types.js';
 import * as queries from './queries.js';
@@ -312,6 +314,7 @@ export class GitHubAPI {
                 labels?: {
                     nodes: Array<{ name: string; color: string }>;
                 };
+                updatedAt?: string;
                 repository?: { name: string; owner?: { login: string } };
                 parent?: { id: string; number: number; title: string; state: string } | null;
                 subIssues?: {
@@ -429,6 +432,7 @@ export class GitHubAPI {
                     subIssues,
                     blockedBy,
                     blocking,
+                    updatedAt: content.updatedAt || null,
                 };
             });
     }
@@ -621,6 +625,7 @@ export class GitHubAPI {
                 subIssues: issue.subIssues.nodes,
                 blockedBy: issue.blockedBy.nodes,
                 blocking: issue.blocking.nodes,
+                updatedAt: null,
             };
         } catch (error) {
             // Issue not found or not in any project
@@ -1442,5 +1447,219 @@ export class GitHubAPI {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Get recent activity across all project items since a given time.
+     * Uses a two-pass approach for efficiency:
+     *   Pass 1: Fetch all project items, filter by updatedAt client-side
+     *   Pass 2: Fetch timeline events only for items that changed
+     */
+    async getRecentActivity(
+        repo: RepoInfo,
+        since: Date,
+        options?: { mine?: boolean }
+    ): Promise<IssueActivity[]> {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        // Pass 1: Get all project items (reuse existing method)
+        const projects = await this.getProjects(repo);
+        if (projects.length === 0) return [];
+
+        const allItems: ProjectItem[] = [];
+        for (const project of projects) {
+            const items = await this.getProjectItems(project.id, project.title);
+            allItems.push(...items);
+        }
+
+        // Filter to items updated since the given time
+        const sinceMs = since.getTime();
+        const sinceISO = since.toISOString();
+        let recentItems = allItems.filter(
+            item => item.updatedAt && new Date(item.updatedAt).getTime() >= sinceMs
+        );
+
+        // Filter to user's items if requested
+        if (options?.mine && this.username) {
+            recentItems = recentItems.filter(item =>
+                item.assignees.includes(this.username!)
+            );
+        }
+
+        // Deduplicate by repo+number (same issue may appear in multiple projects)
+        const seen = new Set<string>();
+        recentItems = recentItems.filter(item => {
+            const key = `${item.repository || ''}#${item.number}`;
+            if (!item.number || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        // Pass 2: Fetch timeline events in batches for efficiency
+        const activities: IssueActivity[] = [];
+        const BATCH_SIZE = 5;
+
+        for (let i = 0; i < recentItems.length; i += BATCH_SIZE) {
+            const batch = recentItems.slice(i, i + BATCH_SIZE);
+            const results = await Promise.allSettled(
+                batch.map(async (item) => {
+                    if (!item.number || !item.repository) return null;
+                    const [owner, name] = item.repository.split('/');
+                    if (!owner || !name) return null;
+
+                    const events = await this.fetchTimelineEvents(
+                        owner, name, item.number, sinceISO
+                    );
+                    if (events.length === 0) return null;
+
+                    return {
+                        issue: {
+                            number: item.number,
+                            title: item.title,
+                            url: item.url || '',
+                        },
+                        status: item.status,
+                        assignees: item.assignees,
+                        changes: events,
+                    } as IssueActivity;
+                })
+            );
+
+            for (const result of results) {
+                if (result.status === 'fulfilled' && result.value) {
+                    activities.push(result.value);
+                }
+            }
+        }
+
+        // Sort by most recent activity first
+        activities.sort((a, b) => {
+            const aLatest = a.changes[a.changes.length - 1]?.timestamp || '';
+            const bLatest = b.changes[b.changes.length - 1]?.timestamp || '';
+            return bLatest.localeCompare(aLatest);
+        });
+
+        return activities;
+    }
+
+    /**
+     * Fetch and normalize timeline events for a single issue/PR
+     */
+    private async fetchTimelineEvents(
+        owner: string,
+        name: string,
+        number: number,
+        since: string,
+    ): Promise<ActivityEvent[]> {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        type TimelineNode = {
+            __typename: string;
+            author?: { login: string };
+            actor?: { login: string };
+            createdAt?: string;
+            body?: string;
+            label?: { name: string };
+            assignee?: { login?: string };
+            source?: {
+                __typename: string;
+                number?: number;
+                title?: string;
+                url?: string;
+            };
+        };
+
+        type TimelineResponse = {
+            repository: {
+                issueOrPullRequest: {
+                    timelineItems: {
+                        nodes: TimelineNode[];
+                    };
+                } | null;
+            };
+        };
+
+        const response: TimelineResponse = await this.graphqlWithRetry(
+            queries.ISSUE_TIMELINE_QUERY,
+            { owner, name, number, since }
+        );
+
+        const item = response.repository.issueOrPullRequest;
+        if (!item) return [];
+
+        const events: ActivityEvent[] = [];
+
+        for (const node of item.timelineItems.nodes) {
+            const actor = node.actor?.login || node.author?.login || 'unknown';
+            const timestamp = node.createdAt || '';
+
+            switch (node.__typename) {
+                case 'IssueComment':
+                    events.push({
+                        type: 'comment',
+                        actor,
+                        timestamp,
+                        details: node.body
+                            ? node.body.substring(0, 80) + (node.body.length > 80 ? '...' : '')
+                            : undefined,
+                    });
+                    break;
+                case 'LabeledEvent':
+                    events.push({
+                        type: 'labeled',
+                        actor,
+                        timestamp,
+                        details: node.label?.name,
+                    });
+                    break;
+                case 'UnlabeledEvent':
+                    events.push({
+                        type: 'unlabeled',
+                        actor,
+                        timestamp,
+                        details: node.label?.name,
+                    });
+                    break;
+                case 'AssignedEvent':
+                    events.push({
+                        type: 'assigned',
+                        actor,
+                        timestamp,
+                        details: node.assignee?.login,
+                    });
+                    break;
+                case 'UnassignedEvent':
+                    events.push({
+                        type: 'unassigned',
+                        actor,
+                        timestamp,
+                        details: node.assignee?.login,
+                    });
+                    break;
+                case 'ClosedEvent':
+                    events.push({ type: 'closed', actor, timestamp });
+                    break;
+                case 'ReopenedEvent':
+                    events.push({ type: 'reopened', actor, timestamp });
+                    break;
+                case 'CrossReferencedEvent': {
+                    const source = node.source;
+                    if (source) {
+                        const ref = source.__typename === 'PullRequest'
+                            ? `PR #${source.number}: ${source.title}`
+                            : `#${source.number}: ${source.title}`;
+                        events.push({
+                            type: 'referenced',
+                            actor,
+                            timestamp,
+                            details: ref,
+                        });
+                    }
+                    break;
+                }
+            }
+        }
+
+        return events;
     }
 }

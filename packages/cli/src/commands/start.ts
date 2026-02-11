@@ -376,6 +376,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         if (options.assign === 'reassign') forceIndex = 0;
         else if (options.assign === 'add') forceIndex = 1;
         else if (options.assign === 'skip') forceIndex = 2;
+        else if (options.forceDefaults) forceIndex = 1; // --force-defaults: auto-add current user
 
         const choices = ['Reassign to me', 'Add me', 'Leave as is'];
         const choiceIdx = await promptSelectWithDefault(

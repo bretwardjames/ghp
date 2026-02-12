@@ -529,7 +529,7 @@ export interface IssueActivity {
  * A single activity event on an issue
  */
 export interface ActivityEvent {
-    type: 'comment' | 'assigned' | 'unassigned' | 'labeled' | 'unlabeled' | 'closed' | 'reopened' | 'referenced';
+    type: 'comment' | 'assigned' | 'unassigned' | 'labeled' | 'unlabeled' | 'closed' | 'reopened' | 'referenced' | 'review_submitted' | 'review_requested' | 'pr_created' | 'pr_merged';
     actor: string;
     timestamp: string;
     details?: string;

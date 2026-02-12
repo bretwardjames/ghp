@@ -379,6 +379,10 @@ function getEventIcon(type: string): string {
         case 'closed': return '✅';
         case 'reopened': return '🔄';
         case 'referenced': return '🔗';
+        case 'review_submitted': return '📝';
+        case 'review_requested': return '👀';
+        case 'pr_created': return '🆕';
+        case 'pr_merged': return '🟣';
         default: return '•';
     }
 }

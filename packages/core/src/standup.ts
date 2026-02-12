@@ -113,6 +113,14 @@ function formatEventLine(event: ActivityEvent): string {
             return `${arrow} Reopened by ${actor} (${timestamp})`;
         case 'referenced':
             return `${arrow} ${event.details} linked by ${actor} (${timestamp})`;
+        case 'review_submitted':
+            return `${arrow} ${event.details} by ${actor} (${timestamp})`;
+        case 'review_requested':
+            return `${arrow} Review requested from ${event.details || 'team'} by ${actor} (${timestamp})`;
+        case 'pr_created':
+            return `${arrow} PR created by ${actor} (${timestamp})`;
+        case 'pr_merged':
+            return `${arrow} PR merged by ${actor} (${timestamp})`;
         default:
             return `${arrow} ${event.type} by ${actor} (${timestamp})`;
     }

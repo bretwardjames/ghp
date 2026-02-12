@@ -1451,9 +1451,11 @@ export class GitHubAPI {
 
     /**
      * Get recent activity across all project items since a given time.
-     * Uses a two-pass approach for efficiency:
+     * Multi-pass approach:
      *   Pass 1: Fetch all project items, filter by updatedAt client-side
      *   Pass 2: Fetch timeline events only for items that changed
+     *   Pass 3: Search for PRs reviewed by user (not captured in project items)
+     *   Pass 4: Search for PRs authored by user (created/merged)
      */
     async getRecentActivity(
         repo: RepoInfo,
@@ -1475,6 +1477,7 @@ export class GitHubAPI {
         // Filter to items updated since the given time
         const sinceMs = since.getTime();
         const sinceISO = since.toISOString();
+        const sinceDate = sinceISO.split('T')[0]; // YYYY-MM-DD for search queries
         let recentItems = allItems.filter(
             item => item.updatedAt && new Date(item.updatedAt).getTime() >= sinceMs
         );
@@ -1532,6 +1535,31 @@ export class GitHubAPI {
             }
         }
 
+        // Track which issue numbers already have activities
+        const activityNumbers = new Set(activities.map(a => a.issue.number));
+
+        // Pass 3: Search for PRs reviewed by user
+        if (this.username) {
+            const reviewActivities = await this.fetchReviewedPRs(
+                repo, this.username, sinceDate, sinceMs, activityNumbers
+            );
+            for (const a of reviewActivities) {
+                activityNumbers.add(a.issue.number);
+                activities.push(a);
+            }
+        }
+
+        // Pass 4: Search for PRs authored by user (if --mine or always for own PRs)
+        if (this.username) {
+            const authoredActivities = await this.fetchAuthoredPRs(
+                repo, this.username, sinceDate, sinceMs, activityNumbers
+            );
+            for (const a of authoredActivities) {
+                activityNumbers.add(a.issue.number);
+                activities.push(a);
+            }
+        }
+
         // Sort by most recent activity first
         activities.sort((a, b) => {
             const aLatest = a.changes[a.changes.length - 1]?.timestamp || '';
@@ -1539,6 +1567,139 @@ export class GitHubAPI {
             return bLatest.localeCompare(aLatest);
         });
 
+        return activities;
+    }
+
+    /**
+     * Search for PRs the user reviewed that aren't already in the activity list.
+     */
+    private async fetchReviewedPRs(
+        repo: RepoInfo,
+        username: string,
+        sinceDate: string,
+        sinceMs: number,
+        seen: Set<number>,
+    ): Promise<IssueActivity[]> {
+        type ReviewSearchResponse = {
+            search: {
+                nodes: Array<{
+                    number: number;
+                    title: string;
+                    url: string;
+                    author: { login: string };
+                    reviews: {
+                        nodes: Array<{
+                            author: { login: string };
+                            state: string;
+                            submittedAt: string;
+                        }>;
+                    };
+                }>;
+            };
+        };
+
+        const searchQuery = `repo:${repo.owner}/${repo.name} reviewed-by:${username} updated:>=${sinceDate} is:pr`;
+        const response: ReviewSearchResponse = await this.graphqlWithRetry(
+            queries.PR_REVIEWS_SEARCH_QUERY,
+            { searchQuery }
+        );
+
+        const activities: IssueActivity[] = [];
+        for (const pr of response.search.nodes) {
+            if (seen.has(pr.number)) continue;
+
+            // Only include reviews by this user within the time window
+            const recentReviews = pr.reviews.nodes.filter(
+                r => r.author?.login === username && new Date(r.submittedAt).getTime() >= sinceMs
+            );
+            if (recentReviews.length === 0) continue;
+
+            const events: ActivityEvent[] = recentReviews.map(r => {
+                const stateLabel = r.state === 'APPROVED' ? 'Approved'
+                    : r.state === 'CHANGES_REQUESTED' ? 'Changes requested'
+                    : r.state === 'COMMENTED' ? 'Review comment'
+                    : r.state === 'DISMISSED' ? 'Review dismissed'
+                    : r.state;
+                return {
+                    type: 'review_submitted' as const,
+                    actor: username,
+                    timestamp: r.submittedAt,
+                    details: stateLabel,
+                };
+            });
+
+            activities.push({
+                issue: { number: pr.number, title: pr.title, url: pr.url },
+                status: null,
+                assignees: [],
+                changes: events,
+            });
+        }
+        return activities;
+    }
+
+    /**
+     * Search for PRs the user authored that aren't already in the activity list.
+     * Captures PR creation and merges.
+     */
+    private async fetchAuthoredPRs(
+        repo: RepoInfo,
+        username: string,
+        sinceDate: string,
+        sinceMs: number,
+        seen: Set<number>,
+    ): Promise<IssueActivity[]> {
+        type AuthoredSearchResponse = {
+            search: {
+                nodes: Array<{
+                    number: number;
+                    title: string;
+                    url: string;
+                    state: string;
+                    createdAt: string;
+                    mergedAt: string | null;
+                    mergedBy: { login: string } | null;
+                }>;
+            };
+        };
+
+        const searchQuery = `repo:${repo.owner}/${repo.name} author:${username} created:>=${sinceDate} is:pr`;
+        const response: AuthoredSearchResponse = await this.graphqlWithRetry(
+            queries.PR_AUTHORED_SEARCH_QUERY,
+            { searchQuery }
+        );
+
+        const activities: IssueActivity[] = [];
+        for (const pr of response.search.nodes) {
+            if (seen.has(pr.number)) continue;
+
+            const events: ActivityEvent[] = [];
+
+            if (new Date(pr.createdAt).getTime() >= sinceMs) {
+                events.push({
+                    type: 'pr_created',
+                    actor: username,
+                    timestamp: pr.createdAt,
+                });
+            }
+
+            if (pr.mergedAt && new Date(pr.mergedAt).getTime() >= sinceMs) {
+                events.push({
+                    type: 'pr_merged',
+                    actor: pr.mergedBy?.login || username,
+                    timestamp: pr.mergedAt,
+                });
+            }
+
+            if (events.length === 0) continue;
+
+            activities.push({
+                issue: { number: pr.number, title: pr.title, url: pr.url },
+                status: pr.state === 'MERGED' ? 'Merged' : pr.state === 'OPEN' ? 'Open' : 'Closed',
+                assignees: [username],
+                changes: events,
+            });
+        }
         return activities;
     }
 
@@ -1567,6 +1728,8 @@ export class GitHubAPI {
                 title?: string;
                 url?: string;
             };
+            state?: string;
+            requestedReviewer?: { login?: string };
         };
 
         type TimelineResponse = {
@@ -1655,6 +1818,29 @@ export class GitHubAPI {
                             details: ref,
                         });
                     }
+                    break;
+                }
+                case 'PullRequestReview': {
+                    const stateLabel = node.state === 'APPROVED' ? 'Approved'
+                        : node.state === 'CHANGES_REQUESTED' ? 'Changes requested'
+                        : node.state === 'COMMENTED' ? 'Review comment'
+                        : node.state === 'DISMISSED' ? 'Review dismissed'
+                        : node.state || 'Reviewed';
+                    events.push({
+                        type: 'review_submitted',
+                        actor,
+                        timestamp,
+                        details: stateLabel,
+                    });
+                    break;
+                }
+                case 'ReviewRequestedEvent': {
+                    events.push({
+                        type: 'review_requested',
+                        actor,
+                        timestamp,
+                        details: node.requestedReviewer?.login,
+                    });
                     break;
                 }
             }

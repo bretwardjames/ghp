@@ -682,8 +682,66 @@ export const ISSUE_TIMELINE_QUERY = `
                                     ... on Issue { number title }
                                 }
                             }
+                            ... on PullRequestReview {
+                                author { login }
+                                createdAt
+                                state
+                            }
+                            ... on ReviewRequestedEvent {
+                                actor { login }
+                                createdAt
+                                requestedReviewer {
+                                    ... on User { login }
+                                }
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+`;
+
+/**
+ * Search for PRs reviewed by a user in a given repo since a date.
+ */
+export const PR_REVIEWS_SEARCH_QUERY = `
+    query($searchQuery: String!) {
+        search(query: $searchQuery, type: ISSUE, first: 50) {
+            nodes {
+                ... on PullRequest {
+                    number
+                    title
+                    url
+                    author { login }
+                    reviews(first: 20) {
+                        nodes {
+                            author { login }
+                            state
+                            submittedAt
+                        }
+                    }
+                }
+            }
+        }
+    }
+`;
+
+/**
+ * Search for PRs authored by a user in a given repo since a date.
+ */
+export const PR_AUTHORED_SEARCH_QUERY = `
+    query($searchQuery: String!) {
+        search(query: $searchQuery, type: ISSUE, first: 50) {
+            nodes {
+                ... on PullRequest {
+                    number
+                    title
+                    url
+                    state
+                    createdAt
+                    mergedAt
+                    mergedBy { login }
                 }
             }
         }

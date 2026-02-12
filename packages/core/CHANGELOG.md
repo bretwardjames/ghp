@@ -1,5 +1,11 @@
 # @bretwardjames/ghp-core
 
+## 0.7.1
+
+### Patch Changes
+
+- Fix standup command to capture PR reviews, authored PRs, and merges. Adds search passes for reviewed-by and author queries, plus new event types: review_submitted, review_requested, pr_created, pr_merged.
+
 ## 0.7.0
 
 ### Minor Changes

@@ -2,6 +2,20 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.5.1] - 2026-02-12
+
+### Fixed
+- Standup panel now shows PR reviews, authored PRs, and merges (new event type icons)
+
+## [0.5.0] - 2026-02-11
+
+### Added
+- **Standup Summary Panel** - View recent issue activity across the project board
+  - "Open Standup Summary" command (`ghProjects.openStandup`) - shows comments, assignments, label changes, closures, and PR cross-references
+  - "Refresh Standup" command (`ghProjects.refreshStandup`) - refresh standup data
+  - Time window selector (8h, 24h, 2d, 1w) and "my issues only" filter
+  - Clickable issue headers to open in browser
+
 ## [0.3.4] - 2026-01-25
 
 ### Added

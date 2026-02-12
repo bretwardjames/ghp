@@ -2,6 +2,12 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.6.0] - 2026-02-12
+
+### Changed
+- Standup defaults to current user's activity (no flags needed)
+- Replaced `--mine` with `--user <name>` / `--user all` across all surfaces
+
 ## [0.5.1] - 2026-02-12
 
 ### Fixed

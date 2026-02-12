@@ -1,5 +1,11 @@
 # @bretwardjames/ghp-core
 
+## 0.8.0
+
+### Minor Changes
+
+- Standup defaults to current user's activity. Added --user flag and --timeline mode.
+
 ## 0.7.1
 
 ### Patch Changes

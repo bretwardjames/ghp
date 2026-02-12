@@ -1,5 +1,16 @@
 # @bretwardjames/ghp-mcp
 
+## 0.4.0
+
+### Minor Changes
+
+- Standup defaults to current user's activity. Added --user flag and --timeline mode.
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.8.0
+
 ## 0.3.1
 
 ### Patch Changes

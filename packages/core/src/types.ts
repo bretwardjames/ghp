@@ -168,6 +168,8 @@ export interface ProjectItem {
     // Blocking relationships (issues only)
     blockedBy: BlockingIssue[];
     blocking: BlockingIssue[];
+    // Timestamp of last update (ISO 8601)
+    updatedAt: string | null;
 }
 
 /**
@@ -507,4 +509,28 @@ export interface BlockingRelationships {
     blockedBy: BlockingIssue[];
     /** Issues that this issue is blocking (these are blocked by this issue) */
     blocking: BlockingIssue[];
+}
+
+// =============================================================================
+// Activity Types (for standup command)
+// =============================================================================
+
+/**
+ * Activity summary for a single issue/PR
+ */
+export interface IssueActivity {
+    issue: { number: number; title: string; url: string };
+    status: string | null;
+    assignees: string[];
+    changes: ActivityEvent[];
+}
+
+/**
+ * A single activity event on an issue
+ */
+export interface ActivityEvent {
+    type: 'comment' | 'assigned' | 'unassigned' | 'labeled' | 'unlabeled' | 'closed' | 'reopened' | 'referenced';
+    actor: string;
+    timestamp: string;
+    details?: string;
 }

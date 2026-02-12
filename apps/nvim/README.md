@@ -252,6 +252,7 @@ local color = require("ghp.statusline").component_color()
 | `:GhpPickPlan [shortcut]` | Fuzzy picker for project board |
 | `:GhpPickWork` | Fuzzy picker for your work |
 | `:GhpPickIssues` | Fuzzy picker for issues |
+| `:GhpStandup [since]` | Show daily activity summary (e.g., `:GhpStandup 2d`) |
 
 ## Picker Integration
 

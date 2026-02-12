@@ -65,6 +65,8 @@ ghp done 123                  # Mark complete
 ghp label 123 bug urgent      # Manage labels
 ghp set-parent 123 --parent 42 # Set parent issue
 ghp progress 42               # Show epic progress
+ghp standup                   # Daily activity summary
+ghp standup --since 2d --mine # Last 2 days, my issues only
 ```
 
 **Shortcuts** - Define named filter combinations in config:

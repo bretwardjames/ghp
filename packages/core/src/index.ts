@@ -310,7 +310,22 @@ export type {
     // Blocking Relationships
     BlockingIssue,
     BlockingRelationships,
+
+    // Activity Types (standup)
+    IssueActivity,
+    ActivityEvent,
 } from './types.js';
+
+// =============================================================================
+// Standup (activity summary)
+// =============================================================================
+
+export {
+    formatStandupText,
+    parseSince,
+} from './standup.js';
+
+export type { FormatStandupOptions } from './standup.js';
 
 // =============================================================================
 // Dashboard (branch overview)

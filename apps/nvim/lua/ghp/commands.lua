@@ -179,6 +179,22 @@ M.telescope_plan = M.pick_plan
 M.telescope_work = M.pick_work
 M.telescope_issues = M.pick_issues
 
+-- Standup functions
+function M.standup(opts)
+  opts = opts or {}
+  local args = "standup"
+  if opts.since then
+    args = args .. " --since " .. opts.since
+  end
+  if opts.mine then
+    args = args .. " --mine"
+  end
+
+  run_ghp(args, function(lines)
+    ui.show_float(lines, { title = get_icon("standup") .. "Standup" })
+  end)
+end
+
 -- Dashboard functions
 function M.dashboard(opts)
   opts = opts or {}
@@ -627,6 +643,23 @@ function M.setup()
   vim.api.nvim_create_user_command("GhpTelescopeIssues", function()
     M.telescope_issues()
   end, {})
+
+  -- Standup commands
+  vim.api.nvim_create_user_command("GhpStandup", function(opts)
+    local args_table = vim.split(opts.args, " ", { trimempty = true })
+    local standup_opts = {}
+    for _, arg in ipairs(args_table) do
+      if arg == "--mine" then
+        standup_opts.mine = true
+      elseif arg:match("^%-%-since=") then
+        standup_opts.since = arg:match("^%-%-since=(.+)")
+      else
+        -- Treat bare argument as --since value
+        standup_opts.since = arg
+      end
+    end
+    M.standup(standup_opts)
+  end, { nargs = "*", desc = "Show standup activity summary (args: [since] [--mine])" })
 
   -- Dashboard commands
   vim.api.nvim_create_user_command("GhpDashboard", function()

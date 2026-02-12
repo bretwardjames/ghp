@@ -34,6 +34,7 @@ import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { progressCommand } from './commands/progress.js';
+import { standupCommand } from './commands/standup.js';
 import { dashboardCommand } from './commands/dashboard.js';
 import { updateCommand } from './commands/update.js';
 import {
@@ -138,6 +139,16 @@ program
     .option('--type <type>', 'Filter parent issues by type (e.g., Epic)')
     .option('-a, --all', 'Show all sub-issues (default: collapse if >10)')
     .action(progressCommand);
+
+// Standup (activity summary)
+program
+    .command('standup')
+    .alias('su')
+    .description('Show recent issue activity for standup summaries')
+    .option('--since <duration>', 'Time window (e.g., 24h, 8h, 2d, 1w, or ISO date)', '24h')
+    .option('--mine', 'Only show issues assigned to me')
+    .option('--json', 'Output as JSON (for scripting/MCP)')
+    .action(standupCommand);
 
 // Dashboard with hooks subcommands
 const dashboardCmd = program

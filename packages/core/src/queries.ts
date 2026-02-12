@@ -91,6 +91,7 @@ export const PROJECT_ITEMS_QUERY = `
                                 number
                                 url
                                 state
+                                updatedAt
                                 issueType { name }
                                 assignees(first: 5) { nodes { login } }
                                 labels(first: 10) { nodes { name color } }
@@ -105,6 +106,7 @@ export const PROJECT_ITEMS_QUERY = `
                                 number
                                 url
                                 state
+                                updatedAt
                                 merged
                                 assignees(first: 5) { nodes { login } }
                                 labels(first: 10) { nodes { name color } }
@@ -567,6 +569,117 @@ export const ISSUE_WITH_PROJECT_ITEMS_QUERY = `
                                 ... on ProjectV2ItemFieldIterationValue {
                                     title
                                     field { ... on ProjectV2IterationField { name } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+`;
+
+/**
+ * Query to get timeline events for an issue since a given time.
+ * Used by the standup command to fetch specific activity details.
+ */
+export const ISSUE_TIMELINE_QUERY = `
+    query($owner: String!, $name: String!, $number: Int!, $since: DateTime!) {
+        repository(owner: $owner, name: $name) {
+            issueOrPullRequest(number: $number) {
+                ... on Issue {
+                    timelineItems(first: 100, since: $since) {
+                        nodes {
+                            __typename
+                            ... on IssueComment {
+                                author { login }
+                                createdAt
+                                body
+                            }
+                            ... on LabeledEvent {
+                                actor { login }
+                                createdAt
+                                label { name }
+                            }
+                            ... on UnlabeledEvent {
+                                actor { login }
+                                createdAt
+                                label { name }
+                            }
+                            ... on AssignedEvent {
+                                actor { login }
+                                createdAt
+                                assignee { ... on User { login } }
+                            }
+                            ... on UnassignedEvent {
+                                actor { login }
+                                createdAt
+                                assignee { ... on User { login } }
+                            }
+                            ... on ClosedEvent {
+                                actor { login }
+                                createdAt
+                            }
+                            ... on ReopenedEvent {
+                                actor { login }
+                                createdAt
+                            }
+                            ... on CrossReferencedEvent {
+                                actor { login }
+                                createdAt
+                                source {
+                                    __typename
+                                    ... on PullRequest { number title url }
+                                    ... on Issue { number title }
+                                }
+                            }
+                        }
+                    }
+                }
+                ... on PullRequest {
+                    timelineItems(first: 100, since: $since) {
+                        nodes {
+                            __typename
+                            ... on IssueComment {
+                                author { login }
+                                createdAt
+                                body
+                            }
+                            ... on LabeledEvent {
+                                actor { login }
+                                createdAt
+                                label { name }
+                            }
+                            ... on UnlabeledEvent {
+                                actor { login }
+                                createdAt
+                                label { name }
+                            }
+                            ... on AssignedEvent {
+                                actor { login }
+                                createdAt
+                                assignee { ... on User { login } }
+                            }
+                            ... on UnassignedEvent {
+                                actor { login }
+                                createdAt
+                                assignee { ... on User { login } }
+                            }
+                            ... on ClosedEvent {
+                                actor { login }
+                                createdAt
+                            }
+                            ... on ReopenedEvent {
+                                actor { login }
+                                createdAt
+                            }
+                            ... on CrossReferencedEvent {
+                                actor { login }
+                                createdAt
+                                source {
+                                    __typename
+                                    ... on PullRequest { number title url }
+                                    ... on Issue { number title }
                                 }
                             }
                         }

@@ -107,6 +107,8 @@ Access via Command Palette (Cmd/Ctrl + Shift + P):
 | **GitHub Projects: Unlink Branch** | Remove branch link from issue |
 | **GitHub Projects: Sync Settings with CLI** | Sync settings with ghp-cli |
 | **GitHub Projects: Install MCP Server** | Configure Claude Desktop integration |
+| **GitHub Projects: Open Standup Summary** | Show recent issue activity across the board |
+| **GitHub Projects: Refresh Standup** | Refresh the standup panel |
 | **GitHub Projects: Show Hidden Views** | Restore hidden sidebar views |
 
 ## Settings

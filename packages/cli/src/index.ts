@@ -144,9 +144,10 @@ program
 program
     .command('standup')
     .alias('su')
-    .description('Show recent issue activity for standup summaries')
+    .description('Show your recent activity for standup (defaults to your issues, 24h)')
     .option('--since <duration>', 'Time window (e.g., 24h, 8h, 2d, 1w, or ISO date)', '24h')
-    .option('--mine', 'Only show issues assigned to me')
+    .option('--user <username>', 'Filter to a specific user, or "all" for everyone')
+    .option('--timeline', 'Show flat chronological timeline instead of grouping by issue')
     .option('--json', 'Output as JSON (for scripting/MCP)')
     .action(standupCommand);
 

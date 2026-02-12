@@ -13,6 +13,8 @@ import type { IssueActivity, ActivityEvent } from './types.js';
 export interface FormatStandupOptions {
     since: Date;
     colorize?: boolean;
+    /** If true, show a flat chronological timeline instead of grouping by issue */
+    timeline?: boolean;
 }
 
 /**
@@ -23,6 +25,19 @@ export interface FormatStandupOptions {
  * @returns Formatted text string
  */
 export function formatStandupText(
+    activities: IssueActivity[],
+    options: FormatStandupOptions,
+): string {
+    if (options.timeline) {
+        return formatTimeline(activities, options);
+    }
+    return formatGrouped(activities, options);
+}
+
+/**
+ * Format activities grouped by issue (default mode).
+ */
+function formatGrouped(
     activities: IssueActivity[],
     options: FormatStandupOptions,
 ): string {
@@ -51,6 +66,52 @@ export function formatStandupText(
         }
 
         lines.push('');
+    }
+
+    return lines.join('\n').trimEnd();
+}
+
+/**
+ * Format activities as a flat chronological timeline.
+ * Events are sorted newest-first with issue context on each line.
+ */
+function formatTimeline(
+    activities: IssueActivity[],
+    options: FormatStandupOptions,
+): string {
+    const { since } = options;
+    const lines: string[] = [];
+
+    // Flatten all events with their issue context
+    const allEvents: { event: ActivityEvent; issue: IssueActivity['issue'] }[] = [];
+    for (const activity of activities) {
+        for (const event of activity.changes) {
+            allEvents.push({ event, issue: activity.issue });
+        }
+    }
+
+    // Sort newest-first
+    allEvents.sort((a, b) =>
+        new Date(b.event.timestamp).getTime() - new Date(a.event.timestamp).getTime()
+    );
+
+    // Header
+    const sinceStr = formatRelativeDate(since);
+    const eventCount = allEvents.length;
+    const issueCount = activities.length;
+    lines.push(`Since ${sinceStr} — ${eventCount} event${eventCount !== 1 ? 's' : ''} across ${issueCount} issue${issueCount !== 1 ? 's' : ''}`);
+    lines.push('');
+
+    if (allEvents.length === 0) {
+        lines.push('No activity found in this time window.');
+        return lines.join('\n');
+    }
+
+    for (const { event, issue } of allEvents) {
+        const time = formatShortTimestamp(event.timestamp);
+        const desc = formatEventDescription(event);
+        const issueRef = `#${issue.number} ${truncate(issue.title, 50)}`;
+        lines.push(`${time}  ${desc}  (${issueRef})`);
     }
 
     return lines.join('\n').trimEnd();
@@ -124,6 +185,49 @@ function formatEventLine(event: ActivityEvent): string {
         default:
             return `${arrow} ${event.type} by ${actor} (${timestamp})`;
     }
+}
+
+/**
+ * Format a single event description without timestamp (for timeline mode).
+ */
+function formatEventDescription(event: ActivityEvent): string {
+    const actor = event.actor;
+    switch (event.type) {
+        case 'comment':
+            return `Comment by ${actor}${event.details ? ': ' + event.details : ''}`;
+        case 'labeled':
+            return `Labeled "${event.details}" by ${actor}`;
+        case 'unlabeled':
+            return `Unlabeled "${event.details}" by ${actor}`;
+        case 'assigned':
+            return `Assigned to ${event.details || actor}`;
+        case 'unassigned':
+            return `Unassigned ${event.details || ''} by ${actor}`;
+        case 'closed':
+            return `Closed by ${actor}`;
+        case 'reopened':
+            return `Reopened by ${actor}`;
+        case 'referenced':
+            return `${event.details} linked by ${actor}`;
+        case 'review_submitted':
+            return `${event.details} by ${actor}`;
+        case 'review_requested':
+            return `Review requested from ${event.details || 'team'} by ${actor}`;
+        case 'pr_created':
+            return `PR created by ${actor}`;
+        case 'pr_merged':
+            return `PR merged by ${actor}`;
+        default:
+            return `${event.type} by ${actor}`;
+    }
+}
+
+/**
+ * Truncate a string to a max length, adding ellipsis if needed.
+ */
+function truncate(str: string, maxLen: number): string {
+    if (str.length <= maxLen) return str;
+    return str.slice(0, maxLen - 1) + '\u2026';
 }
 
 /**

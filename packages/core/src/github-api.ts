@@ -1460,9 +1460,12 @@ export class GitHubAPI {
     async getRecentActivity(
         repo: RepoInfo,
         since: Date,
-        options?: { mine?: boolean }
+        options?: { mine?: boolean; user?: string }
     ): Promise<IssueActivity[]> {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        // Determine which user to filter by (if any)
+        const filterUser = options?.user || (options?.mine ? this.username : null);
 
         // Pass 1: Get all project items (reuse existing method)
         const projects = await this.getProjects(repo);
@@ -1482,10 +1485,10 @@ export class GitHubAPI {
             item => item.updatedAt && new Date(item.updatedAt).getTime() >= sinceMs
         );
 
-        // Filter to user's items if requested
-        if (options?.mine && this.username) {
+        // Filter to specific user's items if requested
+        if (filterUser) {
             recentItems = recentItems.filter(item =>
-                item.assignees.includes(this.username!)
+                item.assignees.includes(filterUser)
             );
         }
 
@@ -1538,21 +1541,20 @@ export class GitHubAPI {
         // Track which issue numbers already have activities
         const activityNumbers = new Set(activities.map(a => a.issue.number));
 
-        // Pass 3: Search for PRs reviewed by user
-        if (this.username) {
+        // Pass 3 & 4: Search for PRs reviewed/authored by user
+        // Only run when filtering to a specific user (default behavior)
+        const prSearchUser = filterUser || this.username;
+        if (prSearchUser) {
             const reviewActivities = await this.fetchReviewedPRs(
-                repo, this.username, sinceDate, sinceMs, activityNumbers
+                repo, prSearchUser, sinceDate, sinceMs, activityNumbers
             );
             for (const a of reviewActivities) {
                 activityNumbers.add(a.issue.number);
                 activities.push(a);
             }
-        }
 
-        // Pass 4: Search for PRs authored by user (if --mine or always for own PRs)
-        if (this.username) {
             const authoredActivities = await this.fetchAuthoredPRs(
-                repo, this.username, sinceDate, sinceMs, activityNumbers
+                repo, prSearchUser, sinceDate, sinceMs, activityNumbers
             );
             for (const a of authoredActivities) {
                 activityNumbers.add(a.issue.number);

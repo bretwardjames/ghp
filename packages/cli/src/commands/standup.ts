@@ -6,7 +6,8 @@ import { formatStandupText, parseSince } from '@bretwardjames/ghp-core';
 
 interface StandupOptions {
     since?: string;
-    mine?: boolean;
+    user?: string;
+    timeline?: boolean;
     json?: boolean;
 }
 
@@ -38,9 +39,13 @@ export async function standupCommand(options: StandupOptions): Promise<void> {
     }
 
     try {
-        const activities = await api.getRecentActivity(repo, since, {
-            mine: options.mine,
-        });
+        // Default: filter to current user. --user all = everyone, --user <name> = specific user
+        const userFlag = options.user?.toLowerCase();
+        const activityOptions = userFlag === 'all'
+            ? {}
+            : { user: options.user || undefined, mine: !options.user };
+
+        const activities = await api.getRecentActivity(repo, since, activityOptions);
 
         if (options.json) {
             console.log(JSON.stringify({
@@ -52,7 +57,7 @@ export async function standupCommand(options: StandupOptions): Promise<void> {
         }
 
         // Use shared formatter from core
-        const output = formatStandupText(activities, { since });
+        const output = formatStandupText(activities, { since, timeline: options.timeline });
         console.log(output);
     } catch (err) {
         console.error(chalk.red('Error:'), (err as Error).message);

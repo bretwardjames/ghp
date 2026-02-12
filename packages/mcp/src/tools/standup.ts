@@ -13,6 +13,7 @@ export const meta: ToolMeta = {
 /**
  * Registers the get_standup tool.
  * Returns recent issue activity for standup summaries.
+ * Defaults to current user's activity (like --mine).
  */
 export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
@@ -20,23 +21,27 @@ export function register(server: McpServer, context: ServerContext): void {
         {
             title: 'Get Standup Summary',
             description:
-                'Get recent issue activity across the project board for standup summaries. Shows what changed (comments, assignments, status changes, PR links) in a given time window.',
+                'Get recent issue activity for standup summaries. Defaults to the current user\'s activity in the last 24h. Use user="all" for all activity.',
             inputSchema: {
                 since: z
                     .string()
                     .optional()
                     .describe('Time window: "24h" (default), "8h", "2d", "1w", or an ISO date'),
-                mine: z
+                user: z
+                    .string()
+                    .optional()
+                    .describe('Filter to a specific user, or "all" for everyone. Defaults to current user.'),
+                timeline: z
                     .boolean()
                     .optional()
-                    .describe('Only show issues assigned to the current user'),
+                    .describe('If true, show a flat chronological timeline instead of grouping by issue'),
                 format: z
                     .enum(['json', 'text'])
                     .optional()
                     .describe('Output format: "json" (default) for structured data, "text" for human-readable summary'),
             },
         },
-        async ({ since = '24h', mine = false, format = 'json' }) => {
+        async ({ since = '24h', user, timeline, format = 'json' }) => {
             const authenticated = await context.ensureAuthenticated();
             if (!authenticated) {
                 return {
@@ -79,12 +84,16 @@ export function register(server: McpServer, context: ServerContext): void {
                     };
                 }
 
-                const activities = await context.api.getRecentActivity(repo, sinceDate, {
-                    mine,
-                });
+                // Default to current user's activity; --user all = everyone
+                const userLower = user?.toLowerCase();
+                const activityOptions = userLower === 'all'
+                    ? {}
+                    : { user: user || undefined, mine: !user };
+
+                const activities = await context.api.getRecentActivity(repo, sinceDate, activityOptions);
 
                 if (format === 'text') {
-                    const text = formatStandupText(activities, { since: sinceDate });
+                    const text = formatStandupText(activities, { since: sinceDate, timeline });
                     return {
                         content: [{ type: 'text', text }],
                     };

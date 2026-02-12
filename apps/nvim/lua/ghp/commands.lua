@@ -186,8 +186,11 @@ function M.standup(opts)
   if opts.since then
     args = args .. " --since " .. opts.since
   end
-  if opts.mine then
-    args = args .. " --mine"
+  if opts.user then
+    args = args .. " --user " .. opts.user
+  end
+  if opts.timeline then
+    args = args .. " --timeline"
   end
 
   run_ghp(args, function(lines)
@@ -648,18 +651,29 @@ function M.setup()
   vim.api.nvim_create_user_command("GhpStandup", function(opts)
     local args_table = vim.split(opts.args, " ", { trimempty = true })
     local standup_opts = {}
-    for _, arg in ipairs(args_table) do
-      if arg == "--mine" then
-        standup_opts.mine = true
+    local i = 1
+    while i <= #args_table do
+      local arg = args_table[i]
+      if arg == "--user" and args_table[i + 1] then
+        standup_opts.user = args_table[i + 1]
+        i = i + 2
+      elseif arg:match("^%-%-user=") then
+        standup_opts.user = arg:match("^%-%-user=(.+)")
+        i = i + 1
       elseif arg:match("^%-%-since=") then
         standup_opts.since = arg:match("^%-%-since=(.+)")
+        i = i + 1
+      elseif arg == "--timeline" then
+        standup_opts.timeline = true
+        i = i + 1
       else
         -- Treat bare argument as --since value
         standup_opts.since = arg
+        i = i + 1
       end
     end
     M.standup(standup_opts)
-  end, { nargs = "*", desc = "Show standup activity summary (args: [since] [--mine])" })
+  end, { nargs = "*", desc = "Show standup activity summary (args: [since] [--user <name|all>] [--timeline])" })
 
   -- Dashboard commands
   vim.api.nvim_create_user_command("GhpDashboard", function()

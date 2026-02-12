@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+### Minor Changes
+
+- 7789fab: Add `ghp standup` command for daily activity summary across CLI, MCP, and VS Code. Shows recent issue activity including comments, assignments, label changes, closures, and PR cross-references. Also fixes `ghp start --force-defaults` not auto-assigning the current user.
+
+### Patch Changes
+
+- Updated dependencies [7789fab]
+  - @bretwardjames/ghp-core@0.7.0
+
 ## 0.7.1
 
 ### Patch Changes

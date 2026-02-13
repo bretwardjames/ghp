@@ -32,6 +32,21 @@ function sanitizeForPath(input: string): string {
  * Git branch names have their own restrictions, and we add additional safety checks.
  * Throws an error if the branch name is invalid or potentially dangerous.
  */
+/**
+ * Validate a git ref string (tag, commit, branch) for shell safety.
+ * Refs are more permissive than branch names (e.g., commit hashes),
+ * but must not contain shell metacharacters.
+ */
+function validateRefString(ref: string): void {
+    if (!ref || ref.trim().length === 0) {
+        throw new Error('Ref cannot be empty');
+    }
+    const dangerousChars = /[`$\\!;|&<>(){}[\]'"]/;
+    if (dangerousChars.test(ref)) {
+        throw new Error(`Ref contains invalid characters: ${ref}`);
+    }
+}
+
 function validateBranchName(branch: string): void {
     // Check for empty
     if (!branch || branch.trim().length === 0) {
@@ -150,13 +165,21 @@ export async function branchExists(
 
 /**
  * Create and checkout a new branch.
+ * @param branchName - Name for the new branch
+ * @param options - Git options. Use `startPoint` to branch from a specific tag, commit, or ref.
  * @throws {GitError} If the branch cannot be created (e.g., already exists, invalid name)
  */
 export async function createBranch(
     branchName: string,
-    options: GitOptions = {}
+    options: GitOptions & { startPoint?: string } = {}
 ): Promise<void> {
-    await execGit(`git checkout -b "${branchName}"`, options);
+    if (options.startPoint) {
+        validateRefString(options.startPoint);
+    }
+    const cmd = options.startPoint
+        ? `git checkout -b "${branchName}" "${options.startPoint}"`
+        : `git checkout -b "${branchName}"`;
+    await execGit(cmd, options);
 }
 
 /**
@@ -305,6 +328,36 @@ export function extractIssueNumberFromBranch(branchName: string): number | null 
     }
 
     return null;
+}
+
+/**
+ * List git tags, sorted by version (highest version first, using semantic version ordering).
+ * @param options - Git options
+ * @returns Array of tag names, highest version first
+ */
+export async function listTags(options: GitOptions = {}): Promise<string[]> {
+    try {
+        const { stdout } = await execGit('git tag -l --sort=-version:refname', options);
+        return stdout.split('\n').filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Verify that a git ref (tag, commit, branch) exists and resolve it to a commit hash.
+ * @param ref - Tag name, commit hash, or branch name
+ * @param options - Git options
+ * @returns The resolved commit hash, or null if the ref doesn't exist
+ */
+export async function resolveRef(ref: string, options: GitOptions = {}): Promise<string | null> {
+    validateRefString(ref);
+    try {
+        const { stdout } = await execGit(`git rev-parse --verify "${ref}"`, options);
+        return stdout.trim();
+    } catch {
+        return null;
+    }
 }
 
 /**

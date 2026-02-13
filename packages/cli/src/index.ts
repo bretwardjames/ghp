@@ -35,6 +35,7 @@ import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { progressCommand } from './commands/progress.js';
 import { standupCommand } from './commands/standup.js';
+import { fieldsCommand } from './commands/fields.js';
 import { dashboardCommand } from './commands/dashboard.js';
 import { updateCommand } from './commands/update.js';
 import {
@@ -274,6 +275,7 @@ program
     .option('--assign <action>', 'Handle assignment: reassign, add, or skip')
     .option('--branch-action <action>', 'Branch action: create, link, or skip')
     .option('--from-main', 'Always switch to main before creating branch')
+    .option('--hotfix [ref]', 'Branch from a specific tag or commit (prompts for tag if no ref given)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .option('--force', 'Proceed despite uncommitted changes')
     .action(startCommand);
@@ -360,12 +362,17 @@ program
     .action(labelCommand);
 
 // Issue/Epic creation - restructured with subcommands
+// enablePositionalOptions() prevents the parent `add` command from greedily
+// consuming options (--body, --status, etc.) that belong to subcommands.
+// Without this, `ghp add issue "Title" --body "text"` silently drops --body
+// because the parent parses it before dispatching to the `issue` subcommand.
 const addCmd = program
     .command('add')
-    .description('Create items (issues, epics) and add to project');
+    .description('Create items (issues, epics) and add to project')
+    .enablePositionalOptions();
 
 // `ghp add issue [title]` - explicit issue creation
-addCmd
+const addIssueSubCmd = addCmd
     .command('issue [title]')
     .description('Create a new issue')
     .option('-b, --body <body>', 'Issue body/description')
@@ -379,6 +386,10 @@ addCmd
     .option('-L, --labels <labels>', 'Labels to apply (comma-separated)')
     .option('--assign [users]', 'Assign users (comma-separated, empty for self)')
     .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
+    .option('--priority <priority>', 'Set Priority field (shortcut for --field Priority=...)')
+    .option('--size <size>', 'Set Size field (shortcut for --field Size=...)')
+    .option('--body-file <path>', 'Read issue body from a file')
+    .option('--body-stdin', 'Read issue body from stdin')
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .action((title, options) => addIssueCommand(title, { ...options, objectType: 'issue' }));
@@ -401,38 +412,33 @@ addCmd
     .option('-L, --labels <labels>', 'Labels to apply (comma-separated)')
     .option('--assign [users]', 'Assign users (comma-separated, empty for self)')
     .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
+    .option('--priority <priority>', 'Set Priority field (shortcut for --field Priority=...)')
+    .option('--size <size>', 'Set Size field (shortcut for --field Size=...)')
+    .option('--body-file <path>', 'Read issue body from a file')
+    .option('--body-stdin', 'Read issue body from stdin')
     .option('--no-template', 'Skip template selection (blank issue)')
     .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
     .action((title, options) => addIssueCommand(title, { ...options, objectType: 'epic' }));
 
 // Backwards compatibility: `ghp add "title"` without subcommand = `ghp add issue "title"`
+// With enablePositionalOptions(), the parent command no longer parses subcommand options.
+// We use allowUnknownOption() so the parent doesn't error on flags like --body/--status,
+// and redirect all args to the `issue` subcommand for proper parsing.
 addCmd
+    .allowUnknownOption()
+    .allowExcessArguments(true)
     .argument('[title]', 'Issue title (for backwards compatibility)')
-    .option('-b, --body <body>', 'Issue body/description')
-    .option('-p, --project <project>', 'Project to add to (defaults to first)')
-    .option('-s, --status <status>', 'Initial status')
-    .option('-e, --edit', 'Open $EDITOR to write issue body')
-    .option('-t, --template <name>', 'Use an issue template from .github/ISSUE_TEMPLATE/')
-    .option('--list-templates', 'List available issue templates')
-    .option('--ai', 'Expand brief title into full issue using AI')
-    .option('--parent <issue>', 'Set parent issue number (links as sub-issue)')
-    .option('-L, --labels <labels>', 'Labels to apply (comma-separated)')
-    .option('--assign [users]', 'Assign users (comma-separated, empty for self)')
-    .option('-F, --field <field=value>', 'Set project field (repeatable)', (val: string, acc: string[]) => { acc.push(val); return acc; }, [])
-    .option('--no-template', 'Skip template selection (blank issue)')
-    .option('-fd, --force-defaults', 'Use default values for all prompts (non-interactive mode)')
-    .action((title, options) => {
-        // Handle --list-templates without title
-        if (options.listTemplates) {
-            return addIssueCommand(title, { ...options, objectType: 'issue' });
-        }
-        // If title is provided and not a subcommand, treat as issue creation
+    .action((title, _options, cmd) => {
+        // If the first arg matched a subcommand (issue/epic), Commander already
+        // dispatched to that subcommand's action - we won't reach here.
+        // For everything else, redirect to the issue subcommand.
         if (title && title !== 'issue' && title !== 'epic') {
-            return addIssueCommand(title, { ...options, objectType: 'issue' });
-        }
-        // No title provided - let addIssueCommand handle the error
-        if (!title) {
-            return addIssueCommand(title, { ...options, objectType: 'issue' });
+            // Forward all raw args (title + any trailing flags) to the issue subcommand.
+            // cmd.args contains the unparsed args: ["My Title", "--body", "text", ...]
+            addIssueSubCmd.parse(cmd.args, { from: 'user' });
+        } else if (!title) {
+            // No title provided - let addIssueCommand handle the prompt/error
+            addIssueSubCmd.parse([], { from: 'user' });
         }
     });
 
@@ -450,6 +456,13 @@ program
     .alias('sf')
     .description('Set a field value on an issue')
     .action(setFieldCommand);
+
+program
+    .command('fields')
+    .description('Show project fields and their valid values')
+    .option('-p, --project <project>', 'Project name (defaults to first)')
+    .option('--json', 'Output as JSON')
+    .action(fieldsCommand);
 
 // Filtering/slicing
 program

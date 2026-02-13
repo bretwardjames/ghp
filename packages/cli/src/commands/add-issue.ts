@@ -40,6 +40,14 @@ interface AddIssueOptions {
     assign?: string;
     /** Project fields to set (field=value format, can be multiple) */
     field?: string[];
+    /** Shortcut for --field Priority=... */
+    priority?: string;
+    /** Shortcut for --field Size=... */
+    size?: string;
+    /** Read issue body from a file */
+    bodyFile?: string;
+    /** Read issue body from stdin */
+    bodyStdin?: boolean;
     /** Object type being created: 'issue' (default) or 'epic' */
     objectType?: 'issue' | 'epic';
     /** Execute AI plan (create sub-issues) - for epic with --ai */
@@ -126,6 +134,58 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         return;
     }
 
+    // Merge named field flags into the generic --field array
+    const fieldSpecs: string[] = options.field || [];
+    if (options.priority) {
+        fieldSpecs.push(`Priority=${options.priority}`);
+    }
+    if (options.size) {
+        fieldSpecs.push(`Size=${options.size}`);
+    }
+    options.field = fieldSpecs;
+
+    // Check for conflicting body sources
+    const bodySources = [
+        options.body ? '--body' : null,
+        options.bodyFile ? '--body-file' : null,
+        options.bodyStdin ? '--body-stdin' : null,
+    ].filter(Boolean);
+    if (bodySources.length > 1) {
+        console.error(chalk.red('Error:'), `Cannot use ${bodySources.join(' and ')} together`);
+        exit(1);
+        return;
+    }
+
+    // Handle --body-file: read body from file
+    if (options.bodyFile) {
+        try {
+            options.body = readFileSync(options.bodyFile, 'utf-8');
+        } catch (err) {
+            console.error(chalk.red('Error:'), `Could not read body file: ${(err as Error).message}`);
+            exit(1);
+            return;
+        }
+    }
+
+    // Handle --body-stdin: read body from stdin
+    if (options.bodyStdin) {
+        if (process.stdin.isTTY) {
+            console.error(chalk.red('Error:'), '--body-stdin requires piped input (e.g., echo "body" | ghp add issue "Title" --body-stdin)');
+            exit(1);
+            return;
+        }
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) {
+            chunks.push(chunk);
+        }
+        options.body = Buffer.concat(chunks).toString('utf-8').trim();
+        if (!options.body) {
+            console.error(chalk.red('Error:'), 'No input received from stdin');
+            exit(1);
+            return;
+        }
+    }
+
     const repo = await detectRepository();
     if (!repo) {
         console.error(chalk.red('Error:'), 'Not in a git repository with a GitHub remote');
@@ -191,8 +251,8 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
     let templateName = (options.template !== false && options.template) || defaults.template;
 
     // If no template specified and templates exist, prompt user to pick one
-    // --no-template flag skips this entirely
-    if (!templateName && templates.length > 0 && !options.body && options.template !== false) {
+    // --no-template flag, --body-file, and --body-stdin skip this entirely
+    if (!templateName && templates.length > 0 && !options.body && options.template !== false && !options.bodyFile && !options.bodyStdin) {
         // Build options list: templates + blank issue
         const templateOptions = [...templates.map(t => t.name), chalk.dim('Blank issue')];
 
@@ -335,7 +395,17 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         return;
     }
 
-    console.log(chalk.green('Added to:'), project.title);
+    // Summary collector for verbose output
+    const summary: { field: string; value: string; status: 'success' | 'warning' | 'none' }[] = [];
+
+    summary.push({ field: 'Added to', value: project.title, status: 'success' });
+
+    // Track body
+    if (body && body.trim().length > 0) {
+        summary.push({ field: 'Body', value: `${body.trim().length} chars`, status: 'success' });
+    } else {
+        summary.push({ field: 'Body', value: '(not set)', status: 'none' });
+    }
 
     // Set initial status
     if (statusName && statusField) {
@@ -344,23 +414,25 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
         );
         if (option) {
             await api.updateItemStatus(project.id, itemId, statusField.fieldId, option.id);
-            console.log(chalk.green('Status:'), statusName);
+            summary.push({ field: 'Status', value: statusName!, status: 'success' });
         } else {
-            console.log(chalk.yellow('Warning:'), `Status "${statusName}" not found`);
+            summary.push({ field: 'Status', value: `"${statusName}" not found`, status: 'warning' });
         }
+    } else {
+        summary.push({ field: 'Status', value: '(not set)', status: 'none' });
     }
 
     // Link to parent issue if specified
     if (options.parent) {
         const parentNumber = parseInt(options.parent, 10);
         if (isNaN(parentNumber)) {
-            console.log(chalk.yellow('Warning:'), `Invalid parent issue number: ${options.parent}`);
+            summary.push({ field: 'Parent', value: `Invalid: ${options.parent}`, status: 'warning' });
         } else {
             const success = await api.addSubIssue(repo, parentNumber, issue.number);
             if (success) {
-                console.log(chalk.green('Parent:'), `#${parentNumber}`);
+                summary.push({ field: 'Parent', value: `#${parentNumber}`, status: 'success' });
             } else {
-                console.log(chalk.yellow('Warning:'), `Failed to link to parent #${parentNumber}`);
+                summary.push({ field: 'Parent', value: `Failed to link #${parentNumber}`, status: 'warning' });
             }
         }
     }
@@ -394,12 +466,15 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
                 failedLabels.push(label);
             }
         }
-        if (appliedLabels.length > 0) {
-            console.log(chalk.green('Labels:'), appliedLabels.join(', '));
+        if (appliedLabels.length > 0 && failedLabels.length === 0) {
+            summary.push({ field: 'Labels', value: appliedLabels.join(', '), status: 'success' });
+        } else if (appliedLabels.length > 0 && failedLabels.length > 0) {
+            summary.push({ field: 'Labels', value: `${appliedLabels.join(', ')} (failed: ${failedLabels.join(', ')})`, status: 'warning' });
+        } else {
+            summary.push({ field: 'Labels', value: `Failed: ${failedLabels.join(', ')}`, status: 'warning' });
         }
-        if (failedLabels.length > 0) {
-            console.log(chalk.yellow('Warning:'), `Labels not found: ${failedLabels.join(', ')}`);
-        }
+    } else {
+        summary.push({ field: 'Labels', value: '(none)', status: 'none' });
     }
 
     // Assign users if specified
@@ -414,33 +489,35 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
             try {
                 const assigneeList = assignees.join(',');
                 await execAsync(`gh issue edit ${issue.number} --add-assignee "${assigneeList}"`);
-                console.log(chalk.green('Assigned:'), assignees.join(', '));
+                summary.push({ field: 'Assigned', value: assignees.join(', '), status: 'success' });
             } catch (error: unknown) {
                 const err = error as { stderr?: string };
-                console.log(chalk.yellow('Warning:'), `Failed to assign: ${err.stderr || 'unknown error'}`);
+                summary.push({ field: 'Assigned', value: `Failed: ${err.stderr || 'unknown error'}`, status: 'warning' });
             }
         }
+    } else {
+        summary.push({ field: 'Assigned', value: '(not assigned)', status: 'none' });
     }
 
     // Set project fields if specified
     if (options.field && options.field.length > 0) {
-        const fields = await api.getProjectFields(project.id);
+        const projectFields = await api.getProjectFields(project.id);
 
         for (const fieldSpec of options.field) {
             const [fieldName, ...valueParts] = fieldSpec.split('=');
             const value = valueParts.join('='); // Handle values with = in them
 
             if (!fieldName || !value) {
-                console.log(chalk.yellow('Warning:'), `Invalid field format: ${fieldSpec} (use field=value)`);
+                summary.push({ field: fieldName || fieldSpec, value: `Invalid format (use field=value)`, status: 'warning' });
                 continue;
             }
 
-            const field = fields.find(f =>
+            const field = projectFields.find(f =>
                 f.name.toLowerCase() === fieldName.toLowerCase()
             );
 
             if (!field) {
-                console.log(chalk.yellow('Warning:'), `Field "${fieldName}" not found`);
+                summary.push({ field: fieldName, value: `Field not found`, status: 'warning' });
                 continue;
             }
 
@@ -452,14 +529,14 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
                     o.name.toLowerCase() === value.toLowerCase()
                 );
                 if (!option) {
-                    console.log(chalk.yellow('Warning:'), `Option "${value}" not found for field "${fieldName}"`);
+                    summary.push({ field: fieldName, value: `"${value}" not found`, status: 'warning' });
                     continue;
                 }
                 fieldValue = { singleSelectOptionId: option.id };
             } else if (field.type === 'Number') {
                 const num = parseFloat(value);
                 if (isNaN(num)) {
-                    console.log(chalk.yellow('Warning:'), `Invalid number "${value}" for field "${fieldName}"`);
+                    summary.push({ field: fieldName, value: `Invalid number "${value}"`, status: 'warning' });
                     continue;
                 }
                 fieldValue = { number: num };
@@ -469,9 +546,24 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
 
             const success = await api.setFieldValue(project.id, itemId, field.id, fieldValue);
             if (success) {
-                console.log(chalk.green(`${fieldName}:`), value);
+                summary.push({ field: fieldName, value, status: 'success' });
             } else {
-                console.log(chalk.yellow('Warning:'), `Failed to set field "${fieldName}"`);
+                summary.push({ field: fieldName, value: `Failed to set "${value}"`, status: 'warning' });
+            }
+        }
+    }
+
+    // Print verbose summary
+    if (summary.length > 0) {
+        const maxFieldLen = Math.max(...summary.map(s => s.field.length));
+        for (const entry of summary) {
+            const paddedField = entry.field.padEnd(maxFieldLen);
+            if (entry.status === 'success') {
+                console.log(`  ${paddedField}  ${entry.value} ${chalk.green('✓')}`);
+            } else if (entry.status === 'warning') {
+                console.log(`  ${paddedField}  ${chalk.yellow(entry.value)} ${chalk.yellow('⚠')}`);
+            } else {
+                console.log(`  ${paddedField}  ${chalk.dim(entry.value)}`);
             }
         }
     }

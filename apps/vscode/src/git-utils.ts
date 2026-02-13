@@ -16,6 +16,8 @@ import {
     branchExists as coreBranchExists,
     sanitizeForBranchName,
     generateBranchName as coreGenerateBranchName,
+    listTags as coreListTags,
+    resolveRef as coreResolveRef,
     // Worktree operations
     createWorktree as coreCreateWorktree,
     removeWorktree as coreRemoveWorktree,
@@ -133,8 +135,8 @@ export async function pullLatest(): Promise<void> {
 /**
  * Create and checkout a new branch
  */
-export async function createBranch(branchName: string): Promise<void> {
-    return coreCreateBranch(branchName, getGitOptions());
+export async function createBranch(branchName: string, startPoint?: string): Promise<void> {
+    return coreCreateBranch(branchName, { ...getGitOptions(), startPoint });
 }
 
 /**
@@ -195,6 +197,20 @@ export async function listWorktrees(): Promise<WorktreeInfo[]> {
  */
 export async function getWorktreeForBranch(branch: string): Promise<WorktreeInfo | null> {
     return coreGetWorktreeForBranch(branch, getGitOptions());
+}
+
+/**
+ * List tags sorted by version (newest first)
+ */
+export async function listTags(): Promise<string[]> {
+    return coreListTags(getGitOptions());
+}
+
+/**
+ * Resolve a ref (tag, branch, commit hash) to a full commit hash
+ */
+export async function resolveRef(ref: string): Promise<string | null> {
+    return coreResolveRef(ref, getGitOptions());
 }
 
 // Re-export WorktreeInfo type for convenience

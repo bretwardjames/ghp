@@ -35,6 +35,8 @@ import * as unlinkBranchTool from './tools/unlink-branch.js';
 // Phase 3: Lower Priority Tools
 import * as getIssueTool from './tools/get-issue.js';
 import * as standupTool from './tools/standup.js';
+import * as fieldsTool from './tools/fields.js';
+import * as tagsTool from './tools/tags.js';
 
 // Re-export types
 export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
@@ -58,6 +60,8 @@ const TOOLS: ToolModule[] = [
     getProgressTool,
     getIssueTool,
     standupTool,
+    fieldsTool,
+    tagsTool,
     // Action tools
     moveTool,
     doneTool,

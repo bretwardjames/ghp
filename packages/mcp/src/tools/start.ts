@@ -7,6 +7,7 @@ import {
     getCurrentBranch,
     executeHooksForEvent,
     hasHooksForEvent,
+    resolveRef,
     type IssueStartedPayload,
 } from '@bretwardjames/ghp-core';
 
@@ -33,9 +34,13 @@ export function register(server: McpServer, context: ServerContext): void {
                     .boolean()
                     .optional()
                     .describe('Whether to update the status (default: true)'),
+                hotfix: z
+                    .string()
+                    .optional()
+                    .describe('Branch from a specific tag or commit for hotfix branches. Use get_tags tool to discover available tags.'),
             },
         },
-        async ({ issue, updateStatus = true }) => {
+        async ({ issue, updateStatus = true, hotfix }) => {
             const authenticated = await context.ensureAuthenticated();
             if (!authenticated) {
                 return {
@@ -63,6 +68,24 @@ export function register(server: McpServer, context: ServerContext): void {
             }
 
             try {
+                // Validate hotfix ref if provided
+                let hotfixInfo = '';
+                if (hotfix) {
+                    const resolved = await resolveRef(hotfix);
+                    if (!resolved) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: `Error: Hotfix ref "${hotfix}" does not exist. Use get_tags to discover available tags.`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    hotfixInfo = `\n\nHotfix: Branch from "${hotfix}" (${resolved.substring(0, 7)}). Use the CLI to create the branch: ghp start ${issue} --hotfix ${hotfix}`;
+                }
+
                 // Find the issue in projects
                 const item = await context.api.findItemByNumber(repo, issue);
                 if (!item) {
@@ -88,7 +111,7 @@ export function register(server: McpServer, context: ServerContext): void {
                         content: [
                             {
                                 type: 'text',
-                                text: `Started work on issue #${issue} "${item.title}" (status not updated).${blockingWarning}`,
+                                text: `Started work on issue #${issue} "${item.title}" (status not updated).${blockingWarning}${hotfixInfo}`,
                             },
                         ],
                     };
@@ -182,7 +205,7 @@ export function register(server: McpServer, context: ServerContext): void {
                     content: [
                         {
                             type: 'text',
-                            text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${blockingWarning}${hookInfo}`,
+                            text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${blockingWarning}${hotfixInfo}${hookInfo}`,
                         },
                     ],
                 };

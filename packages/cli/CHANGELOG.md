@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1
+
+### Patch Changes
+
+- Default to adding user as assignee when starting work in non-interactive CLI and MCP contexts
+
 ## 0.10.0
 
 ### Minor Changes

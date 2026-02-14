@@ -1,5 +1,11 @@
 # @bretwardjames/ghp-mcp
 
+## 0.5.1
+
+### Patch Changes
+
+- Default to adding user as assignee when starting work in non-interactive CLI and MCP contexts
+
 ## 0.5.0
 
 ### Minor Changes

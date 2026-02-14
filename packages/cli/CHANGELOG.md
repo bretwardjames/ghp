@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.2
+
+### Patch Changes
+
+- Fix set_field failing silently on SingleSelect fields by routing through inline GraphQL mutation pattern. Surface actual error messages instead of generic failures. Add Iteration field type support.
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.10.0
+
 ## 0.10.1
 
 ### Patch Changes

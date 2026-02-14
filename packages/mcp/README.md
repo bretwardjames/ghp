@@ -73,8 +73,10 @@ The server uses the same GitHub authentication as the CLI. Run `ghp auth` to aut
 | `update_issue` | Update an issue's title and/or body |
 | `move_issue` | Move an issue to a different status |
 | `mark_done` | Mark an issue as done |
-| `start_work` | Start working on an issue |
+| `start_work` | Start working on an issue (supports `hotfix` param for branching from tags) |
 | `create_worktree` | Create a worktree for parallel development |
+| `get_fields` | List all project fields and their valid values |
+| `get_tags` | List git tags sorted newest first (for hotfix discovery) |
 | `assign_issue` | Assign users to an issue |
 | `add_comment` | Add a comment to an issue |
 | `set_field` | Set a field value on an issue |

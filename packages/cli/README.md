@@ -110,6 +110,10 @@ ghp add issue "Title" --status "Backlog"     # Set initial status
 ghp add issue "Title" --labels "bug,urgent"  # Apply labels
 ghp add issue "Title" --assign          # Assign yourself
 ghp add issue "Title" --parent 42       # Create as sub-issue
+ghp add issue "Title" --priority P1     # Set priority field
+ghp add issue "Title" --size M          # Set size field
+ghp add issue "Title" --body-file body.md  # Body from file
+echo "body" | ghp add issue "Title" --body-stdin  # Body from stdin
 
 # Create epics
 ghp add epic "Epic title"               # Create epic (issue with epic label)
@@ -118,6 +122,11 @@ ghp add epic "Title" --ai -x            # Execute AI plan (create issues)
 ghp add epic "Title" --ai -c "context"  # Provide additional context
 
 ghp add --list-templates                # List available templates
+```
+
+```bash
+ghp fields                     # Show all project fields and valid values
+ghp fields --json              # JSON output for scripts/AI tools
 ```
 
 ```bash
@@ -181,6 +190,7 @@ The `start` command:
 | `--branch-action <action>` | `create`, `link`, or `skip` |
 | `--assign <action>` | `reassign`, `add`, or `skip` |
 | `--from-main` | Create branch from main (when not on main) |
+| `--hotfix [ref]` | Branch from a tag or commit for hotfix. Omit ref for interactive tag picker |
 | `--force` | Proceed with uncommitted changes |
 | `--force-defaults` | Non-interactive mode |
 
@@ -399,6 +409,16 @@ ghp hooks add ts-funnel-up \
 ghp hooks add ts-funnel-down \
   --event worktree-removed \
   --command "ts-magic down --port \${issue.number}"
+```
+
+### Daily Standup
+
+```bash
+ghp standup                    # Activity summary (last 24h, your issues)
+ghp standup --since 2d         # Activity from last 2 days
+ghp standup --timeline         # Flat chronological view (no grouping)
+ghp standup --user alice       # Activity for a specific user
+ghp standup --json             # JSON output for scripts/AI tools
 ```
 
 ### Agent Management

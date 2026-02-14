@@ -105,6 +105,21 @@ const result = await withRetry(
 const result = await withRetry(() => api.getIssue(repo, 123), DEFAULT_RETRY_CONFIG);
 ```
 
+### Git Utilities
+
+```typescript
+import { listTags, resolveRef, createBranch } from '@bretwardjames/ghp-core';
+
+// List git tags sorted by version (newest first)
+const tags = await listTags();  // ['v1.2.0', 'v1.1.0', ...]
+
+// Validate and resolve a git ref (tag, commit, branch)
+const sha = await resolveRef('v1.2.0');  // 'abc123...' or null
+
+// Create a branch from a specific ref (for hotfixes)
+await createBranch('hotfix/fix-login', { startPoint: 'v1.2.0' });
+```
+
 ### Shell Utilities
 
 Safe shell command construction to prevent injection:
@@ -120,6 +135,11 @@ const num = validateNumericInput("123", "issue number");  // 123 or throws
 
 // Validate URLs
 validateUrl("https://github.com/...", "issue URL");  // throws if invalid
+
+// Validate git ref strings (rejects shell metacharacters)
+import { validateRefString } from '@bretwardjames/ghp-core';
+validateRefString('v1.2.0');  // ok
+validateRefString('v1; rm -rf /');  // throws Error
 ```
 
 ### Event Hooks

@@ -37,6 +37,8 @@ Intelligently handles existing branches:
 - If issue has a linked branch → switches to it
 - If no linked branch → offers to create new or link existing
 
+**Hotfix mode**: Choose "Hotfix from tag/commit" to branch from a specific release tag or commit SHA, useful for urgent fixes against a stable release.
+
 ### Parallel Work Mode (Worktrees)
 
 Work on multiple issues simultaneously without switching branches:

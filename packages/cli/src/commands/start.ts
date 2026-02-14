@@ -425,7 +425,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         const choiceIdx = await promptSelectWithDefault(
             'What would you like to do?',
             choices,
-            2, // default: skip (leave as is) for non-interactive
+            1, // default: add me (non-destructive) for non-interactive
             forceIndex
         );
 

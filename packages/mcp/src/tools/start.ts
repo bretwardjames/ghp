@@ -100,6 +100,20 @@ export function register(server: McpServer, context: ServerContext): void {
                     };
                 }
 
+                // Check if current user is assigned, add them if not (non-destructive)
+                const isAssigned = item.assignees.some(
+                    (a) => a.toLowerCase() === context.api.username?.toLowerCase()
+                );
+
+                let assignmentInfo = '';
+                if (!isAssigned && context.api.username) {
+                    const newAssignees = [...item.assignees, context.api.username];
+                    const success = await context.api.updateAssignees(repo, issue, newAssignees);
+                    if (success) {
+                        assignmentInfo = `\nAssigned ${context.api.username} to issue.`;
+                    }
+                }
+
                 // Check for blocking issues
                 const openBlockers = item.blockedBy?.filter(b => b.state === 'OPEN') || [];
                 const blockingWarning = openBlockers.length > 0
@@ -111,7 +125,7 @@ export function register(server: McpServer, context: ServerContext): void {
                         content: [
                             {
                                 type: 'text',
-                                text: `Started work on issue #${issue} "${item.title}" (status not updated).${blockingWarning}${hotfixInfo}`,
+                                text: `Started work on issue #${issue} "${item.title}" (status not updated).${assignmentInfo}${blockingWarning}${hotfixInfo}`,
                             },
                         ],
                     };
@@ -205,7 +219,7 @@ export function register(server: McpServer, context: ServerContext): void {
                     content: [
                         {
                             type: 'text',
-                            text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${blockingWarning}${hotfixInfo}${hookInfo}`,
+                            text: `Started work on issue #${issue} "${item.title}" - status set to "${inProgressOption.name}".${assignmentInfo}${blockingWarning}${hotfixInfo}${hookInfo}`,
                         },
                     ],
                 };

@@ -2,6 +2,13 @@
 
 All notable changes to the "GitHub Projects" extension will be documented in this file.
 
+## [0.7.0] - 2026-02-13
+
+### Added
+- **Hotfix branching** - "Hotfix from tag/commit" option in Start Working quickpick
+  - Pick from available tags or enter a custom commit SHA
+  - Validates ref before creating branch
+
 ## [0.6.0] - 2026-02-12
 
 ### Changed

@@ -77,14 +77,24 @@ function M.open(issue_number)
   end)
 end
 
-function M.start(issue_number)
+function M.start(issue_number, opts)
+  opts = opts or {}
   if not issue_number then
     issue_number = vim.fn.input("Issue number: ")
   end
   if issue_number == "" then return end
 
+  local cmd = "ghp start " .. issue_number
+  if opts.hotfix then
+    if opts.hotfix == true then
+      cmd = cmd .. " --hotfix"
+    else
+      cmd = cmd .. " --hotfix " .. opts.hotfix
+    end
+  end
+
   -- Run in terminal for interactive prompts
-  ui.show_terminal("ghp start " .. issue_number)
+  ui.show_terminal(cmd)
 end
 
 function M.add(title)
@@ -551,8 +561,25 @@ function M.setup()
   end, { nargs = "?" })
 
   vim.api.nvim_create_user_command("GhpStart", function(opts)
-    M.start(opts.args ~= "" and opts.args or nil)
-  end, { nargs = "?" })
+    local args = vim.split(opts.args, " ", { trimempty = true })
+    local issue = args[1]
+    local start_opts = {}
+    local i = 2
+    while i <= #args do
+      if args[i] == "--hotfix" then
+        if args[i + 1] and not args[i + 1]:match("^%-%-") then
+          start_opts.hotfix = args[i + 1]
+          i = i + 2
+        else
+          start_opts.hotfix = true
+          i = i + 1
+        end
+      else
+        i = i + 1
+      end
+    end
+    M.start(issue, start_opts)
+  end, { nargs = "*", desc = "Start working on an issue (supports --hotfix [ref])" })
 
   vim.api.nvim_create_user_command("GhpStartParallel", function(opts)
     -- Use bang (!) to create worktree without opening editor

@@ -8,6 +8,8 @@ import {
     branchExists,
     generateBranchName,
     getCurrentBranch,
+    listTags,
+    resolveRef,
 } from './git-utils';
 import type { NormalizedProjectItem, ProjectWithViews } from './types';
 import { getBranchLinker } from './extension';
@@ -132,11 +134,12 @@ export async function executeStartWorking(
         // Build options based on current state
         let options: string[];
         if (isOnMain) {
-            options = ['Create new branch', 'Link existing branch'];
+            options = ['Create new branch', 'Hotfix from tag/commit', 'Link existing branch'];
         } else {
             options = [
                 `Switch to ${mainBranch} & create branch`,
                 `Create from current (${status.currentBranch})`,
+                'Hotfix from tag/commit',
                 'Link existing branch',
             ];
         }
@@ -186,6 +189,39 @@ export async function executeStartWorking(
                     return false;
                 }
             }
+        } else if (action === 'Hotfix from tag/commit') {
+            const tags = await listTags();
+            const choices = [...tags.slice(0, 20), '$(edit) Enter custom ref...'];
+
+            const selected = await vscode.window.showQuickPick(choices, {
+                title: 'Select tag or commit to branch from',
+                placeHolder: 'Choose a tag (newest first)',
+            });
+
+            if (!selected) return false;
+
+            let hotfixRef: string;
+            if (selected.includes('Enter custom ref')) {
+                const customRef = await vscode.window.showInputBox({
+                    prompt: 'Enter a tag, commit hash, or branch name',
+                    placeHolder: 'e.g., v1.2.0 or abc1234',
+                });
+                if (!customRef) return false;
+                hotfixRef = customRef;
+            } else {
+                hotfixRef = selected;
+            }
+
+            // Validate ref
+            const resolved = await resolveRef(hotfixRef);
+            if (!resolved) {
+                vscode.window.showErrorMessage(`Ref "${hotfixRef}" not found.`);
+                return false;
+            }
+
+            // Create branch from hotfix ref
+            const createResult = await createBranchAndLink(api, item, branchPattern, maxLength, branchLinker, hotfixRef);
+            if (!createResult) return false;
         } else if (action.includes('Create from current') || action === 'Create new branch') {
             // Create branch from current position
             const createResult = await createBranchAndLink(
@@ -282,7 +318,8 @@ async function createBranchAndLink(
     item: NormalizedProjectItem,
     branchPattern: string,
     maxLength: number,
-    branchLinker: ReturnType<typeof getBranchLinker>
+    branchLinker: ReturnType<typeof getBranchLinker>,
+    startPoint?: string
 ): Promise<boolean> {
     const branchName = generateBranchName(
         branchPattern,
@@ -320,7 +357,7 @@ async function createBranchAndLink(
 
     // Create the new branch
     try {
-        await createBranch(branchName);
+        await createBranch(branchName, startPoint);
         // Auto-link the branch to this issue
         await linkBranchToIssue(branchName, item, branchLinker);
         vscode.window.showInformationMessage(`Created and switched to branch: ${branchName}`);

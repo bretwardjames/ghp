@@ -14,6 +14,8 @@ import {
     generateBranchName,
     getAllBranches,
     getWorktreeForBranch,
+    listTags,
+    resolveRef,
     GitError,
     type RepoInfo,
 } from '../git-utils.js';
@@ -63,6 +65,8 @@ interface StartOptions {
     assign?: AssignAction;
     branchAction?: BranchAction;
     fromMain?: boolean;
+    /** Branch from a specific tag, commit, or ref (for hotfix branches). Set to true when --hotfix is passed without a value. */
+    hotfix?: string | boolean;
     /** Use default values for all prompts (non-interactive mode) */
     forceDefaults?: boolean;
     force?: boolean;
@@ -127,12 +131,14 @@ async function handleUncommittedChanges(force?: boolean, forceDefaults?: boolean
 /**
  * Create a new branch, push it, and link it to the issue.
  * @param forceDefaults - If true, accept defaults without prompting
+ * @param hotfixRef - If provided, branch from this specific tag/commit/ref instead of current HEAD
  */
 async function createAndLinkBranch(
     repo: RepoInfo,
     item: { number?: number | null; title: string },
     branchPattern: string,
-    forceDefaults?: boolean
+    forceDefaults?: boolean,
+    hotfixRef?: string
 ): Promise<string> {
     const branchName = generateBranchName(branchPattern, {
         user: api.username || 'user',
@@ -156,8 +162,8 @@ async function createAndLinkBranch(
     } else {
         // Create branch
         try {
-            await createBranch(branchName);
-            console.log(chalk.green('✓'), `Created branch: ${branchName}`);
+            await createBranch(branchName, hotfixRef ? { startPoint: hotfixRef } : {});
+            console.log(chalk.green('✓'), `Created branch: ${branchName}${hotfixRef ? ` (from ${hotfixRef})` : ''}`);
 
             // Create empty commit linking to issue and push
             const commitMsg = `Start work on #${item.number}\n\n${item.title}`;
@@ -201,6 +207,43 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         ['--nvim', '--claude', '--terminal-only'],
         [options.nvim, options.claude, options.terminalOnly]
     );
+
+    // Handle --hotfix: resolve the ref or prompt for a tag
+    if (options.hotfix) {
+        if (options.hotfix === true) {
+            // --hotfix passed without a value: prompt user to pick a tag
+            const tags = await listTags();
+            if (tags.length === 0) {
+                console.error(chalk.red('Error:'), 'No tags found in this repository.');
+                exit(1);
+                return;
+            }
+
+            // Show recent tags for selection (limit to 20 for readability)
+            const displayTags = tags.slice(0, 20);
+
+            if (options.forceDefaults || !isInteractive()) {
+                // Non-interactive: default to the most recent tag
+                options.hotfix = displayTags[0];
+                console.log(chalk.dim(`[non-interactive] Using most recent tag: ${options.hotfix}`));
+            } else {
+                const selectedIdx = await promptSelectWithDefault(
+                    'Select a tag to branch from:',
+                    displayTags,
+                    0 // default: most recent tag
+                );
+                options.hotfix = displayTags[selectedIdx];
+            }
+        }
+
+        // Validate the ref exists
+        const resolved = await resolveRef(options.hotfix as string);
+        if (!resolved) {
+            console.error(chalk.red('Error:'), `Ref "${options.hotfix}" not found. Use a tag, commit hash, or branch name.`);
+            exit(1);
+            return;
+        }
+    }
 
     let inputNumber = parseInt(issue, 10);
     if (isNaN(inputNumber)) {
@@ -420,6 +463,9 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         // ═══════════════════════════════════════════════════════════════════════
         // Issue already has a linked branch - offer switch or parallel worktree
         // ═══════════════════════════════════════════════════════════════════════
+        if (options.hotfix) {
+            console.log(chalk.yellow('Warning:'), `--hotfix ignored: issue #${issueNumber} already has linked branch "${linkedBranch}"`);
+        }
         const currentBranch = await getCurrentBranch();
 
         // Check if already on the branch
@@ -532,7 +578,8 @@ export async function startCommand(issue: string, options: StartOptions): Promis
 
             // Map --branch-action flag to choice index
             let forceIndex: number | undefined;
-            if (options.branchAction === 'create') forceIndex = 0;
+            if (options.hotfix) forceIndex = 0; // --hotfix implies create new branch
+            else if (options.branchAction === 'create') forceIndex = 0;
             else if (options.branchAction === 'link') forceIndex = 1;
             else if (options.branchAction === 'skip') {
                 // Skip branch creation entirely
@@ -578,15 +625,20 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     await checkoutBranch(selectedBranch);
                     console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
                 } else {
-                    // Create new branch from main
-                    await handlePullIfBehind(mainBranch, options.forceDefaults);
-                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
+                    // Create new branch from main (or from hotfix ref)
+                    if (options.hotfix) {
+                        console.log(chalk.dim(`Branching from ref: ${options.hotfix}`));
+                    } else {
+                        await handlePullIfBehind(mainBranch, options.forceDefaults);
+                    }
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults, options.hotfix as string | undefined);
                 }
             }
         } else {
             // Not on main - offer: switch to main & create, create from current, or link existing
 
             // Map flags to choice index
+            // --hotfix → 0 (auto-select "switch to main & create" path, but hotfix ref overrides base)
             // --branch-action=create + --from-main → 0 (switch to main & create)
             // --branch-action=create + no --from-main → 1 (create from current)
             // --branch-action=link → 2
@@ -594,6 +646,10 @@ export async function startCommand(issue: string, options: StartOptions): Promis
             let forceIndex: number | undefined;
             if (options.branchAction === 'skip') {
                 console.log(chalk.dim('[--branch-action=skip] Skipping branch creation'));
+            } else if (options.hotfix) {
+                // --hotfix overrides the base ref, so auto-select create (choice 0)
+                // The actual branch point comes from the hotfix ref, not from main
+                forceIndex = 0;
             } else if (options.branchAction === 'link') {
                 forceIndex = 2;
             } else if (options.branchAction === 'create') {
@@ -648,14 +704,22 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                         console.log(chalk.green('✓'), `Switched to branch: ${selectedBranch}`);
                     }
                 } else if (choice === 1) {
-                    // Create from current branch
-                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
+                    // Create from current branch (or from hotfix ref)
+                    if (options.hotfix) {
+                        console.log(chalk.dim(`Branching from ref: ${options.hotfix}`));
+                    }
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults, options.hotfix as string | undefined);
                 } else {
-                    // Switch to main & create
-                    await checkoutBranch(mainBranch);
-                    console.log(chalk.green('✓'), `Switched to ${mainBranch}`);
-                    await handlePullIfBehind(mainBranch, options.forceDefaults);
-                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults);
+                    // Switch to main & create (or from hotfix ref)
+                    if (options.hotfix) {
+                        // With --hotfix, skip switching to main - branch directly from the ref
+                        console.log(chalk.dim(`Branching from ref: ${options.hotfix}`));
+                    } else {
+                        await checkoutBranch(mainBranch);
+                        console.log(chalk.green('✓'), `Switched to ${mainBranch}`);
+                        await handlePullIfBehind(mainBranch, options.forceDefaults);
+                    }
+                    await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults, options.hotfix as string | undefined);
                 }
             }
         }

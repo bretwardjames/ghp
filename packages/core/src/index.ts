@@ -59,6 +59,8 @@ export {
     getLocalBranches,
     getRemoteBranches,
     getAllBranches,
+    listTags,
+    resolveRef,
     // Worktree operations
     createWorktree,
     removeWorktree,

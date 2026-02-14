@@ -66,7 +66,10 @@ ghp label 123 bug urgent      # Manage labels
 ghp set-parent 123 --parent 42 # Set parent issue
 ghp progress 42               # Show epic progress
 ghp standup                   # Daily activity summary
-ghp standup --since 2d --mine # Last 2 days, my issues only
+ghp standup --since 2d        # Last 2 days
+ghp standup --timeline        # Flat chronological view
+ghp standup --user alice      # Activity for a specific user
+ghp fields                    # Discover project fields and values
 ```
 
 **Shortcuts** - Define named filter combinations in config:
@@ -84,6 +87,8 @@ Work on multiple issues simultaneously using git worktrees:
 
 ```bash
 ghp start 123 --parallel      # Create worktree instead of switching
+ghp start 123 --hotfix v1.2.0 # Branch hotfix from a tag/commit
+ghp start 123 --hotfix        # Interactive tag picker for hotfix
 ghp switch 456 --parallel     # Open existing issue in worktree
 ghp worktree list             # List all active worktrees
 ghp worktree remove 123       # Clean up worktree when done

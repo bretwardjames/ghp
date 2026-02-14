@@ -230,7 +230,7 @@ local color = require("ghp.statusline").component_color()
 | `:GhpPlan [shortcut]` | View project board (optional: use configured shortcut) |
 | `:GhpWork` | View items assigned to you |
 | `:GhpOpen [issue]` | View issue details |
-| `:GhpStart [issue]` | Start working on an issue (creates branch, updates status) |
+| `:GhpStart [issue] [--hotfix [ref]]` | Start working on an issue (creates branch, updates status). Use `--hotfix` for hotfix branching |
 | `:GhpStartParallel [issue]` | Start in a new worktree and open nvim + claude |
 | `:GhpStartParallel! [issue]` | Create worktree only (no editor - for agent workflows) |
 | `:GhpReview [pr]` | Review PR in worktree (resolves PR → issue) |
@@ -252,7 +252,7 @@ local color = require("ghp.statusline").component_color()
 | `:GhpPickPlan [shortcut]` | Fuzzy picker for project board |
 | `:GhpPickWork` | Fuzzy picker for your work |
 | `:GhpPickIssues` | Fuzzy picker for issues |
-| `:GhpStandup [since]` | Show daily activity summary (e.g., `:GhpStandup 2d`) |
+| `:GhpStandup [since]` | Show daily activity summary (e.g., `:GhpStandup 2d`, `:GhpStandup --timeline`) |
 
 ## Picker Integration
 

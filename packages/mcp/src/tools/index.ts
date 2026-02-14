@@ -27,6 +27,8 @@ import { register as registerLinkBranch } from './link-branch.js';
 import { register as registerUnlinkBranch } from './unlink-branch.js';
 // Phase 3: Lower Priority Tools
 import { register as registerGetIssue } from './get-issue.js';
+import { register as registerGetFields } from './fields.js';
+import { register as registerGetTags } from './tags.js';
 
 /**
  * @deprecated Use registerEnabledTools from '../tool-registry.js' instead.
@@ -39,6 +41,8 @@ export function registerAllTools(server: McpServer, context: ServerContext): voi
     registerListWorktrees(server, context);
     registerGetProgress(server, context);
     registerGetIssue(server, context);
+    registerGetFields(server, context);
+    registerGetTags(server, context);
 
     // Action tools
     registerMove(server, context);

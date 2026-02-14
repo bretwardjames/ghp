@@ -26,6 +26,8 @@ export {
     getLocalBranches,
     getRemoteBranches,
     getAllBranches,
+    listTags,
+    resolveRef,
     parseGitHubUrl,
     // Worktree operations
     createWorktree,

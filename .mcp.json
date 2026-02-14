@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ragtime": {
+      "command": "ragtime-mcp",
+      "args": [
+        "--path",
+        "."
+      ]
+    }
+  }
+}

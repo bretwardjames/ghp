@@ -1,0 +1,41 @@
+docs:
+  paths:
+  - docs
+  patterns:
+  - '**/*.md'
+  exclude:
+  - '**/node_modules/**'
+  - '**/.git/**'
+  - '**/.ragtime/**'
+code:
+  paths:
+  - .
+  languages:
+  - python
+  - typescript
+  - javascript
+  - vue
+  - dart
+  exclude:
+  - '**/node_modules/**'
+  - '**/.git/**'
+  - '**/build/**'
+  - '**/dist/**'
+  - '**/.dart_tool/**'
+  - '**/generated/**'
+  - '**/*.generated.*'
+  - '**/*.g.dart'
+  - '**/*.d.ts'
+  - '**/__tests__/**'
+  - '**/*.test.*'
+  - '**/*.spec.*'
+  - '**/__init__.py'
+conventions:
+  files:
+  - .ragtime/CONVENTIONS.md
+  also_search_memories: true
+  storage: auto
+  default_file: .ragtime/CONVENTIONS.md
+  folder: .ragtime/conventions/
+  scan_docs_for_sections:
+  - docs/

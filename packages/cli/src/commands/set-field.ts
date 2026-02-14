@@ -72,7 +72,7 @@ export async function setFieldCommand(issue: string, field: string, value: strin
     }
 
     // Build the value object based on field type
-    let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string };
+    let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string; date?: string; iterationId?: string };
 
     if (targetField.type === 'SingleSelect' && targetField.options) {
         const option = targetField.options.find(o =>
@@ -84,6 +84,16 @@ export async function setFieldCommand(issue: string, field: string, value: strin
             exit(1);
         }
         fieldValue = { singleSelectOptionId: option.id };
+    } else if (targetField.type === 'Iteration' && targetField.options) {
+        const option = targetField.options.find(o =>
+            o.name.toLowerCase() === value.toLowerCase()
+        );
+        if (!option) {
+            console.error(chalk.red('Error:'), `Invalid value "${value}" for field "${field}"`);
+            console.log('Available iterations:', targetField.options.map(o => o.name).join(', '));
+            exit(1);
+        }
+        fieldValue = { iterationId: option.id };
     } else if (targetField.type === '' || targetField.type === 'Text') {
         fieldValue = { text: value };
     } else if (targetField.type === 'Number') {
@@ -98,12 +108,12 @@ export async function setFieldCommand(issue: string, field: string, value: strin
         exit(1);
     }
 
-    const success = await api.setFieldValue(item.projectId, item.id, targetField.id, fieldValue);
+    const result = await api.setFieldValue(item.projectId, item.id, targetField.id, fieldValue);
 
-    if (success) {
+    if (result.success) {
         console.log(chalk.green('Updated:'), `#${issueNumber} ${targetField.name} = ${value}`);
     } else {
-        console.error(chalk.red('Error:'), 'Failed to update field');
+        console.error(chalk.red('Error:'), `Failed to update field: ${result.error || 'Unknown error'}`);
         exit(1);
     }
 }

@@ -39,7 +39,7 @@ vi.mock('../github-api.js', () => ({
         addLabelToIssue: vi.fn(),
         addSubIssue: vi.fn(),
         getProjectFields: vi.fn(),
-        setFieldValue: vi.fn(),
+        setFieldValue: vi.fn().mockResolvedValue({ success: true }),
     },
 }));
 

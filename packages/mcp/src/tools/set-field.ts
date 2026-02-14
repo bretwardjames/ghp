@@ -88,7 +88,7 @@ export function register(server: McpServer, context: ServerContext): void {
                 }
 
                 // Build the value object based on field type
-                let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string };
+                let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string; date?: string; iterationId?: string };
 
                 if (targetField.type === 'SingleSelect' && targetField.options) {
                     const option = targetField.options.find(
@@ -107,6 +107,23 @@ export function register(server: McpServer, context: ServerContext): void {
                         };
                     }
                     fieldValue = { singleSelectOptionId: option.id };
+                } else if (targetField.type === 'Iteration' && targetField.options) {
+                    const option = targetField.options.find(
+                        (o) => o.name.toLowerCase() === value.toLowerCase()
+                    );
+                    if (!option) {
+                        const available = targetField.options.map((o) => o.name).join(', ');
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: `Invalid value "${value}" for field "${field}". Available iterations: ${available}`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    fieldValue = { iterationId: option.id };
                 } else if (targetField.type === 'Number') {
                     const num = parseFloat(value);
                     if (isNaN(num)) {

@@ -66,7 +66,7 @@ export async function fieldsCommand(options: FieldsOptions): Promise<void> {
         const paddedName = field.name.padEnd(maxNameLen);
         const label = chalk.cyan(paddedName);
 
-        if (field.type === 'SingleSelect' && field.options && field.options.length > 0) {
+        if ((field.type === 'SingleSelect' || field.type === 'Iteration') && field.options && field.options.length > 0) {
             const optionStr = field.options.map(o => o.name).join(' | ');
             console.log(`  ${label}   ${optionStr}`);
         } else {

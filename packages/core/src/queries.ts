@@ -145,6 +145,10 @@ export const PROJECT_FIELDS_QUERY = `
                         ... on ProjectV2IterationField {
                             id
                             name
+                            configuration {
+                                iterations { id title }
+                                completedIterations { id title }
+                            }
                         }
                     }
                 }

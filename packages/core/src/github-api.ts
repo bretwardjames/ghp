@@ -652,17 +652,29 @@ export class GitHubAPI {
                         id: string;
                         name: string;
                         options?: Array<{ id: string; name: string }>;
+                        configuration?: {
+                            iterations: Array<{ id: string; title: string }>;
+                            completedIterations: Array<{ id: string; title: string }>;
+                        };
                     }>;
                 };
             };
         } = await this.graphqlWithRetry(queries.PROJECT_FIELDS_QUERY, { projectId });
 
-        return response.node.fields.nodes.map(f => ({
-            id: f.id,
-            name: f.name,
-            type: f.__typename.replace('ProjectV2', '').replace('Field', ''),
-            options: f.options,
-        }));
+        return response.node.fields.nodes.map(f => {
+            // Map iteration configurations into the options format
+            let options = f.options;
+            if (f.configuration) {
+                const all = [...f.configuration.iterations, ...f.configuration.completedIterations];
+                options = all.map(i => ({ id: i.id, name: i.title }));
+            }
+            return {
+                id: f.id,
+                name: f.name,
+                type: f.__typename.replace('ProjectV2', '').replace('Field', ''),
+                options,
+            };
+        });
     }
 
     /**

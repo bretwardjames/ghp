@@ -1,5 +1,20 @@
 # @bretwardjames/ghp-core
 
+## 0.9.0
+
+### Minor Changes
+
+- Add field discovery, hotfix branching, and named flags
+
+  - `ghp fields` command to discover project fields and valid values
+  - `--hotfix [ref]` flag on `ghp start` to branch from tags/commits
+  - `--priority` and `--size` named flags on `ghp add`
+  - `--body-file` and `--body-stdin` flags for issue body input
+  - Verbose creation summary showing field assignments
+  - Fix silent flag dropping after positional title arg
+  - `get_fields` and `get_tags` MCP tools
+  - `validateRefString()` for shell injection prevention in git refs
+
 ## 0.8.0
 
 ### Minor Changes

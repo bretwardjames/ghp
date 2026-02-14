@@ -544,11 +544,11 @@ export async function addIssueCommand(title: string, options: AddIssueOptions): 
                 fieldValue = { text: value };
             }
 
-            const success = await api.setFieldValue(project.id, itemId, field.id, fieldValue);
-            if (success) {
+            const result = await api.setFieldValue(project.id, itemId, field.id, fieldValue);
+            if (result.success) {
                 summary.push({ field: fieldName, value, status: 'success' });
             } else {
-                summary.push({ field: fieldName, value: `Failed to set "${value}"`, status: 'warning' });
+                summary.push({ field: fieldName, value: `Failed to set "${value}": ${result.error || 'Unknown error'}`, status: 'warning' });
             }
         }
     }

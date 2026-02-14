@@ -262,9 +262,10 @@ export class VSCodeGitHubAPI extends GitHubAPI {
         fieldId: string,
         optionId: string
     ): Promise<boolean> {
-        return this.setFieldValue(projectId, itemId, fieldId, {
+        const result = await this.setFieldValue(projectId, itemId, fieldId, {
             singleSelectOptionId: optionId,
         });
+        return result.success;
     }
 
     /**

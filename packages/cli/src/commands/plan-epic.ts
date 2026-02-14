@@ -118,12 +118,12 @@ function createToolHandlers(
                 valueToSet = { text: value };
             }
 
-            const success = await api.setFieldValue(projectId, item.id, field.id, valueToSet);
-            if (success) {
+            const result = await api.setFieldValue(projectId, item.id, field.id, valueToSet);
+            if (result.success) {
                 console.log(chalk.dim(`  Set ${fieldName}=${value} on #${issueNumber}`));
             }
 
-            return { success, issueNumber, fieldName, value };
+            return { success: result.success, issueNumber, fieldName, value };
         },
 
         add_blocker: async (input) => {

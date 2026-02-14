@@ -666,26 +666,40 @@ export class GitHubAPI {
     }
 
     /**
-     * Set a field value on a project item
+     * Set a field value on a project item.
+     * Routes SingleSelect fields through the inline mutation pattern
+     * (passing the option ID as a scalar variable) since GitHub's API
+     * does not reliably deserialize ProjectV2FieldValue input objects.
      */
     async setFieldValue(
         projectId: string,
         itemId: string,
         fieldId: string,
-        value: { text?: string; number?: number; singleSelectOptionId?: string }
-    ): Promise<boolean> {
+        value: { text?: string; number?: number; singleSelectOptionId?: string; date?: string; iterationId?: string }
+    ): Promise<{ success: boolean; error?: string }> {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
 
         try {
-            await this.graphqlWithRetry(queries.UPDATE_ITEM_FIELD_MUTATION, {
-                projectId,
-                itemId,
-                fieldId,
-                value,
-            });
-            return true;
-        } catch {
-            return false;
+            if (value.singleSelectOptionId) {
+                // Use the proven inline mutation pattern for SingleSelect fields
+                await this.graphqlWithRetry(queries.UPDATE_ITEM_STATUS_MUTATION, {
+                    projectId,
+                    itemId,
+                    fieldId,
+                    optionId: value.singleSelectOptionId,
+                });
+            } else {
+                await this.graphqlWithRetry(queries.UPDATE_ITEM_FIELD_MUTATION, {
+                    projectId,
+                    itemId,
+                    fieldId,
+                    value,
+                });
+            }
+            return { success: true };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: message };
         }
     }
 

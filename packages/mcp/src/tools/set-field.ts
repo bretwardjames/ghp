@@ -87,15 +87,53 @@ export function register(server: McpServer, context: ServerContext): void {
                     };
                 }
 
+                // Build the value object based on field type
+                let fieldValue: { text?: string; number?: number; singleSelectOptionId?: string };
+
+                if (targetField.type === 'SingleSelect' && targetField.options) {
+                    const option = targetField.options.find(
+                        (o) => o.name.toLowerCase() === value.toLowerCase()
+                    );
+                    if (!option) {
+                        const available = targetField.options.map((o) => o.name).join(', ');
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: `Invalid value "${value}" for field "${field}". Available options: ${available}`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    fieldValue = { singleSelectOptionId: option.id };
+                } else if (targetField.type === 'Number') {
+                    const num = parseFloat(value);
+                    if (isNaN(num)) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: `Value must be a number for field "${field}".`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    fieldValue = { number: num };
+                } else {
+                    fieldValue = { text: value };
+                }
+
                 // Set the field value
-                const success = await context.api.setFieldValue(
+                const result = await context.api.setFieldValue(
                     item.projectId,
                     item.id,
                     targetField.id,
-                    value
+                    fieldValue
                 );
 
-                if (success) {
+                if (result.success) {
                     return {
                         content: [
                             {
@@ -109,7 +147,7 @@ export function register(server: McpServer, context: ServerContext): void {
                         content: [
                             {
                                 type: 'text',
-                                text: 'Failed to set field value.',
+                                text: `Failed to set field "${field}": ${result.error || 'Unknown error'}`,
                             },
                         ],
                         isError: true,

@@ -1,11 +1,9 @@
 {
   "_comment": "ghp-cli configuration - see https://github.com/your/ghp-cli for docs",
-
   "mainBranch": "main",
   "branchPattern": "{user}/{number}-{title}",
   "startWorkingStatus": "In Progress",
   "doneStatus": "Done",
-
   "defaults": {
     "plan": {},
     "addIssue": {
@@ -14,15 +12,15 @@
       "status": "Backlog"
     }
   },
-
   "parallelWork": {
     "claudeCommand": "start"
   },
-
   "shortcuts": {
     "bugs": {
       "status": "Backlog",
-      "slice": ["type=Bug"]
+      "slice": [
+        "type=Bug"
+      ]
     },
     "mywork": {
       "status": "In Progress",

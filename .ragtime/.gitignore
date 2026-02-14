@@ -1,0 +1,5 @@
+# Synced branches from teammates (dot-prefixed)
+branches/.*
+
+# Index database
+index/

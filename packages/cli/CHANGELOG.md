@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.3
+
+### Patch Changes
+
+- Add `--body` / `-b` flag to `pr` command for passing PR description directly
+
 ## 0.10.2
 
 ### Patch Changes

@@ -21,6 +21,7 @@ const execAsync = promisify(exec);
 interface PrOptions {
     create?: boolean;
     open?: boolean;
+    body?: string;
     aiDescription?: boolean;
     force?: boolean;
     hooks?: boolean;  // --no-hooks sets this to false
@@ -79,7 +80,7 @@ async function createPr(
     issueTitle: string | undefined,
     options: PrOptions
 ): Promise<void> {
-    const { aiDescription: useAiDescription, force, hooks = true } = options;
+    const { body: customBody, aiDescription: useAiDescription, force, hooks = true } = options;
 
     try {
         // Build title from issue if available
@@ -91,8 +92,10 @@ async function createPr(
             body = `Relates to #${issueNumber}`;
         }
 
-        // Generate AI description if requested
-        if (useAiDescription) {
+        // Use explicit body if provided, otherwise try AI generation
+        if (customBody) {
+            body = customBody;
+        } else if (useAiDescription) {
             const aiBody = await generateAiDescription(issueNumber, issueTitle);
             if (aiBody) {
                 body = aiBody;

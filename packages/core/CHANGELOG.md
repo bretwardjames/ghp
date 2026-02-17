@@ -1,5 +1,11 @@
 # @bretwardjames/ghp-core
 
+## 0.11.0
+
+### Minor Changes
+
+- Issue lifecycle management: auto-move issues on PR creation (`prOpenedStatus`), sync merged PRs (`sync-merged`), and close issues on release (`release <ref>`)
+
 ## 0.10.0
 
 ### Minor Changes

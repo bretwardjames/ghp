@@ -1,5 +1,16 @@
 # @bretwardjames/ghp-mcp
 
+## 0.6.0
+
+### Minor Changes
+
+- Issue lifecycle management: auto-move issues on PR creation (`prOpenedStatus`), sync merged PRs (`sync-merged`), and close issues on release (`release <ref>`)
+
+### Patch Changes
+
+- Updated dependencies
+  - @bretwardjames/ghp-core@0.11.0
+
 ## 0.5.2
 
 ### Patch Changes

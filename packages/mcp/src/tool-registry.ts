@@ -22,6 +22,8 @@ import * as worktreeTool from './tools/worktree.js';
 // Phase 1: High Priority Tools
 import * as createPrTool from './tools/create-pr.js';
 import * as mergePrTool from './tools/merge-pr.js';
+import * as syncMergedTool from './tools/sync-merged.js';
+import * as releaseTool from './tools/release.js';
 import * as listWorktreesTool from './tools/list-worktrees.js';
 import * as removeWorktreeTool from './tools/remove-worktree.js';
 import * as stopWorkTool from './tools/stop-work.js';
@@ -80,6 +82,8 @@ const TOOLS: ToolModule[] = [
     // PR tools
     createPrTool,
     mergePrTool,
+    syncMergedTool,
+    releaseTool,
     // Worktree tools
     worktreeTool,
     removeWorktreeTool,
@@ -227,6 +231,26 @@ export function loadHooksConfig(): HooksConfig {
     }
 
     return result;
+}
+
+/**
+ * Read a top-level config value from user/workspace config (workspace wins).
+ */
+export function getConfigValue<T = string>(key: string, defaultValue: T): T {
+    const userConfigPath = join(homedir(), '.config', 'ghp-cli', 'config.json');
+    const userConfig = loadConfigFile(userConfigPath);
+
+    const repoRoot = getRepoRoot();
+    const workspaceConfigPath = repoRoot ? join(repoRoot, '.ghp', 'config.json') : null;
+    const workspaceConfig = workspaceConfigPath ? loadConfigFile(workspaceConfigPath) : null;
+
+    const workspaceVal = workspaceConfig?.[key];
+    if (workspaceVal !== undefined) return workspaceVal as T;
+
+    const userVal = userConfig?.[key];
+    if (userVal !== undefined) return userVal as T;
+
+    return defaultValue;
 }
 
 /**

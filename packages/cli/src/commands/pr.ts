@@ -150,6 +150,19 @@ async function createPr(
         // Success!
         console.log(chalk.green('Created PR:'), result.pr?.url);
 
+        // Move linked issue to prOpenedStatus
+        if (issueNumber) {
+            const prOpenedStatus = getConfig('prOpenedStatus');
+            if (prOpenedStatus) {
+                const moveResult = await api.moveIssueToStatus(repo, issueNumber, prOpenedStatus);
+                if (moveResult.success) {
+                    console.log(chalk.green('✓'), `Moved #${issueNumber} to "${prOpenedStatus}"`);
+                } else if (moveResult.error) {
+                    console.log(chalk.yellow('⚠'), `Could not move #${issueNumber}: ${moveResult.error}`);
+                }
+            }
+        }
+
         // Log hook results
         if (result.hookResults.length > 0) {
             console.log();

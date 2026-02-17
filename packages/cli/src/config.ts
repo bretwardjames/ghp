@@ -139,6 +139,8 @@ export interface Config {
     branchPattern: string;
     startWorkingStatus: string;
     doneStatus: string;
+    prOpenedStatus: string;
+    prMergedStatus: string;
 
     // Issue handling
     /** What to do when an issue is not in any project (default: 'ask') */
@@ -187,6 +189,8 @@ const DEFAULT_CONFIG: Config = {
     branchPattern: '{user}/{number}-{title}',
     startWorkingStatus: 'In Progress',
     doneStatus: 'Done',
+    prOpenedStatus: 'In Review',
+    prMergedStatus: 'Ready for Beta',
     issueNotInProject: 'ask',
     // Worktree defaults
     worktreePath: '~/.ghp/worktrees',

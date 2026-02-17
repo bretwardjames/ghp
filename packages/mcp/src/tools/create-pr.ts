@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
-import { loadHooksConfig } from '../tool-registry.js';
+import { loadHooksConfig, getConfigValue } from '../tool-registry.js';
 import {
     createPRWorkflow,
     getCurrentBranch,
@@ -141,12 +141,27 @@ export function register(server: McpServer, context: ServerContext): void {
                     };
                 }
 
+                // Move linked issue to prOpenedStatus
+                let statusMoveMessage = '';
+                if (linkedIssue) {
+                    const prOpenedStatus = getConfigValue('prOpenedStatus', 'In Review');
+                    if (prOpenedStatus) {
+                        const moveResult = await context.api.moveIssueToStatus(repo, linkedIssue, prOpenedStatus);
+                        if (moveResult.success) {
+                            statusMoveMessage = `\nMoved #${linkedIssue} to "${prOpenedStatus}"`;
+                        } else if (moveResult.error) {
+                            statusMoveMessage = `\nCould not move #${linkedIssue}: ${moveResult.error}`;
+                        }
+                    }
+                }
+
                 // Build success message
                 let message = `Created PR #${result.pr!.number}: ${result.pr!.title}\n\nURL: ${result.pr!.url}`;
 
                 if (result.issue) {
                     message += `\nLinked to issue #${result.issue.number}`;
                 }
+                message += statusMoveMessage;
 
                 // Report hook results
                 const successHooks = result.hookResults.filter(h => h.success).length;

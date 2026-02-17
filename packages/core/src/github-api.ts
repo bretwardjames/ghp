@@ -517,6 +517,32 @@ export class GitHubAPI {
     }
 
     /**
+     * Move an issue to a target status in its project.
+     * Returns { success, error? } — does not throw.
+     */
+    async moveIssueToStatus(
+        repo: RepoInfo,
+        issueNumber: number,
+        targetStatus: string
+    ): Promise<{ success: boolean; error?: string }> {
+        const item = await this.findItemByNumber(repo, issueNumber);
+        if (!item) return { success: false, error: `Issue #${issueNumber} not found in any project` };
+
+        if (item.status === targetStatus) return { success: true };
+
+        const statusField = await this.getStatusField(item.projectId);
+        if (!statusField) return { success: false, error: 'Could not find Status field on project' };
+
+        const option = statusField.options.find(o => o.name === targetStatus);
+        if (!option) return { success: false, error: `Status "${targetStatus}" not found. Available: ${statusField.options.map(o => o.name).join(', ')}` };
+
+        const updated = await this.updateItemStatus(item.projectId, item.id, statusField.fieldId, option.id);
+        return updated
+            ? { success: true }
+            : { success: false, error: 'Failed to update status' };
+    }
+
+    /**
      * Find an item by issue number - direct lookup via issue's projectItems
      * Much faster than iterating through all project items
      */

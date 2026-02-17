@@ -38,6 +38,8 @@ import { standupCommand } from './commands/standup.js';
 import { fieldsCommand } from './commands/fields.js';
 import { dashboardCommand } from './commands/dashboard.js';
 import { updateCommand } from './commands/update.js';
+import { syncMergedCommand } from './commands/sync-merged.js';
+import { releaseCommand } from './commands/release.js';
 import {
     hooksListCommand,
     hooksAddCommand,
@@ -347,6 +349,20 @@ program
     .option('--auto', 'Enable auto-merge (merge when requirements are met)')
     .option('--auto-clean', 'Automatically remove worktree if branch is in use')
     .action(mergeCommand);
+
+program
+    .command('sync-merged')
+    .description('Move issues linked to merged PRs to prMergedStatus')
+    .option('-n, --limit <count>', 'Number of merged PRs to check (default: 50)')
+    .option('--dry-run', 'Show what would be moved without making changes')
+    .action(syncMergedCommand);
+
+program
+    .command('release <ref>')
+    .description('Move issues included in a release tag/commit to doneStatus')
+    .option('-n, --limit <count>', 'Number of merged PRs to check (default: 200)')
+    .option('--dry-run', 'Show what would be moved without making changes')
+    .action(releaseCommand);
 
 // Assignment
 program

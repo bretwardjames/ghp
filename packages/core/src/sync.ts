@@ -17,7 +17,7 @@
  * The canonical setting keys used in sync operations.
  * These are the CLI key names (used as the canonical form).
  */
-export type SyncableSettingKey = 'mainBranch' | 'branchPattern' | 'startWorkingStatus' | 'doneStatus';
+export type SyncableSettingKey = 'mainBranch' | 'branchPattern' | 'startWorkingStatus' | 'doneStatus' | 'prOpenedStatus' | 'prMergedStatus';
 
 /**
  * Settings that can be synced between CLI and VSCode.
@@ -28,6 +28,8 @@ export interface SyncableSettings {
     branchPattern?: string;
     startWorkingStatus?: string;
     doneStatus?: string;
+    prOpenedStatus?: string;
+    prMergedStatus?: string;
 }
 
 /**
@@ -95,6 +97,8 @@ export const SYNCABLE_KEYS: readonly SyncableSettingKey[] = [
     'branchPattern',
     'startWorkingStatus',
     'doneStatus',
+    'prOpenedStatus',
+    'prMergedStatus',
 ] as const;
 
 /**
@@ -104,7 +108,9 @@ export const SETTING_DISPLAY_NAMES: Record<SyncableSettingKey, string> = {
     mainBranch: 'Main Branch',
     branchPattern: 'Branch Name Pattern',
     startWorkingStatus: 'Start Working Status',
-    doneStatus: 'Done/PR Merged Status',
+    doneStatus: 'Done Status',
+    prOpenedStatus: 'PR Opened Status',
+    prMergedStatus: 'PR Merged Status',
 };
 
 /**
@@ -114,7 +120,9 @@ export const VSCODE_TO_CLI_MAP: Record<string, SyncableSettingKey> = {
     'mainBranch': 'mainBranch',
     'branchNamePattern': 'branchPattern',
     'startWorkingStatus': 'startWorkingStatus',
-    'prMergedStatus': 'doneStatus',
+    'doneStatus': 'doneStatus',
+    'prOpenedStatus': 'prOpenedStatus',
+    'prMergedStatus': 'prMergedStatus',
 };
 
 /**
@@ -124,7 +132,9 @@ export const CLI_TO_VSCODE_MAP: Record<SyncableSettingKey, string> = {
     mainBranch: 'mainBranch',
     branchPattern: 'branchNamePattern',
     startWorkingStatus: 'startWorkingStatus',
-    doneStatus: 'prMergedStatus',
+    doneStatus: 'doneStatus',
+    prOpenedStatus: 'prOpenedStatus',
+    prMergedStatus: 'prMergedStatus',
 };
 
 /**
@@ -135,6 +145,8 @@ export const DEFAULT_VALUES: Record<SyncableSettingKey, string> = {
     branchPattern: '{user}/{number}-{title}',
     startWorkingStatus: 'In Progress',
     doneStatus: 'Done',
+    prOpenedStatus: 'In Review',
+    prMergedStatus: 'Ready for Beta',
 };
 
 // =============================================================================

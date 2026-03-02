@@ -45,6 +45,7 @@ export {
     hasUncommittedChanges,
     branchExists,
     createBranch,
+    createBranchNoCheckout,
     checkoutBranch,
     pullLatest,
     fetchOrigin,

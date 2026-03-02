@@ -8,7 +8,9 @@ import {
     hasUncommittedChanges,
     branchExists,
     createBranch,
+    createBranchNoCheckout,
     checkoutBranch,
+    fetchOrigin,
     getCommitsBehind,
     pullLatest,
     generateBranchName,
@@ -72,6 +74,8 @@ interface StartOptions {
     force?: boolean;
     /** Create worktree instead of switching branches (parallel work mode) */
     parallel?: boolean;
+    /** With --parallel: never switch branches in the main repo (zero-checkout worktree creation) */
+    keepBranch?: boolean;
     /** Custom path for parallel worktree */
     worktreePath?: string;
     /** Whether to open a terminal (default: true with --parallel, set to false with --no-open) */
@@ -138,7 +142,9 @@ async function createAndLinkBranch(
     item: { number?: number | null; title: string },
     branchPattern: string,
     forceDefaults?: boolean,
-    hotfixRef?: string
+    hotfixRef?: string,
+    noCheckout?: boolean,
+    startPoint?: string
 ): Promise<string> {
     const branchName = generateBranchName(branchPattern, {
         user: api.username || 'user',
@@ -147,34 +153,51 @@ async function createAndLinkBranch(
         repo: repo.name,
     });
 
-    // Check if branch exists
-    if (await branchExists(branchName)) {
-        console.log(chalk.yellow('Branch already exists:'), branchName);
-        const shouldCheckout = await confirmWithDefault(
-            'Checkout existing branch?',
-            true, // default is to proceed
-            forceDefaults   // --force-defaults flag
-        );
-        if (shouldCheckout) {
-            await checkoutBranch(branchName);
-            console.log(chalk.green('✓'), `Switched to ${branchName}`);
+    if (noCheckout) {
+        // Parallel worktree path: create branch without switching working tree
+        if (await branchExists(branchName)) {
+            console.log(chalk.dim(`Branch already exists locally: ${branchName}`));
+        } else {
+            try {
+                await createBranchNoCheckout(branchName, startPoint ? { startPoint } : {});
+                console.log(chalk.green('✓'), `Created branch: ${branchName}${startPoint ? ` (from ${startPoint})` : ''}`);
+                await execAsync(`git push -u origin ${branchName}`);
+                console.log(chalk.green('✓'), `Pushed branch to origin`);
+            } catch (error) {
+                console.error(chalk.red('Error:'), 'Failed to create branch:', error);
+                exit(1);
+            }
         }
     } else {
-        // Create branch
-        try {
-            await createBranch(branchName, hotfixRef ? { startPoint: hotfixRef } : {});
-            console.log(chalk.green('✓'), `Created branch: ${branchName}${hotfixRef ? ` (from ${hotfixRef})` : ''}`);
+        // Standard path: create branch and switch to it
+        if (await branchExists(branchName)) {
+            console.log(chalk.yellow('Branch already exists:'), branchName);
+            const shouldCheckout = await confirmWithDefault(
+                'Checkout existing branch?',
+                true, // default is to proceed
+                forceDefaults   // --force-defaults flag
+            );
+            if (shouldCheckout) {
+                await checkoutBranch(branchName);
+                console.log(chalk.green('✓'), `Switched to ${branchName}`);
+            }
+        } else {
+            // Create branch
+            try {
+                await createBranch(branchName, hotfixRef ? { startPoint: hotfixRef } : {});
+                console.log(chalk.green('✓'), `Created branch: ${branchName}${hotfixRef ? ` (from ${hotfixRef})` : ''}`);
 
-            // Create empty commit linking to issue and push
-            const commitMsg = `Start work on #${item.number}\n\n${item.title}`;
-            await execAsync(`git commit --allow-empty -m "${commitMsg.replace(/"/g, '\\"')}"`);
-            console.log(chalk.green('✓'), `Created linking commit for #${item.number}`);
+                // Create empty commit linking to issue and push
+                const commitMsg = `Start work on #${item.number}\n\n${item.title}`;
+                await execAsync(`git commit --allow-empty -m "${commitMsg.replace(/"/g, '\\"')}"`);
+                console.log(chalk.green('✓'), `Created linking commit for #${item.number}`);
 
-            await execAsync(`git push -u origin ${branchName}`);
-            console.log(chalk.green('✓'), `Pushed branch to origin`);
-        } catch (error) {
-            console.error(chalk.red('Error:'), 'Failed to create branch:', error);
-            exit(1);
+                await execAsync(`git push -u origin ${branchName}`);
+                console.log(chalk.green('✓'), `Pushed branch to origin`);
+            } catch (error) {
+                console.error(chalk.red('Error:'), 'Failed to create branch:', error);
+                exit(1);
+            }
         }
     }
 
@@ -455,6 +478,9 @@ export async function startCommand(issue: string, options: StartOptions): Promis
     let worktreePath: string | undefined;
     let worktreeBranch: string | undefined; // Branch name for worktree (used in spawn directive)
     let worktreeWasCreated = false; // Track if a NEW worktree was created (for hooks)
+    // Set by the no-checkout parallel path so the --parallel block below knows the new branch name
+    // without relying on getCurrentBranch() (which won't change when we skip checkout)
+    let newBranchForWorktree: string | undefined;
 
     // Remember original branch for --parallel mode (switch back after worktree creation)
     const originalBranch = await getCurrentBranch();
@@ -576,6 +602,15 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         if (isOnMain) {
             // On main - offer: create new or link existing
 
+            if (options.parallel && options.keepBranch && options.branchAction !== 'link' && options.branchAction !== 'skip') {
+                // --parallel --keep-branch: create branch without switching away from main
+                const hotfixRef = options.hotfix ? String(options.hotfix) : undefined;
+                newBranchForWorktree = await createAndLinkBranch(
+                    repo, item, branchPattern, options.forceDefaults,
+                    hotfixRef,
+                    true, // noCheckout - stay on main
+                );
+            } else {
             // Map --branch-action flag to choice index
             let forceIndex: number | undefined;
             if (options.hotfix) forceIndex = 0; // --hotfix implies create new branch
@@ -634,9 +669,23 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults, options.hotfix as string | undefined);
                 }
             }
+            } // end non-parallel branch
         } else {
             // Not on main - offer: switch to main & create, create from current, or link existing
 
+            if (options.parallel && options.keepBranch && options.branchAction !== 'link' && options.branchAction !== 'skip') {
+                // --parallel --keep-branch: create branch from origin/main without switching
+                console.log(chalk.dim('Fetching latest from origin for branch base...'));
+                await fetchOrigin();
+                const hotfixRef = options.hotfix ? String(options.hotfix) : undefined;
+                const startPoint = hotfixRef ?? `origin/${mainBranch}`;
+                newBranchForWorktree = await createAndLinkBranch(
+                    repo, item, branchPattern, options.forceDefaults,
+                    hotfixRef,
+                    true, // noCheckout - never switch the working tree
+                    startPoint
+                );
+            } else {
             // Map flags to choice index
             // --hotfix → 0 (auto-select "switch to main & create" path, but hotfix ref overrides base)
             // --branch-action=create + --from-main → 0 (switch to main & create)
@@ -722,15 +771,15 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     await createAndLinkBranch(repo, item, branchPattern, options.forceDefaults, options.hotfix as string | undefined);
                 }
             }
+            } // end non-parallel branch
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
         // Handle --parallel flag after new branch creation
         // ═══════════════════════════════════════════════════════════════════════════
         if (options.parallel) {
-            // We just created a new branch and are now on it
-            // For parallel mode, create a worktree and switch back to original branch
-            const newBranchName = await getCurrentBranch();
+            // newBranchForWorktree is set when --keep-branch skipped checkout; otherwise read current branch
+            const newBranchName = newBranchForWorktree || await getCurrentBranch();
             if (newBranchName) {
                 const result = await createParallelWorktree(
                     repo,
@@ -748,11 +797,16 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                 isParallelMode = true;
                 worktreeWasCreated = !result.alreadyExisted;
 
-                // Switch back to original branch so user stays in their previous context
-                if (originalBranch && originalBranch !== newBranchName) {
-                    await checkoutBranch(originalBranch);
-                    console.log(chalk.green('✓'), `Switched back to ${originalBranch} (worktree created)`);
-                } else if (!originalBranch) {
+                // Switch back to original branch so user stays in their previous context.
+                // Skip when --keep-branch was used: we never left the original branch.
+                if (!newBranchForWorktree && originalBranch && originalBranch !== newBranchName) {
+                    try {
+                        await checkoutBranch(originalBranch);
+                        console.log(chalk.green('✓'), `Switched back to ${originalBranch} (worktree created)`);
+                    } catch (error) {
+                        console.log(chalk.yellow('⚠'), `Could not switch back to ${originalBranch} — currently on: ${await getCurrentBranch()}`);
+                    }
+                } else if (!originalBranch && !newBranchForWorktree) {
                     console.log(chalk.yellow('⚠'), 'Was in detached HEAD state, staying on new branch');
                 }
             }

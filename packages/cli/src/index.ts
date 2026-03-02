@@ -266,6 +266,7 @@ program
     .option('--issue', 'Treat input as issue number (default in --review: treat as PR number)')
     // Parallel work mode
     .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
+    .option('--keep-branch', 'With --parallel: never switch branches in the main repo (zero-checkout worktree creation)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--admin', 'Open admin pane (ghp agents watch) with --parallel')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')

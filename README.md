@@ -86,12 +86,13 @@ ghp fields                    # Discover project fields and values
 Work on multiple issues simultaneously using git worktrees:
 
 ```bash
-ghp start 123 --parallel      # Create worktree instead of switching
-ghp start 123 --hotfix v1.2.0 # Branch hotfix from a tag/commit
-ghp start 123 --hotfix        # Interactive tag picker for hotfix
-ghp switch 456 --parallel     # Open existing issue in worktree
-ghp worktree list             # List all active worktrees
-ghp worktree remove 123       # Clean up worktree when done
+ghp start 123 --parallel               # Create worktree instead of switching
+ghp start 123 --parallel --keep-branch # Worktree without any branch switch in main repo
+ghp start 123 --hotfix v1.2.0          # Branch hotfix from a tag/commit
+ghp start 123 --hotfix                 # Interactive tag picker for hotfix
+ghp switch 456 --parallel              # Open existing issue in worktree
+ghp worktree list                      # List all active worktrees
+ghp worktree remove 123                # Clean up worktree when done
 ```
 
 Each worktree gets automatic setup: copies `.env` files and runs your install command.

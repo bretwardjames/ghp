@@ -183,6 +183,26 @@ export async function createBranch(
 }
 
 /**
+ * Create a new branch without switching to it.
+ * Uses `git branch` instead of `git checkout -b`, so the working tree is unaffected.
+ * Useful for parallel worktree workflows where you never want to change the current branch.
+ * @throws {GitError} If the branch already exists or the start point doesn't exist
+ */
+export async function createBranchNoCheckout(
+    branchName: string,
+    options: GitOptions & { startPoint?: string } = {}
+): Promise<void> {
+    validateBranchName(branchName);
+    if (options.startPoint) {
+        validateRefString(options.startPoint);
+    }
+    const cmd = options.startPoint
+        ? `git branch "${branchName}" "${options.startPoint}"`
+        : `git branch "${branchName}"`;
+    await execGit(cmd, options);
+}
+
+/**
  * Checkout an existing branch.
  * @throws {GitError} If the branch cannot be checked out (e.g., doesn't exist, uncommitted changes)
  */

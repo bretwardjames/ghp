@@ -6,7 +6,7 @@
 import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, copyFileSync, mkdirSync } from 'fs';
+import { existsSync, copyFileSync, cpSync, lstatSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { getWorktreeConfig, getConfig } from './config.js';
 import {
@@ -37,13 +37,16 @@ export async function setupWorktree(worktreePath: string, sourcePath: string): P
         const destFile = join(worktreePath, file);
 
         if (existsSync(srcFile)) {
-            // Ensure destination directory exists
-            const destDir = dirname(destFile);
-            if (!existsSync(destDir)) {
-                mkdirSync(destDir, { recursive: true });
+            if (lstatSync(srcFile).isDirectory()) {
+                cpSync(srcFile, destFile, { recursive: true });
+            } else {
+                // Ensure destination directory exists
+                const destDir = dirname(destFile);
+                if (!existsSync(destDir)) {
+                    mkdirSync(destDir, { recursive: true });
+                }
+                copyFileSync(srcFile, destFile);
             }
-
-            copyFileSync(srcFile, destFile);
             console.log(chalk.dim(`  Copied ${file}`));
         }
     }

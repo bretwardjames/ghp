@@ -186,6 +186,7 @@ The `start` command:
 | Option | Description |
 |--------|-------------|
 | `--parallel` | Create worktree instead of switching branches |
+| `--keep-branch` | With `--parallel`: never switch branches in the main repo (zero-checkout worktree creation) |
 | `--worktree-path <path>` | Custom worktree location |
 | `--branch-action <action>` | `create`, `link`, or `skip` |
 | `--assign <action>` | `reassign`, `add`, or `skip` |
@@ -240,13 +241,16 @@ ghp sync                       # Sync active label with current branch
 Work on multiple issues simultaneously:
 
 ```bash
-ghp start 123 --parallel       # Create worktree for issue
-ghp switch 456 --parallel      # Open existing issue in worktree
-ghp worktree list              # List all active worktrees
-ghp worktree list --json       # JSON output for scripts/AI tools
-ghp worktree remove 123        # Remove worktree for issue
-ghp worktree remove 123 --force  # Force remove (uncommitted changes)
+ghp start 123 --parallel               # Create worktree for issue
+ghp start 123 --parallel --keep-branch # Create worktree without switching branches in main repo
+ghp switch 456 --parallel              # Open existing issue in worktree
+ghp worktree list                      # List all active worktrees
+ghp worktree list --json               # JSON output for scripts/AI tools
+ghp worktree remove 123                # Remove worktree for issue
+ghp worktree remove 123 --force        # Force remove (uncommitted changes)
 ```
+
+`--keep-branch` is designed for non-interactive and multi-agent workflows where other processes are working in the main repo. Instead of switching branches (which `--parallel` normally does to create the branch), it creates the branch directly from `origin/main` without any checkout, keeping the main repo's working tree untouched.
 
 ### Branch Dashboard
 

@@ -1,5 +1,19 @@
 # @bretwardjames/ghp-core
 
+## 0.12.0
+
+### Minor Changes
+
+- Add `--keep-branch` flag for zero-checkout worktree creation
+
+  `ghp start <issue> --parallel --keep-branch` creates the branch and worktree
+  without switching branches in the main repo at any point. Designed for
+  non-interactive and multi-agent workflows where other processes depend on
+  the main repo staying on its current branch.
+
+  Also fixes worktree setup to correctly handle directories in `worktreeCopyFiles`
+  (was using `copyFileSync` which fails on directories).
+
 ## 0.11.0
 
 ### Minor Changes

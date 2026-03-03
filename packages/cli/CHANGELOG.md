@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0
+
+### Minor Changes
+
+- Add tmux window naming, hooks installer, worktree symlink support, and ghp review command
+
+  - `ghp review [<pr>] [--json]` — list PRs pending your review or get full diff + inline comment context for one PR
+  - `parallelWork.tmux.windowName` config — template for initial tmux window name (`{issueNumber}`, `{issueTitle}`, `{branch}`)
+  - `parallelWork.tmux.titleTemplates` — named status templates Claude can apply with `ghp tmux rename --template <name>`
+  - `ghp tmux rename [--template <name>] [title]` — rename the current tmux window from within a worker pane
+  - `ghp tmux install-hooks` — write Claude Code lifecycle hooks (SessionStart/Stop/Notification) into `.claude/settings.json` that auto-rename the window; also installs default working/waiting/done templates
+  - `worktreeLinkFiles` config — symlink files/dirs into worktrees instead of copying (processed after `worktreeCopyFiles`, enabling patterns like copy `.ragtime/` then symlink `.ragtime/index/` for a shared vector DB)
+
 ## 0.12.0
 
 ### Minor Changes

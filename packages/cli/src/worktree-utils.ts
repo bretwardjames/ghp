@@ -6,7 +6,7 @@
 import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, copyFileSync, cpSync, lstatSync, mkdirSync } from 'fs';
+import { existsSync, copyFileSync, cpSync, lstatSync, mkdirSync, rmSync, symlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { getWorktreeConfig, getConfig } from './config.js';
 import {
@@ -22,6 +22,15 @@ import {
 
 const execAsync = promisify(exec);
 
+/** lstatSync that returns null instead of throwing when path doesn't exist. */
+function lstatSync_safe(filePath: string) {
+    try {
+        return lstatSync(filePath);
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Setup a worktree for parallel work: copy configured files and run setup command.
  *
@@ -31,7 +40,7 @@ const execAsync = promisify(exec);
 export async function setupWorktree(worktreePath: string, sourcePath: string): Promise<void> {
     const config = getWorktreeConfig();
 
-    // Copy configured files
+    // Copy configured files/dirs
     for (const file of config.copyFiles) {
         const srcFile = join(sourcePath, file);
         const destFile = join(worktreePath, file);
@@ -40,7 +49,6 @@ export async function setupWorktree(worktreePath: string, sourcePath: string): P
             if (lstatSync(srcFile).isDirectory()) {
                 cpSync(srcFile, destFile, { recursive: true });
             } else {
-                // Ensure destination directory exists
                 const destDir = dirname(destFile);
                 if (!existsSync(destDir)) {
                     mkdirSync(destDir, { recursive: true });
@@ -49,6 +57,37 @@ export async function setupWorktree(worktreePath: string, sourcePath: string): P
             }
             console.log(chalk.dim(`  Copied ${file}`));
         }
+    }
+
+    // Symlink configured files/dirs (processed after copies, so a linkFile can
+    // replace a subdirectory that was just copied — e.g. copy .ragtime/ then
+    // symlink .ragtime/index/ back to the source to share the vector DB)
+    for (const file of config.linkFiles) {
+        const srcFile = join(sourcePath, file);
+        const destFile = join(worktreePath, file);
+
+        if (!lstatSync_safe(srcFile)) continue;
+
+        // If something already exists at the destination (e.g. copied in the
+        // previous loop), remove it so we can replace it with the symlink.
+        // Use lstat (not stat) so we catch dangling symlinks too.
+        const existing = lstatSync_safe(destFile);
+        if (existing) {
+            if (existing.isDirectory()) {
+                rmSync(destFile, { recursive: true, force: true });
+            } else {
+                rmSync(destFile, { force: true });
+            }
+        }
+
+        // Ensure the parent directory exists
+        const destDir = dirname(destFile);
+        if (!existsSync(destDir)) {
+            mkdirSync(destDir, { recursive: true });
+        }
+
+        symlinkSync(srcFile, destFile);
+        console.log(chalk.dim(`  Linked ${file}`));
     }
 
     // Run setup command if enabled

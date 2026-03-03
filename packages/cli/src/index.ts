@@ -41,7 +41,7 @@ import { updateCommand } from './commands/update.js';
 import { syncMergedCommand } from './commands/sync-merged.js';
 import { releaseCommand } from './commands/release.js';
 import { reviewCommand } from './commands/review.js';
-import { tmuxRenameCommand } from './commands/tmux.js';
+import { tmuxRenameCommand, tmuxInstallHooksCommand } from './commands/tmux.js';
 import {
     hooksListCommand,
     hooksAddCommand,
@@ -360,6 +360,13 @@ tmuxCmd
     .description('Rename the current tmux window (call from within a ghp worker pane)')
     .option('-t, --template <name>', 'Use a named title template from parallelWork.tmux.titleTemplates config')
     .action(tmuxRenameCommand);
+
+tmuxCmd
+    .command('install-hooks')
+    .description('Install Claude Code lifecycle hooks that auto-rename the tmux window')
+    .option('--global', 'Install to ~/.claude/settings.json instead of .claude/settings.json')
+    .option('--force', 'Overwrite any existing ghp tmux rename hooks')
+    .action(tmuxInstallHooksCommand);
 
 program
     .command('merge [pr-number]')

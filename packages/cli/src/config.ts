@@ -185,7 +185,8 @@ export interface Config {
 
     // Worktree settings for parallel work mode
     worktreePath?: string;           // Base path for worktrees (default: ~/.ghp/worktrees)
-    worktreeCopyFiles?: string[];    // Files to copy to new worktrees (default: ['.env', '.env.local'])
+    worktreeCopyFiles?: string[];    // Files/dirs to copy to new worktrees (default: ['.env', '.env.local'])
+    worktreeLinkFiles?: string[];    // Files/dirs to symlink into new worktrees (default: [])
     worktreeSetupCommand?: string;   // Command to run in new worktrees (default: 'pnpm install')
     worktreeAutoSetup?: boolean;     // Whether to run setup automatically (default: true)
 
@@ -687,6 +688,7 @@ export function listConfig(): Record<string, string | string[] | boolean | undef
 export interface WorktreeConfig {
     path: string;
     copyFiles: string[];
+    linkFiles: string[];
     setupCommand: string;
     autoSetup: boolean;
 }
@@ -699,6 +701,7 @@ export function getWorktreeConfig(): WorktreeConfig {
     return {
         path: config.worktreePath ?? DEFAULT_CONFIG.worktreePath!,
         copyFiles: config.worktreeCopyFiles ?? DEFAULT_CONFIG.worktreeCopyFiles!,
+        linkFiles: config.worktreeLinkFiles ?? [],
         setupCommand: config.worktreeSetupCommand ?? DEFAULT_CONFIG.worktreeSetupCommand!,
         autoSetup: config.worktreeAutoSetup ?? DEFAULT_CONFIG.worktreeAutoSetup!,
     };

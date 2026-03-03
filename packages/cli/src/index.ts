@@ -30,6 +30,7 @@ import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
 import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
+import { worktreeMoveToCommand, worktreeCleanCommand, worktreeSwapStatusCommand } from './commands/worktree-swap.js';
 import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
@@ -557,6 +558,23 @@ worktreeCmd
     .description('List all worktrees')
     .option('--json', 'Output as JSON (for programmatic use)')
     .action(worktreeListCommand);
+
+worktreeCmd
+    .command('move-to <issue>')
+    .description('Swap a worktree branch into the main repo for live testing')
+    .option('-f, --force', 'Proceed even with uncommitted changes in main')
+    .action(worktreeMoveToCommand);
+
+worktreeCmd
+    .command('clean')
+    .description('Reverse a move-to swap: restore main and re-attach the worktree')
+    .option('-f, --force', 'Restore repos even if branches have diverged')
+    .action(worktreeCleanCommand);
+
+worktreeCmd
+    .command('status')
+    .description('Show current worktree swap state')
+    .action(worktreeSwapStatusCommand);
 
 // Agent management
 const agentsCmd = program

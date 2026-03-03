@@ -18,7 +18,8 @@ import {
     type SessionWatcher,
 } from '@bretwardjames/ghp-core';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
-import { killTmuxWindow, isInsideTmux } from '../terminal-utils.js';
+import { killTmuxWindow, isInsideTmux, resolveWindowName } from '../terminal-utils.js';
+import { getParallelWorkConfig } from '../config.js';
 import { exit, registerCleanupHandler } from '../exit.js';
 
 // Track active session watchers
@@ -198,7 +199,8 @@ async function stopAgent(agentId: string, issueNumber: number): Promise<void> {
 
     // Try to kill the tmux window if we're in tmux
     if (isInsideTmux()) {
-        const windowName = `ghp-${issueNumber}`;
+        const windowConfig = getParallelWorkConfig();
+        const windowName = resolveWindowName(windowConfig.tmuxWindowName, { issueNumber, issueTitle: '' });
         const result = await killTmuxWindow(windowName);
         if (result.success) {
             console.log(chalk.dim(`Killed tmux window: ${windowName}`));
@@ -250,7 +252,8 @@ async function stopAllAgents(force?: boolean): Promise<void> {
     for (const agent of agents) {
         // Try to kill tmux window
         if (isInsideTmux()) {
-            const windowName = `ghp-${agent.issueNumber}`;
+            const windowConfig = getParallelWorkConfig();
+            const windowName = resolveWindowName(windowConfig.tmuxWindowName, { issueNumber: agent.issueNumber, issueTitle: '' });
             await killTmuxWindow(windowName);
         } else if (agent.pid > 0) {
             try {

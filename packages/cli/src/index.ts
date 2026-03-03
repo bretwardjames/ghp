@@ -40,6 +40,8 @@ import { dashboardCommand } from './commands/dashboard.js';
 import { updateCommand } from './commands/update.js';
 import { syncMergedCommand } from './commands/sync-merged.js';
 import { releaseCommand } from './commands/release.js';
+import { reviewCommand } from './commands/review.js';
+import { tmuxRenameCommand } from './commands/tmux.js';
 import {
     hooksListCommand,
     hooksAddCommand,
@@ -340,6 +342,24 @@ program
     .option('-f, --force', 'Force PR creation even if blocking hooks fail')
     .option('--no-hooks', 'Skip all hooks (pre-pr, pr-creating, pr-created)')
     .action(prCommand);
+
+program
+    .command('review [pr]')
+    .alias('rv')
+    .description('List PRs pending your review, or get full review context for one PR')
+    .option('--json', 'Output as JSON (for agent consumption)')
+    .action(reviewCommand);
+
+// tmux utilities (for use inside parallel work panes)
+const tmuxCmd = program
+    .command('tmux')
+    .description('tmux utilities for ghp parallel work panes');
+
+tmuxCmd
+    .command('rename [title]')
+    .description('Rename the current tmux window (call from within a ghp worker pane)')
+    .option('-t, --template <name>', 'Use a named title template from parallelWork.tmux.titleTemplates config')
+    .action(tmuxRenameCommand);
 
 program
     .command('merge [pr-number]')

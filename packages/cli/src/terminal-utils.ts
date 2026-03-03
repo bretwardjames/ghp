@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { getConfig, getParallelWorkConfig, type TerminalMode } from './config.js';
+import { getConfig, getParallelWorkConfig, type TerminalMode, type CustomLayoutPane } from './config.js';
 import type { SubagentSpawnDirective } from './types.js';
 
 const execAsync = promisify(exec);
@@ -414,6 +414,111 @@ export async function openTerminal(
 }
 
 /**
+ * Resolve template variables in a custom layout command string.
+ * Supported: {worktreePath}, {issueNumber}, {issueTitle}, {claudeCommand}
+ */
+function resolveLayoutCommand(
+    command: string,
+    vars: { worktreePath: string; issueNumber: number; issueTitle: string; claudeCommand: string }
+): string {
+    return command
+        .replace(/\{worktreePath\}/g, vars.worktreePath)
+        .replace(/\{issueNumber\}/g, String(vars.issueNumber))
+        .replace(/\{issueTitle\}/g, vars.issueTitle.replace(/"/g, '\\"'))
+        .replace(/\{claudeCommand\}/g, vars.claudeCommand);
+}
+
+/**
+ * Resolve template variables in a tmux window name.
+ * Supported: {issueNumber}, {issueTitle}, {branch}
+ */
+export function resolveWindowName(
+    template: string,
+    vars: { issueNumber: number; issueTitle: string; branch?: string }
+): string {
+    return template
+        .replace(/\{issueNumber\}/g, String(vars.issueNumber))
+        .replace(/\{issueTitle\}/g, vars.issueTitle)
+        .replace(/\{branch\}/g, vars.branch ?? '');
+}
+
+/**
+ * Open a custom tmux layout defined by the user's customLayout config.
+ * Creates a new named window then adds splits for each subsequent pane.
+ * Only works inside tmux.
+ */
+export async function openCustomLayout(
+    worktreePath: string,
+    issueNumber: number,
+    issueTitle: string,
+    panes: CustomLayoutPane[],
+    envPrefix: string
+): Promise<{ success: boolean; error?: string }> {
+    if (!isInsideTmux()) {
+        return { success: false, error: 'custom layout requires a tmux session' };
+    }
+
+    if (panes.length === 0) {
+        return { success: false, error: 'customLayout is empty — add at least one pane in config' };
+    }
+
+    // Resolve the {claudeCommand} variable by checking if a slash command exists
+    const resolvedCmd = await getClaudeCommand();
+    const claudeCommandVar = resolvedCmd ? `/${resolvedCmd} ${issueNumber}` : `start ${issueNumber}`;
+
+    const vars = { worktreePath, issueNumber, issueTitle, claudeCommand: claudeCommandVar };
+    const layoutConfig = getParallelWorkConfig();
+    const windowName = resolveWindowName(layoutConfig.tmuxWindowName, { issueNumber, issueTitle });
+
+    // Create the main window with the first pane's command
+    const firstCommand = `${envPrefix} ${resolveLayoutCommand(panes[0].command, vars)}`;
+    const mainResult = await openTmuxTerminal(worktreePath, firstCommand, windowName);
+    if (!mainResult.success) return mainResult;
+
+    // Add each subsequent pane as a split in the named window
+    for (let i = 1; i < panes.length; i++) {
+        const pane = panes[i];
+        const splitFlag = pane.split === 'vertical' ? '-v' : '-h';
+        const sizeFlag = pane.size !== undefined ? ['-p', String(pane.size)] : [];
+        const cmd = resolveLayoutCommand(pane.command, vars);
+
+        const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+            const args = [
+                'split-window', splitFlag,
+                '-t', windowName,
+                '-c', worktreePath,
+                ...sizeFlag,
+                cmd,
+            ];
+            const child = spawn('tmux', args, { stdio: 'ignore' });
+            child.on('error', (err) => resolve({ success: false, error: err.message }));
+            child.on('close', (code) => {
+                if (code === 0) resolve({ success: true });
+                else resolve({ success: false, error: `tmux split-window exited with code ${code}` });
+            });
+        });
+
+        if (!result.success) {
+            // Non-fatal: warn and continue with remaining panes
+            console.log(chalk.yellow('⚠'), `Could not open pane ${i + 1}: ${result.error}`);
+        }
+    }
+
+    // Focus the marked pane (or pane 0 by default)
+    const focusIndex = panes.findIndex(p => p.focus);
+    const targetPane = focusIndex >= 0 ? focusIndex : 0;
+    if (targetPane > 0) {
+        await new Promise<void>((resolve) => {
+            const child = spawn('tmux', ['select-pane', '-t', `${windowName}.${targetPane}`], { stdio: 'ignore' });
+            child.on('close', () => resolve());
+            child.on('error', () => resolve());
+        });
+    }
+
+    return { success: true };
+}
+
+/**
  * Open a terminal for parallel work on an issue.
  * If autoResume is enabled and previous sessions exist, offers to resume.
  */
@@ -429,8 +534,24 @@ export async function openParallelWorkTerminal(
 
     // Terminal-only mode: just open the terminal, no Claude
     if (terminalMode === 'terminal') {
-        const windowName = `ghp-${issueNumber}`;
+        const windowName = resolveWindowName(config.tmuxWindowName, { issueNumber, issueTitle });
         const result = await openTerminal(worktreePath, undefined, windowName);
+        return { ...result, resumed: false };
+    }
+
+    // Build the GHP_SPAWN_CONTEXT env prefix (used by all modes that run Claude)
+    const envJson = JSON.stringify(spawnDirective);
+    const envPrefix = `export GHP_SPAWN_CONTEXT='${envJson.replace(/'/g, "'\\''")}' &&`;
+
+    // Custom layout mode: user-defined panes
+    if (terminalMode === 'custom') {
+        if (config.customLayout.length === 0) {
+            return {
+                success: false,
+                error: 'terminalMode is "custom" but customLayout is empty. Add panes in config under parallelWork.customLayout.',
+            };
+        }
+        const result = await openCustomLayout(worktreePath, issueNumber, issueTitle, config.customLayout, envPrefix);
         return { ...result, resumed: false };
     }
 
@@ -454,12 +575,10 @@ export async function openParallelWorkTerminal(
         command = buildClaudeCommand(issueNumber, issueTitle, worktreePath, claudeCommand, shouldResume);
     }
 
-    // Set the spawn context as an environment variable for Claude to potentially use
-    const envJson = JSON.stringify(spawnDirective);
-    const fullCommand = `export GHP_SPAWN_CONTEXT='${envJson.replace(/'/g, "'\\''")}' && ${command}`;
+    const fullCommand = `${envPrefix} ${command}`;
 
-    // Name the tmux window with the issue number for tracking/cleanup
-    const windowName = `ghp-${issueNumber}`;
+    // Name the tmux window for tracking/cleanup
+    const windowName = resolveWindowName(config.tmuxWindowName, { issueNumber, issueTitle });
     const result = await openTerminal(worktreePath, fullCommand, windowName);
     return { ...result, resumed: shouldResume };
 }

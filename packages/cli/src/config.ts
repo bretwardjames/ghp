@@ -49,7 +49,22 @@ export interface WorkDefaults {
  * - 'nvim-claude': Open nvim with coder/claudecode.nvim plugin
  * - 'terminal': Just open terminal, no Claude
  */
-export type TerminalMode = 'claude' | 'nvim-claude' | 'terminal';
+export type TerminalMode = 'claude' | 'nvim-claude' | 'terminal' | 'custom';
+
+/**
+ * A single pane definition for the 'custom' terminal mode.
+ * Supports template variables: {worktreePath}, {issueNumber}, {issueTitle}, {claudeCommand}
+ */
+export interface CustomLayoutPane {
+    /** Command to run in this pane */
+    command: string;
+    /** How to split from the previous pane (omit for the first/main pane) */
+    split?: 'horizontal' | 'vertical';
+    /** Size of this pane as a percentage of the pane being split (default: 50) */
+    size?: number;
+    /** Whether to focus this pane after layout is built (default: first pane) */
+    focus?: boolean;
+}
 
 export interface ParallelWorkConfig {
     /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'tmux') */
@@ -62,16 +77,35 @@ export interface ParallelWorkConfig {
     claudeCommand?: string;
     /** Whether to auto-resume previous Claude sessions when switching to worktree (default: true) */
     autoResume?: boolean;
-    /** Terminal mode: 'claude' (default), 'nvim-claude', or 'terminal' */
+    /** Terminal mode: 'claude' (default), 'nvim-claude', 'terminal', or 'custom' */
     terminalMode?: TerminalMode;
     /** Neovim command to use (default: 'nvim') */
     nvimCommand?: string;
+    /**
+     * Pane layout for 'custom' terminal mode.
+     * First entry is the main window; subsequent entries are splits.
+     * Commands support template vars: {worktreePath}, {issueNumber}, {issueTitle}, {claudeCommand}
+     */
+    customLayout?: CustomLayoutPane[];
     /** Tmux-specific configuration (used when terminal is 'tmux' or auto-detected inside tmux) */
     tmux?: {
         /** Whether to spawn a new window or split the current window into a pane */
         mode?: 'window' | 'pane';
         /** Direction to split when mode is 'pane' */
         paneDirection?: 'horizontal' | 'vertical';
+        /**
+         * Template for the initial window name when spawning a parallel worktree.
+         * Supports {issueNumber}, {issueTitle}, {branch}.
+         * Default: "ghp-{issueNumber}"
+         */
+        windowName?: string;
+        /**
+         * Named title templates. Claude (or any pane) can apply one with:
+         *   ghp tmux rename --template <name>
+         * Template vars: {issueNumber}, {issueTitle}, {branch}
+         * Example: { "waiting": "⏳ {issueNumber}", "working": "⚙️ {issueNumber}" }
+         */
+        titleTemplates?: Record<string, string>;
     };
 }
 
@@ -678,6 +712,11 @@ export interface ResolvedParallelWorkConfig {
     autoResume: boolean;
     terminalMode: TerminalMode;
     nvimCommand: string;
+    customLayout: CustomLayoutPane[];
+    /** Resolved tmux window name template (default: "ghp-{issueNumber}") */
+    tmuxWindowName: string;
+    /** Named title templates for `ghp tmux rename --template <name>` */
+    tmuxTitleTemplates: Record<string, string>;
 }
 
 /**
@@ -694,6 +733,9 @@ export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
         autoResume: parallelWork.autoResume ?? true,
         terminalMode: parallelWork.terminalMode ?? 'claude',
         nvimCommand: parallelWork.nvimCommand ?? 'nvim',
+        customLayout: parallelWork.customLayout ?? [],
+        tmuxWindowName: parallelWork.tmux?.windowName ?? 'ghp-{issueNumber}',
+        tmuxTitleTemplates: parallelWork.tmux?.titleTemplates ?? {},
     };
 }
 

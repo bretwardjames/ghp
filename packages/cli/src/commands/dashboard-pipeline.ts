@@ -112,7 +112,7 @@ async function releasePaneToWindow(attached: AttachedPane): Promise<void> {
 // tmux helpers — pane mode (zoom/select)
 // ---------------------------------------------------------------------------
 
-/** Find the pane ID that contains a process whose cwd matches the worktree path. */
+/** Find the pane ID that contains a process whose cwd matches the worktree path (current window only). */
 async function findPaneForWorktree(worktreePath: string): Promise<string | null> {
     try {
         const { stdout } = await execFileAsync('tmux', [
@@ -122,6 +122,26 @@ async function findPaneForWorktree(worktreePath: string): Promise<string | null>
             const [paneId, panePath] = line.split(' ', 2);
             if (panePath && panePath.startsWith(worktreePath)) {
                 return paneId;
+            }
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+/** Find pane + window info for a worktree path across all tmux windows. */
+async function findAgentByWorktreePath(worktreePath: string): Promise<{ paneId: string; windowName: string } | null> {
+    try {
+        const { stdout } = await execFileAsync('tmux', [
+            'list-panes', '-a', '-F', '#{pane_id} #{window_name} #{pane_current_path}',
+        ]);
+        for (const line of stdout.trim().split('\n')) {
+            const parts = line.split(' ');
+            if (parts.length < 3) continue;
+            const paneId = parts[0];
+            const windowName = parts[1];
+            const panePath = parts.slice(2).join(' ');
+            if (panePath && panePath.startsWith(worktreePath)) {
+                return { paneId, windowName };
             }
         }
     } catch { /* ignore */ }
@@ -410,17 +430,28 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
             await sendPaneBack();
         }
 
-        const windowName = `ghp-${issueNumber}`;
         if (!dashboardPaneId) return;
-        const result = await pullPaneFromWindow(windowName, dashboardPaneId);
-        if (!result) return;
+
+        // Look up worktree path from pipeline registry, then find the pane by cwd
+        const repoRoot = await getMainWorktreeRoot();
+        if (!repoRoot) return;
+        const pipelineEntry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === issueNumber);
+        if (!pipelineEntry) return;
+
+        const agent = await findAgentByWorktreePath(pipelineEntry.worktreePath);
+        if (!agent) return;
+
+        // Pull the pane into dashboard
+        try {
+            await execFileAsync('tmux', ['join-pane', '-v', '-l', '50%', '-t', dashboardPaneId, '-s', agent.paneId]);
+        } catch { return; }
 
         // Set pane border title so it's visually clear which agent is shown
         try {
-            await execFileAsync('tmux', ['select-pane', '-t', result.paneId, '-T', `Agent #${issueNumber}`]);
+            await execFileAsync('tmux', ['select-pane', '-t', agent.paneId, '-T', `Agent #${issueNumber}`]);
         } catch { /* best effort */ }
 
-        attached = { issueNumber, paneId: result.paneId, sourceWindowName: result.sourceWindowName };
+        attached = { issueNumber, paneId: agent.paneId, sourceWindowName: agent.windowName };
         await refresh();
     }
 

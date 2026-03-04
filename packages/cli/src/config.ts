@@ -152,6 +152,7 @@ export interface Config {
     // Worktree settings for parallel work mode
     worktreePath?: string;           // Base path for worktrees (default: ~/.ghp/worktrees)
     worktreeCopyFiles?: string[];    // Files to copy to new worktrees (default: ['.env', '.env.local'])
+    worktreeSymlinkFiles?: string[]; // Files to symlink from main repo into new worktrees
     worktreeSetupCommand?: string;   // Command to run in new worktrees (default: 'pnpm install')
     worktreeAutoSetup?: boolean;     // Whether to run setup automatically (default: true)
 
@@ -635,7 +636,7 @@ export function getAddIssueDefaults(): { template?: string; project?: string; st
     return config.defaults?.addIssue || {};
 }
 
-export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSetupCommand', 'worktreeAutoSetup', 'parallelWork'] as const;
+export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSymlinkFiles', 'worktreeSetupCommand', 'worktreeAutoSetup', 'parallelWork'] as const;
 
 export type ConfigSource = 'default' | 'workspace' | 'user';
 
@@ -653,6 +654,7 @@ export function listConfig(): Record<string, string | string[] | boolean | undef
         doneStatus: config.doneStatus,
         worktreePath: config.worktreePath,
         worktreeCopyFiles: config.worktreeCopyFiles,
+        worktreeSymlinkFiles: config.worktreeSymlinkFiles,
         worktreeSetupCommand: config.worktreeSetupCommand,
         worktreeAutoSetup: config.worktreeAutoSetup,
     };
@@ -661,6 +663,7 @@ export function listConfig(): Record<string, string | string[] | boolean | undef
 export interface WorktreeConfig {
     path: string;
     copyFiles: string[];
+    symlinkFiles: string[];
     setupCommand: string;
     autoSetup: boolean;
 }
@@ -673,6 +676,7 @@ export function getWorktreeConfig(): WorktreeConfig {
     return {
         path: config.worktreePath ?? DEFAULT_CONFIG.worktreePath!,
         copyFiles: config.worktreeCopyFiles ?? DEFAULT_CONFIG.worktreeCopyFiles!,
+        symlinkFiles: config.worktreeSymlinkFiles ?? [],
         setupCommand: config.worktreeSetupCommand ?? DEFAULT_CONFIG.worktreeSetupCommand!,
         autoSetup: config.worktreeAutoSetup ?? DEFAULT_CONFIG.worktreeAutoSetup!,
     };

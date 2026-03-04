@@ -158,6 +158,19 @@ async function findCoordinatorPane(): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
+// Git helpers
+// ---------------------------------------------------------------------------
+
+async function isMainRepoDirty(repoRoot: string): Promise<boolean> {
+    try {
+        const { stdout } = await execFileAsync('git', ['-C', repoRoot, 'status', '--porcelain']);
+        return stdout.trim().length > 0;
+    } catch {
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
 
@@ -205,7 +218,8 @@ function renderDashboard(
     entries: DashboardEntry[],
     tmuxMode: TmuxMode,
     attached: AttachedPane | null,
-    now: string
+    now: string,
+    mainDirty: boolean
 ): void {
     process.stdout.write('\x1b[2J\x1b[H'); // clear
 
@@ -240,7 +254,8 @@ function renderDashboard(
     }
 
     if (ready.length > 0) {
-        console.log(chalk.green.bold('  READY FOR INTEGRATION'));
+        const blocked = mainDirty ? chalk.red.bold('  BLOCKED') + chalk.red(' — main repo has uncommitted changes') : '';
+        console.log(chalk.green.bold('  READY FOR INTEGRATION') + blocked);
         for (const e of ready) {
             const age = formatAge(e.pipeline.stageEnteredAt);
             const active = isAttached(e, attached);
@@ -345,8 +360,10 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     }
 
     async function refresh(): Promise<void> {
+        const repoRoot = await getMainWorktreeRoot();
         const entries = await buildEntries();
-        renderDashboard(entries, tmuxMode, attached, new Date().toLocaleTimeString());
+        const dirty = repoRoot ? await isMainRepoDirty(repoRoot) : false;
+        renderDashboard(entries, tmuxMode, attached, new Date().toLocaleTimeString(), dirty);
     }
 
     function getNumberedEntry(entries: DashboardEntry[], digit: number): DashboardEntry | undefined {

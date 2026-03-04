@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.13.0
+
+### Minor Changes
+
+- Add worktree swap commands, configurable pipeline stages, dashboard with pane-pull, and stage emoji indicators
+
+  - `ghp wt move-to/clean/status/ready/next` — swap worktree branches into main repo for integration testing
+  - `ghp pipeline dashboard` — interactive kanban dashboard with tmux pane-pull
+  - `ghp pipeline advance/set/stages` — agents self-report pipeline progress
+  - `ghp status` — unified pipeline + agent status view
+  - `--background` flag on `ghp start/switch --parallel` to open agent terminals without stealing focus
+  - Stage emojis in tmux window titles (e.g., 🔨 ghp-271) update automatically on transitions
+  - Configurable pipeline stages via `ghp config pipeline.stages`
+
 ## 0.12.0
 
 ### Minor Changes

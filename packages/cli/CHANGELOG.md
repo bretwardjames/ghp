@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.3
+
+### Patch Changes
+
+- Always register worktrees in the pipeline dashboard when in parallel mode, even if the worktree already existed
+
 ## 0.16.2
 
 ### Patch Changes

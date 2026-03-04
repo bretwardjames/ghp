@@ -131,15 +131,12 @@ async function findPaneForWorktree(worktreePath: string): Promise<string | null>
 /** Find pane + window info for a worktree path across all tmux windows. */
 async function findAgentByWorktreePath(worktreePath: string): Promise<{ paneId: string; windowName: string } | null> {
     try {
+        const sep = '\t';
         const { stdout } = await execFileAsync('tmux', [
-            'list-panes', '-a', '-F', '#{pane_id} #{window_name} #{pane_current_path}',
+            'list-panes', '-a', '-F', `#{pane_id}${sep}#{window_name}${sep}#{pane_current_path}`,
         ]);
         for (const line of stdout.trim().split('\n')) {
-            const parts = line.split(' ');
-            if (parts.length < 3) continue;
-            const paneId = parts[0];
-            const windowName = parts[1];
-            const panePath = parts.slice(2).join(' ');
+            const [paneId, windowName, panePath] = line.split(sep);
             if (panePath && panePath.startsWith(worktreePath)) {
                 return { paneId, windowName };
             }

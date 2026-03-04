@@ -8,6 +8,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { join } from 'path';
 import { getConfig } from './config.js';
 
@@ -73,6 +74,40 @@ export function getStageIndex(stageName: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Stage emoji mapping
+// ---------------------------------------------------------------------------
+
+const STAGE_EMOJIS: Record<string, string> = {
+    initiating: '⏳',
+    planning: '📋',
+    plan_ready: '📝',
+    building_tests: '🧪',
+    working: '🔨',
+    needs_attention: '🚨',
+    code_review: '👀',
+    ready_for_integration: '✅',
+    integration_testing: '🔄',
+    code_review_loop: '🔍',
+    writing_pr: '📤',
+    pr_submitted: '🏁',
+};
+
+/** Get the emoji for a pipeline stage. Returns empty string for unknown stages. */
+export function getStageEmoji(stage: string): string {
+    return STAGE_EMOJIS[stage] ?? '';
+}
+
+/** Rename the tmux window for an issue to reflect its current stage. */
+function renameWorktreeWindow(issueNumber: number, stage: string): void {
+    const emoji = getStageEmoji(stage);
+    const prefix = emoji ? `${emoji} ` : '';
+    const windowName = `ghp-${issueNumber}`;
+    try {
+        execFileSync('tmux', ['rename-window', '-t', windowName, `${prefix}${windowName}`], { stdio: 'ignore' });
+    } catch { /* not in tmux or window doesn't exist — fine */ }
+}
+
+// ---------------------------------------------------------------------------
 // Registry I/O
 // ---------------------------------------------------------------------------
 
@@ -114,6 +149,7 @@ export function registerWorktree(
     };
     registry[String(entry.issueNumber)] = full;
     saveRegistry(repoRoot, registry);
+    renameWorktreeWindow(entry.issueNumber, stages[0]);
     return full;
 }
 
@@ -130,6 +166,7 @@ export function advanceWorktreeStage(repoRoot: string, issueNumber: number): Pip
     entry.stage = stages[currentIndex + 1];
     entry.stageEnteredAt = new Date().toISOString();
     saveRegistry(repoRoot, registry);
+    renameWorktreeWindow(issueNumber, entry.stage);
     return entry;
 }
 
@@ -145,6 +182,7 @@ export function setWorktreeStage(repoRoot: string, issueNumber: number, stageNam
     entry.stage = stageName;
     entry.stageEnteredAt = new Date().toISOString();
     saveRegistry(repoRoot, registry);
+    renameWorktreeWindow(issueNumber, stageName);
     return entry;
 }
 

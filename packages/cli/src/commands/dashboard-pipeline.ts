@@ -12,7 +12,7 @@ import { promisify } from 'util';
 import { getAgentSummaries, type AgentSummary } from '@bretwardjames/ghp-core';
 import { getMainWorktreeRoot } from '../git-utils.js';
 import { getConfig } from '../config.js';
-import { getAllPipelineEntries, getReadyWorktrees, getIntegrationTriggerStage, type PipelineEntry } from '../pipeline-registry.js';
+import { getAllPipelineEntries, getReadyWorktrees, getIntegrationTriggerStage, getStageEmoji, type PipelineEntry } from '../pipeline-registry.js';
 import { readSwapState } from './worktree-swap-state.js';
 import { worktreeCleanCommand, worktreeNextCommand } from './worktree-swap.js';
 import { registerCleanupHandler, resetExitState } from '../exit.js';
@@ -187,7 +187,9 @@ function issueLabel(entry: DashboardEntry): string {
 }
 
 function stageLine(entry: DashboardEntry): string {
-    const stage = chalk.dim(entry.pipeline.stage);
+    const emoji = getStageEmoji(entry.pipeline.stage);
+    const prefix = emoji ? `${emoji} ` : '';
+    const stage = chalk.dim(`${prefix}${entry.pipeline.stage}`);
     const uptime = entry.agent?.uptime ? chalk.dim(` · ${entry.agent.uptime}`) : '';
     const port = entry.agent?.port ? chalk.dim(` :${entry.agent.port}`) : '';
     return `${stage}${uptime}${port}`;

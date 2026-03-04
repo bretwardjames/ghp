@@ -15,6 +15,7 @@ import {
     getPipelineEntry,
     getPipelineStages,
     getIntegrationTriggerStage,
+    getStageEmoji,
 } from '../pipeline-registry.js';
 import { exit } from '../exit.js';
 
@@ -109,8 +110,10 @@ export async function pipelineStagesCommand(): Promise<void> {
     console.log();
     for (let i = 0; i < stages.length; i++) {
         const name = stages[i];
+        const emoji = getStageEmoji(name);
+        const prefix = emoji ? `${emoji} ` : '  ';
         const marker = name === triggerStage ? chalk.green(' ← integration trigger') : '';
-        console.log(`  ${chalk.dim(`${i + 1}.`)} ${name}${marker}`);
+        console.log(`  ${chalk.dim(`${i + 1}.`)} ${prefix}${name}${marker}`);
     }
     console.log();
     console.log(chalk.dim('Configure with: ghp config pipeline.stages \'["stage1", "stage2", ...]\''));

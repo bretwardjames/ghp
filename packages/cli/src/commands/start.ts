@@ -26,7 +26,7 @@ import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
-import { registerWorktree } from '../pipeline-registry.js';
+import { registerWorktree, getPipelineEntry } from '../pipeline-registry.js';
 import { getMainWorktreeRoot } from '../git-utils.js';
 import { openParallelWorkTerminal, openAdminPane, isDashboardOpen, isInsideTmux } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
@@ -965,10 +965,12 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         }
     }
 
-    // Register new worktree in pipeline (starts at first stage, typically 'initiating')
-    if (worktreeWasCreated && worktreePath && worktreeBranch) {
+    // Register worktree in pipeline (starts at first stage, typically 'initiating')
+    // Always register in parallel mode — even if the worktree already existed —
+    // so re-running `ghp start` on an existing worktree still shows up in the dashboard.
+    if (isParallelMode && worktreePath && worktreeBranch) {
         const mainRoot = await getMainWorktreeRoot();
-        if (mainRoot) {
+        if (mainRoot && !getPipelineEntry(mainRoot, issueNumber)) {
             registerWorktree(mainRoot, {
                 issueNumber,
                 issueTitle: item.title,

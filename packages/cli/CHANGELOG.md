@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1
+
+### Patch Changes
+
+- Fix dashboard pane-pull to use worktree path lookup instead of window name matching, preventing breakage from emoji-prefixed window titles
+
 ## 0.13.0
 
 ### Minor Changes

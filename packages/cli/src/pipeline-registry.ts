@@ -22,7 +22,6 @@ const DEFAULT_STAGES = [
     'plan_ready',
     'building_tests',
     'working',
-    'needs_attention',
     'code_review',
     'ready_for_integration',
     'integration_testing',
@@ -30,6 +29,12 @@ const DEFAULT_STAGES = [
     'writing_pr',
     'pr_submitted',
 ];
+
+/**
+ * Special non-linear stage. Can be entered from any stage; advancing from it
+ * restores the previous stage. Not part of the linear pipeline.
+ */
+const NEEDS_ATTENTION = 'needs_attention';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,8 +45,10 @@ export interface PipelineEntry {
     issueTitle: string;
     branch: string;
     worktreePath: string;
-    /** Current stage name (from configured stages list) */
+    /** Current stage name (from configured stages list, or 'needs_attention') */
     stage: string;
+    /** Stage before entering needs_attention (used to restore on advance) */
+    previousStage?: string;
     /** ISO timestamp of when the entry moved to the current stage */
     stageEnteredAt: string;
     /** ISO timestamp of initial registration */
@@ -136,7 +143,7 @@ function saveRegistry(repoRoot: string, registry: PipelineRegistry): void {
 /** Register a new worktree at the first stage (typically 'initiating'). */
 export function registerWorktree(
     repoRoot: string,
-    entry: Omit<PipelineEntry, 'stage' | 'stageEnteredAt' | 'registeredAt'>
+    entry: Omit<PipelineEntry, 'stage' | 'previousStage' | 'stageEnteredAt' | 'registeredAt'>
 ): PipelineEntry {
     const registry = loadRegistry(repoRoot);
     const stages = getPipelineStages();
@@ -153,31 +160,52 @@ export function registerWorktree(
     return full;
 }
 
-/** Advance a worktree to the next stage in the pipeline. Returns null if not found or already at last stage. */
+/** Advance a worktree to the next stage in the pipeline. Returns null if not found or already at last stage.
+ *  If currently at needs_attention, restores to the previous stage instead of advancing. */
 export function advanceWorktreeStage(repoRoot: string, issueNumber: number): PipelineEntry | null {
     const registry = loadRegistry(repoRoot);
     const entry = registry[String(issueNumber)];
     if (!entry) return null;
+
+    // Restore from needs_attention → go back to where we were
+    if (entry.stage === NEEDS_ATTENTION && entry.previousStage) {
+        entry.stage = entry.previousStage;
+        delete entry.previousStage;
+        entry.stageEnteredAt = new Date().toISOString();
+        saveRegistry(repoRoot, registry);
+        renameWorktreeWindow(issueNumber, entry.stage);
+        return entry;
+    }
 
     const stages = getPipelineStages();
     const currentIndex = stages.indexOf(entry.stage);
     if (currentIndex < 0 || currentIndex >= stages.length - 1) return entry;
 
     entry.stage = stages[currentIndex + 1];
+    delete entry.previousStage;
     entry.stageEnteredAt = new Date().toISOString();
     saveRegistry(repoRoot, registry);
     renameWorktreeWindow(issueNumber, entry.stage);
     return entry;
 }
 
-/** Set a worktree to a specific stage by name. */
+/** Set a worktree to a specific stage by name. Accepts linear stages and 'needs_attention'. */
 export function setWorktreeStage(repoRoot: string, issueNumber: number, stageName: string): PipelineEntry | null {
     const registry = loadRegistry(repoRoot);
     const entry = registry[String(issueNumber)];
     if (!entry) return null;
 
     const stages = getPipelineStages();
-    if (!stages.includes(stageName)) return null;
+    if (!stages.includes(stageName) && stageName !== NEEDS_ATTENTION) return null;
+
+    // Entering needs_attention: save current stage so advance can restore it
+    if (stageName === NEEDS_ATTENTION && entry.stage !== NEEDS_ATTENTION) {
+        entry.previousStage = entry.stage;
+    }
+    // Leaving needs_attention via explicit set: clear previousStage
+    if (stageName !== NEEDS_ATTENTION) {
+        delete entry.previousStage;
+    }
 
     entry.stage = stageName;
     entry.stageEnteredAt = new Date().toISOString();
@@ -221,6 +249,7 @@ export function getReadyWorktrees(repoRoot: string): PipelineEntry[] {
 
 /** Check if a stage is at or past the integration trigger point. */
 export function isAtOrPastIntegration(stageName: string): boolean {
+    if (stageName === NEEDS_ATTENTION) return false;
     const stages = getPipelineStages();
     const triggerIndex = stages.indexOf(getIntegrationTriggerStage());
     const stageIndex = stages.indexOf(stageName);

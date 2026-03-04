@@ -226,11 +226,12 @@ function renderDashboard(
     process.stdout.write('\x1b[2J\x1b[H'); // clear
 
     const triggerStage = getIntegrationTriggerStage();
-    const waiting = entries.filter(e => e.agent?.waitingForInput);
+    const waiting = entries.filter(e => e.agent?.waitingForInput || e.pipeline.stage === 'needs_attention');
     const ready   = entries.filter(e => e.pipeline.stage === triggerStage && !e.inMainRepo);
     const testing = entries.filter(e => e.inMainRepo);
     const working = entries.filter(e =>
         !e.agent?.waitingForInput &&
+        e.pipeline.stage !== 'needs_attention' &&
         e.pipeline.stage !== triggerStage &&
         !e.inMainRepo
     );
@@ -370,9 +371,10 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
 
     function getNumberedEntry(entries: DashboardEntry[], digit: number): DashboardEntry | undefined {
         const triggerStage = getIntegrationTriggerStage();
-        const waiting = entries.filter(e => e.agent?.waitingForInput);
+        const waiting = entries.filter(e => e.agent?.waitingForInput || e.pipeline.stage === 'needs_attention');
         const working = entries.filter(e =>
             !e.agent?.waitingForInput &&
+            e.pipeline.stage !== 'needs_attention' &&
             e.pipeline.stage !== triggerStage &&
             !e.inMainRepo
         );

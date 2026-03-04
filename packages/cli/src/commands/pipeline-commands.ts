@@ -85,9 +85,9 @@ export async function pipelineSetCommand(stage: string, issueArg?: string): Prom
     }
 
     const stages = getPipelineStages();
-    if (!stages.includes(stage)) {
+    if (!stages.includes(stage) && stage !== 'needs_attention') {
         console.error(chalk.red('Error:'), `Unknown stage: ${stage}`);
-        console.error('Available stages:', stages.join(', '));
+        console.error('Available stages:', stages.join(', ') + ', needs_attention');
         exit(1);
         return;
     }
@@ -115,6 +115,8 @@ export async function pipelineStagesCommand(): Promise<void> {
         const marker = name === triggerStage ? chalk.green(' ← integration trigger') : '';
         console.log(`  ${chalk.dim(`${i + 1}.`)} ${prefix}${name}${marker}`);
     }
+    console.log();
+    console.log(`     ${getStageEmoji('needs_attention')} needs_attention${chalk.yellow(' (non-linear — enter from any stage, advance to resume)')}`);
     console.log();
     console.log(chalk.dim('Configure with: ghp config pipeline.stages \'["stage1", "stage2", ...]\''));
     console.log(chalk.dim('Integration trigger: ghp config pipeline.integrationAfter "<stage>"'));

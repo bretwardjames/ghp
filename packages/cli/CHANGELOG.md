@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.2
+
+### Patch Changes
+
+- Fix pane-pull parsing to use tab separators, preventing emoji window names from breaking field splitting
+
 ## 0.16.1
 
 ### Patch Changes

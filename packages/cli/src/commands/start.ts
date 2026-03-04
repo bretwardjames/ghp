@@ -26,6 +26,8 @@ import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
+import { registerWorktree } from '../pipeline-registry.js';
+import { getMainWorktreeRoot } from '../git-utils.js';
 import { openParallelWorkTerminal, openAdminPane, isInsideTmux } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
 import {
@@ -958,6 +960,19 @@ export async function startCommand(issue: string, options: StartOptions): Promis
                     console.log(chalk.dim(`  ${result.error}`));
                 }
             }
+        }
+    }
+
+    // Register new worktree in pipeline (stage 1 / in_progress)
+    if (worktreeWasCreated && worktreePath && worktreeBranch) {
+        const mainRoot = await getMainWorktreeRoot();
+        if (mainRoot) {
+            registerWorktree(mainRoot, {
+                issueNumber,
+                issueTitle: item.title,
+                branch: worktreeBranch,
+                worktreePath,
+            });
         }
     }
 

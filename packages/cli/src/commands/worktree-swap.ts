@@ -9,52 +9,25 @@
 import chalk from 'chalk';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
 import { api } from '../github-api.js';
-import { detectRepository, listWorktrees, getRepositoryRoot, getMainWorktreeRoot, getCurrentBranch, hasUncommittedChanges } from '../git-utils.js';
+import {
+    readSwapState,
+    writeSwapState,
+    clearSwapState,
+    type SwapState,
+} from './worktree-swap-state.js';
+import { detectRepository, listWorktrees, getMainWorktreeRoot, getCurrentBranch, hasUncommittedChanges } from '../git-utils.js';
 import { getBranchForIssue } from '../branch-linker.js';
 import { exit } from '../exit.js';
+import {
+    markWorktreeReady,
+    advanceWorktreeStage,
+    getReadyWorktrees,
+    getPipelineEntry,
+    type PipelineEntry,
+} from '../pipeline-registry.js';
 
 const execFileAsync = promisify(execFile);
-
-// ---------------------------------------------------------------------------
-// State file
-// ---------------------------------------------------------------------------
-
-interface SwapState {
-    /** Branch main was on before the swap */
-    mainBranch: string;
-    /** Absolute path to the worktree */
-    worktreePath: string;
-    /** Branch the worktree was (and should return to) */
-    worktreeBranch: string;
-    /** ISO timestamp */
-    swappedAt: string;
-}
-
-function getStateFilePath(repoRoot: string): string {
-    return join(repoRoot, '.git', 'ghp-wt-state.json');
-}
-
-function readSwapState(repoRoot: string): SwapState | null {
-    const path = getStateFilePath(repoRoot);
-    if (!existsSync(path)) return null;
-    try {
-        return JSON.parse(readFileSync(path, 'utf-8')) as SwapState;
-    } catch {
-        return null;
-    }
-}
-
-function writeSwapState(repoRoot: string, state: SwapState): void {
-    writeFileSync(getStateFilePath(repoRoot), JSON.stringify(state, null, 2));
-}
-
-function clearSwapState(repoRoot: string): void {
-    const path = getStateFilePath(repoRoot);
-    if (existsSync(path)) unlinkSync(path);
-}
 
 // ---------------------------------------------------------------------------
 // Git helpers (use execFile to avoid shell injection via branch names)
@@ -255,13 +228,14 @@ export async function worktreeMoveToCommand(issue: string, options: MoveToOption
         return;
     }
 
-    // Step 3: Save state
+    // Step 3: Save state and advance pipeline to stage 2
     writeSwapState(repoRoot, {
         mainBranch,
         worktreePath: worktree.path,
         worktreeBranch: branchName,
         swappedAt: new Date().toISOString(),
     });
+    advanceWorktreeStage(repoRoot, issueNumber);
 
     console.log(chalk.green('✓'), `Now on ${chalk.cyan(branchName)} in main repo`);
     console.log(chalk.dim(`  Main was on: ${mainBranch}`));
@@ -360,10 +334,43 @@ export async function worktreeCleanCommand(options: CleanOptions): Promise<void>
 
     clearSwapState(repoRoot);
 
+    // Advance worktree to stage 3 (polish)
+    const issueNum = extractIssueFromBranch(state.worktreeBranch);
+    if (issueNum) {
+        advanceWorktreeStage(repoRoot, issueNum);
+    }
+
     console.log();
     console.log(chalk.green('✓'), 'Swap reversed');
     console.log(chalk.dim(`  Main: back on ${state.mainBranch}`));
     console.log(chalk.dim(`  Worktree: ${state.worktreePath} re-attached to ${state.worktreeBranch}`));
+
+    // Prompt about next ready worktrees
+    const ready = getReadyWorktrees(repoRoot);
+    if (ready.length > 0) {
+        console.log();
+        console.log(chalk.bold(`${ready.length} worktree(s) ready for integration testing:`));
+        for (const entry of ready) {
+            const age = entry.readyAt ? formatAge(entry.readyAt) : '';
+            console.log(`  ${chalk.cyan(`#${entry.issueNumber}`)}  ${entry.issueTitle.substring(0, 40).padEnd(40)}  ${chalk.dim(age)}`);
+        }
+        console.log();
+        console.log(`Run ${chalk.cyan('ghp wt next')} to swap in the next one.`);
+    }
+}
+
+function extractIssueFromBranch(branch: string): number | null {
+    const match = branch.match(/\/(\d+)[-_]/);
+    if (match) return parseInt(match[1], 10);
+    return null;
+}
+
+function formatAge(isoTimestamp: string): string {
+    const ms = Date.now() - new Date(isoTimestamp).getTime();
+    const minutes = Math.floor(ms / 60000);
+    if (minutes < 60) return `ready ${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `ready ${hours}h ago`;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,4 +401,121 @@ export async function worktreeSwapStatusCommand(): Promise<void> {
     console.log(`  Since:     ${chalk.dim(new Date(state.swappedAt).toLocaleString())}`);
     console.log();
     console.log(`Run ${chalk.cyan('ghp wt clean')} to restore both repos.`);
+}
+
+// ---------------------------------------------------------------------------
+// ready
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark the current worktree's stage as complete — ready for integration testing.
+ * Auto-detects the issue from the current branch if not specified.
+ */
+export async function worktreeReadyCommand(issueArg?: string): Promise<void> {
+    const repoRoot = await getMainWorktreeRoot();
+    if (!repoRoot) {
+        console.error(chalk.red('Error:'), 'Could not determine repository root');
+        exit(1);
+        return;
+    }
+
+    let issueNumber: number;
+
+    if (issueArg) {
+        issueNumber = parseInt(issueArg, 10);
+        if (isNaN(issueNumber)) {
+            console.error(chalk.red('Error:'), 'Issue must be a number');
+            exit(1);
+            return;
+        }
+    } else {
+        // Auto-detect from cwd branch
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        try {
+            const { stdout } = await execFileAsync('git', ['branch', '--show-current'], { cwd: process.cwd() });
+            const branch = stdout.trim();
+            const detected = extractIssueFromBranch(branch);
+            if (!detected) {
+                console.error(chalk.red('Error:'), `Could not detect issue number from branch: ${branch}`);
+                console.error('Pass the issue number explicitly: ghp wt ready <issue>');
+                exit(1);
+                return;
+            }
+            issueNumber = detected;
+        } catch {
+            console.error(chalk.red('Error:'), 'Could not determine current branch');
+            exit(1);
+            return;
+        }
+    }
+
+    const entry = markWorktreeReady(repoRoot, issueNumber);
+    if (!entry) {
+        console.error(chalk.red('Error:'), `Issue #${issueNumber} is not registered in the pipeline.`);
+        console.error('It may not have been started with --parallel, or the pipeline registry is missing.');
+        exit(1);
+        return;
+    }
+
+    console.log(chalk.green('✓'), `#${issueNumber} marked ready for integration testing`);
+    console.log(chalk.dim(`  Branch: ${entry.branch}`));
+    console.log(chalk.dim(`  Worktree: ${entry.worktreePath}`));
+    console.log();
+    console.log(`From the main repo, run ${chalk.cyan('ghp wt next')} to swap it in.`);
+}
+
+// ---------------------------------------------------------------------------
+// next
+// ---------------------------------------------------------------------------
+
+/**
+ * Swap the next ready worktree into the main repo.
+ * Picks FIFO by readyAt unless a specific issue is given.
+ */
+export async function worktreeNextCommand(issueArg?: string): Promise<void> {
+    const repoRoot = await getMainWorktreeRoot();
+    if (!repoRoot) {
+        console.error(chalk.red('Error:'), 'Could not determine repository root');
+        exit(1);
+        return;
+    }
+
+    let entry: PipelineEntry;
+
+    if (issueArg) {
+        const issueNumber = parseInt(issueArg, 10);
+        if (isNaN(issueNumber)) {
+            console.error(chalk.red('Error:'), 'Issue must be a number');
+            exit(1);
+            return;
+        }
+        const found = getPipelineEntry(repoRoot, issueNumber);
+        if (!found) {
+            console.error(chalk.red('Error:'), `Issue #${issueNumber} is not in the pipeline.`);
+            exit(1);
+            return;
+        }
+        if (found.stageStatus !== 'ready') {
+            console.error(chalk.red('Error:'), `Issue #${issueNumber} is not ready (status: ${found.stageStatus}).`);
+            exit(1);
+            return;
+        }
+        entry = found;
+    } else {
+        const ready = getReadyWorktrees(repoRoot);
+        if (ready.length === 0) {
+            console.log(chalk.dim('No worktrees are ready for integration testing.'));
+            console.log(chalk.dim('Agents signal readiness with: ghp wt ready'));
+            return;
+        }
+        entry = ready[0];
+        if (ready.length > 1) {
+            console.log(chalk.dim(`${ready.length} worktrees ready — picking oldest: #${entry.issueNumber}`));
+        }
+    }
+
+    // Delegate to move-to logic
+    await worktreeMoveToCommand(String(entry.issueNumber), {});
 }

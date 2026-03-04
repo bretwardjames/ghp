@@ -30,10 +30,12 @@ import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
 import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
-import { worktreeMoveToCommand, worktreeCleanCommand, worktreeSwapStatusCommand } from './commands/worktree-swap.js';
+import { worktreeMoveToCommand, worktreeCleanCommand, worktreeSwapStatusCommand, worktreeReadyCommand, worktreeNextCommand } from './commands/worktree-swap.js';
 import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
+import { statusCommand } from './commands/status.js';
+import { pipelineDashboardCommand } from './commands/dashboard-pipeline.js';
 import { progressCommand } from './commands/progress.js';
 import { standupCommand } from './commands/standup.js';
 import { fieldsCommand } from './commands/fields.js';
@@ -576,6 +578,23 @@ worktreeCmd
     .description('Show current worktree swap state')
     .action(worktreeSwapStatusCommand);
 
+worktreeCmd
+    .command('ready [issue]')
+    .description('Mark this worktree\'s stage complete — queues it for integration testing')
+    .action(worktreeReadyCommand);
+
+worktreeCmd
+    .command('next [issue]')
+    .description('Swap the next ready worktree into main (FIFO, or specify issue to override)')
+    .action(worktreeNextCommand);
+
+// Unified status
+program
+    .command('status')
+    .description('Show pipeline + agent status for all worktrees')
+    .option('--json', 'Output as JSON (for slash commands and dashboard)')
+    .action(statusCommand);
+
 // Agent management
 const agentsCmd = program
     .command('agents')
@@ -602,6 +621,14 @@ agentsCmd
     .description('Watch agents with auto-refresh (simple dashboard)')
     .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
     .action(agentsWatchCommand);
+
+// Pipeline dashboard (kanban + pane pull)
+program
+    .command('pipeline')
+    .alias('pl')
+    .description('Pipeline dashboard — kanban view of all worktrees with interactive pane-pull')
+    .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
+    .action(pipelineDashboardCommand);
 
 // Self-update
 program

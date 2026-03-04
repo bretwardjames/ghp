@@ -1,23 +1,9 @@
 /**
- * Pipeline dashboard — kanban view of all worktrees with pane-pull interaction.
+ * Pipeline dashboard — kanban view of all worktrees with interactive controls.
  *
- * Layout (no pane attached):
- *
- *   GHP Dashboard                    [14:22:03]
- *   ─────────────────────────────────────────────────────
- *   NEEDS ATTENTION      READY           IN TESTING
- *   ⚠ [1] #271 auth      ✓ [i] #269      ⟳ #268
- *     S1 · 23m             ready 8m         [x] clean
- *
- *   WORKING
- *   ● #273 export  S1 · 1h 4m
- *   ● #275 dark    S3 · 22m
- *   ─────────────────────────────────────────────────────
- *   [1-9] pull  [i] next  [x] clean  [c] coord  [q] quit
- *
- * Layout (pane attached, split right):
- *   The dashboard narrows and the agent pane fills the right side.
- *   tmux handles the visual split; we just move the pane in/out.
+ * Detects tmux layout mode at startup:
+ *   - pane mode:   agents are panes in the same window. [1-9] zooms the agent pane.
+ *   - window mode: agents are in separate windows. [1-9] pulls pane into dashboard window.
  */
 
 import chalk from 'chalk';
@@ -25,10 +11,33 @@ import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { getAgentSummaries, type AgentSummary } from '@bretwardjames/ghp-core';
 import { getMainWorktreeRoot } from '../git-utils.js';
-import { getAllPipelineEntries, getReadyWorktrees, type PipelineEntry } from '../pipeline-registry.js';
+import { getConfig } from '../config.js';
+import { getAllPipelineEntries, getReadyWorktrees, getIntegrationTriggerStage, type PipelineEntry } from '../pipeline-registry.js';
 import { readSwapState } from './worktree-swap-state.js';
-import { worktreeMoveToCommand, worktreeCleanCommand, worktreeNextCommand } from './worktree-swap.js';
-import { registerCleanupHandler } from '../exit.js';
+import { worktreeCleanCommand, worktreeNextCommand } from './worktree-swap.js';
+import { registerCleanupHandler, resetExitState } from '../exit.js';
+
+// Guard: when true, the dashboard cleanup handler is a no-op
+let suppressCleanup = false;
+
+/**
+ * Run a command that might call exit() without killing the dashboard.
+ * Temporarily overrides process.exit, suppresses cleanup, and resets exit state.
+ */
+async function safeExec(fn: () => Promise<void>): Promise<void> {
+    const realExit = process.exit;
+    process.exit = (() => {}) as never;
+    suppressCleanup = true;
+    try {
+        await fn();
+    } catch { /* swallow ExitPendingError */ } finally {
+        // Wait a tick for any cleanup handlers to run (they'll be no-ops)
+        await new Promise(resolve => setTimeout(resolve, 50));
+        process.exit = realExit;
+        suppressCleanup = false;
+        resetExitState();
+    }
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -40,36 +49,24 @@ interface DashboardEntry {
     pipeline: PipelineEntry;
     agent?: AgentSummary;
     inMainRepo: boolean;
-    /** 1-based index within the "needs attention" bucket, for keypress mapping */
     attentionIndex?: number;
-    /** 1-based index within the "ready" bucket, for [i] override */
-    readyIndex?: number;
 }
 
 interface AttachedPane {
     issueNumber: number;
-    /** tmux global pane ID, e.g. %23 */
     paneId: string;
-    /** Original window target the pane came from, e.g. ghp:ghp-271 */
-    sourceWindow: string;
+    sourceWindowName: string;
 }
 
 interface DashboardOptions {
     interval?: string;
 }
 
-// ---------------------------------------------------------------------------
-// tmux pane helpers
-// ---------------------------------------------------------------------------
+type TmuxMode = 'pane' | 'window';
 
-async function getCurrentPaneId(): Promise<string | null> {
-    try {
-        const { stdout } = await execFileAsync('tmux', ['display-message', '-p', '#{pane_id}']);
-        return stdout.trim() || null;
-    } catch {
-        return null;
-    }
-}
+// ---------------------------------------------------------------------------
+// tmux helpers — window mode (join-pane pull/release)
+// ---------------------------------------------------------------------------
 
 async function getCurrentWindowTarget(): Promise<string | null> {
     try {
@@ -80,43 +77,69 @@ async function getCurrentWindowTarget(): Promise<string | null> {
     }
 }
 
-/**
- * Pull a pane from a named window into the current window (horizontal split).
- * Returns the pane's global ID so we can send it back later.
- */
-async function pullPane(sourceWindowName: string): Promise<{ paneId: string; sourceWindow: string } | null> {
+async function pullPaneFromWindow(sourceWindowName: string, targetPaneId: string): Promise<{ paneId: string; sourceWindowName: string } | null> {
     try {
-        // Find the pane ID in the source window (first pane)
         const { stdout: paneIdOut } = await execFileAsync('tmux', [
             'display-message', '-t', sourceWindowName, '-p', '#{pane_id}',
         ]);
         const paneId = paneIdOut.trim();
         if (!paneId) return null;
 
-        const sourceWindow = await getCurrentWindowTarget();
-        if (!sourceWindow) return null;
-
-        // Join the pane into the current window, horizontal split
-        await execFileAsync('tmux', ['join-pane', '-h', '-s', paneId]);
-
-        return { paneId, sourceWindow };
+        // Split the dashboard pane vertically: dashboard stays on top, agent gets bottom 50%
+        await execFileAsync('tmux', ['join-pane', '-v', '-l', '50%', '-t', targetPaneId, '-s', paneId]);
+        return { paneId, sourceWindowName };
     } catch {
         return null;
     }
 }
 
-/**
- * Send a pane back to its original window.
- */
-async function releasePane(attached: AttachedPane): Promise<void> {
+async function releasePaneToWindow(attached: AttachedPane): Promise<void> {
     try {
-        await execFileAsync('tmux', ['join-pane', '-t', attached.sourceWindow, '-s', attached.paneId]);
-    } catch {
-        // If the window is gone, just break the pane into its own window
-        try {
-            await execFileAsync('tmux', ['break-pane', '-t', attached.paneId, '-d']);
-        } catch { /* best effort */ }
-    }
+        // break-pane -s = source pane to break out, -d = don't switch to it
+        await execFileAsync('tmux', ['break-pane', '-s', attached.paneId, '-d']);
+        // Restore the original window name (e.g., ghp-271)
+        const { stdout } = await execFileAsync('tmux', [
+            'display-message', '-t', attached.paneId, '-p', '#{window_id}',
+        ]);
+        const windowId = stdout.trim();
+        if (windowId) {
+            await execFileAsync('tmux', ['rename-window', '-t', windowId, attached.sourceWindowName]);
+        }
+    } catch { /* best effort */ }
+}
+
+// ---------------------------------------------------------------------------
+// tmux helpers — pane mode (zoom/select)
+// ---------------------------------------------------------------------------
+
+/** Find the pane ID that contains a process whose cwd matches the worktree path. */
+async function findPaneForWorktree(worktreePath: string): Promise<string | null> {
+    try {
+        const { stdout } = await execFileAsync('tmux', [
+            'list-panes', '-F', '#{pane_id} #{pane_current_path}',
+        ]);
+        for (const line of stdout.trim().split('\n')) {
+            const [paneId, panePath] = line.split(' ', 2);
+            if (panePath && panePath.startsWith(worktreePath)) {
+                return paneId;
+            }
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+/** Select (focus) a pane. */
+async function selectPane(paneId: string): Promise<void> {
+    try {
+        await execFileAsync('tmux', ['select-pane', '-t', paneId]);
+    } catch { /* ignore */ }
+}
+
+/** Get the pane ID of the dashboard itself (this process). */
+function getDashboardPaneId(): string | null {
+    // TMUX_PANE is set by tmux for each pane's process — unlike display-message
+    // which returns the *active* pane, this reliably identifies our own pane.
+    return process.env.TMUX_PANE || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,7 +147,6 @@ async function releasePane(attached: AttachedPane): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function findCoordinatorPane(): Promise<string | null> {
-    // Look for a window named ghp-root, ghp-coordinator, or ghp-main
     const candidates = ['ghp-root', 'ghp-coordinator', 'ghp-main'];
     for (const name of candidates) {
         try {
@@ -152,47 +174,67 @@ function issueLabel(entry: DashboardEntry): string {
 }
 
 function stageLine(entry: DashboardEntry): string {
-    const stage = chalk.dim(`S${entry.pipeline.stage}`);
+    const stage = chalk.dim(entry.pipeline.stage);
     const uptime = entry.agent?.uptime ? chalk.dim(` · ${entry.agent.uptime}`) : '';
     const port = entry.agent?.port ? chalk.dim(` :${entry.agent.port}`) : '';
     return `${stage}${uptime}${port}`;
 }
 
+function isAttached(entry: DashboardEntry, attached: AttachedPane | null): boolean {
+    return attached !== null && attached.issueNumber === entry.pipeline.issueNumber;
+}
+
+function renderEntry(
+    e: DashboardEntry,
+    prefix: string,
+    attached: AttachedPane | null,
+    showAction?: boolean
+): void {
+    const active = isAttached(e, attached);
+    const label = active
+        ? chalk.bgCyan.black(` #${e.pipeline.issueNumber} `) + '  ' + chalk.bold(e.pipeline.issueTitle.substring(0, 35))
+        : issueLabel(e);
+    const marker = active ? chalk.cyan('►') : ' ';
+    console.log(`  ${marker}${prefix} ${label}  ${stageLine(e)}`);
+    if (showAction && e.agent?.currentAction) {
+        console.log(`          ${chalk.dim(`└─ ${e.agent.currentAction.substring(0, 55)}`)}`);
+    }
+}
+
 function renderDashboard(
     entries: DashboardEntry[],
+    tmuxMode: TmuxMode,
     attached: AttachedPane | null,
     now: string
 ): void {
     process.stdout.write('\x1b[2J\x1b[H'); // clear
 
+    const triggerStage = getIntegrationTriggerStage();
     const waiting = entries.filter(e => e.agent?.waitingForInput);
-    const ready   = entries.filter(e => e.pipeline.stageStatus === 'ready' && !e.inMainRepo);
+    const ready   = entries.filter(e => e.pipeline.stage === triggerStage && !e.inMainRepo);
     const testing = entries.filter(e => e.inMainRepo);
     const working = entries.filter(e =>
         !e.agent?.waitingForInput &&
-        e.pipeline.stageStatus === 'in_progress' &&
+        e.pipeline.stage !== triggerStage &&
         !e.inMainRepo
     );
 
-    // Assign attention indices
-    waiting.forEach((e, i) => { e.attentionIndex = i + 1; });
-    ready.forEach((e, i)   => { e.readyIndex = i + 1; });
+    // Number all entries for keypress selection (attention first, then working)
+    const numbered = [...waiting, ...working];
+    numbered.forEach((e, i) => { e.attentionIndex = i + 1; });
 
-    const attachedNote = attached ? chalk.yellow(` │ ATTACHED: #${attached.issueNumber}`) : '';
-    console.log(chalk.bold('GHP Dashboard'), chalk.dim(`[${now}]`), attachedNote);
+    const attachedLabel = attached
+        ? chalk.bgCyan.black(` VIEWING: #${attached.issueNumber} `)
+        : '';
+
+    console.log(chalk.bold('GHP Pipeline'), chalk.dim(`[${now}]`), attachedLabel);
     console.log(chalk.dim('─'.repeat(70)));
-
-    // Top row: Needs Attention | Ready | In Testing (side by side if space)
-    const hasPriority = waiting.length > 0 || ready.length > 0 || testing.length > 0;
 
     if (waiting.length > 0) {
         console.log(chalk.yellow.bold('  NEEDS ATTENTION'));
         for (const e of waiting) {
             const key = chalk.yellow(`[${e.attentionIndex}]`);
-            console.log(`  ${key} ${issueLabel(e)}  ${stageLine(e)}`);
-            if (e.agent?.currentAction) {
-                console.log(`       ${chalk.yellow(`└─ ⚠ ${e.agent.currentAction.substring(0, 55)}`)}`);
-            }
+            renderEntry(e, key, attached, true);
         }
         console.log();
     }
@@ -200,19 +242,27 @@ function renderDashboard(
     if (ready.length > 0) {
         console.log(chalk.green.bold('  READY FOR INTEGRATION'));
         for (const e of ready) {
-            const age = formatAge(e.pipeline.readyAt);
-            console.log(`  ${chalk.green('✓')}  ${issueLabel(e)}  ${chalk.dim(age)}`);
+            const age = formatAge(e.pipeline.stageEnteredAt);
+            const active = isAttached(e, attached);
+            const marker = active ? chalk.cyan('►') : ' ';
+            const label = active
+                ? chalk.bgCyan.black(` #${e.pipeline.issueNumber} `) + '  ' + chalk.bold(e.pipeline.issueTitle.substring(0, 35))
+                : issueLabel(e);
+            console.log(`  ${marker}${chalk.green('✓')}  ${label}  ${chalk.dim(age)}`);
         }
-        console.log(`  ${chalk.dim(`[i] swap next   [i <n>] pick specific`)}`);
         console.log();
     }
 
     if (testing.length > 0) {
         console.log(chalk.blue.bold('  IN TESTING (main repo)'));
         for (const e of testing) {
-            console.log(`  ${chalk.blue('⟳')}  ${issueLabel(e)}`);
+            const active = isAttached(e, attached);
+            const marker = active ? chalk.cyan('►') : ' ';
+            const label = active
+                ? chalk.bgCyan.black(` #${e.pipeline.issueNumber} `) + '  ' + chalk.bold(e.pipeline.issueTitle.substring(0, 35))
+                : issueLabel(e);
+            console.log(`  ${marker}${chalk.blue('⟳')}  ${label}`);
         }
-        console.log(`  ${chalk.dim('[x] ghp wt clean')}`);
         console.log();
     }
 
@@ -220,26 +270,28 @@ function renderDashboard(
         console.log(chalk.white.bold('  WORKING'));
         for (const e of working) {
             const sym = e.agent?.status === 'running' ? chalk.green('●') : chalk.dim('○');
-            console.log(`  ${sym}  ${issueLabel(e)}  ${stageLine(e)}`);
-            if (e.agent?.currentAction) {
-                console.log(`       ${chalk.dim(`└─ ${e.agent.currentAction.substring(0, 55)}`)}`);
-            }
+            const key = e.attentionIndex ? chalk.dim(`[${e.attentionIndex}]`) : '   ';
+            renderEntry(e, `${key} ${sym}`, attached, true);
         }
         console.log();
     }
 
-    if (!hasPriority && working.length === 0) {
+    if (entries.length === 0) {
         console.log(chalk.dim('  No worktrees in pipeline.'));
-        console.log(chalk.dim('  Start one: ghp start <issue> --parallel'));
+        console.log(chalk.dim('  ghp start <issue> --parallel'));
         console.log();
     }
 
     console.log(chalk.dim('─'.repeat(70)));
 
-    if (attached) {
-        console.log(chalk.dim('[esc] send pane back  [c] coordinator  [q] quit'));
+    if (tmuxMode === 'pane') {
+        console.log(chalk.dim('[1-9] focus agent  [i] next integration  [x] clean  [q] quit'));
     } else {
-        console.log(chalk.dim('[1-9] pull agent pane  [i] next integration  [x] clean  [c] coordinator  [q] quit'));
+        if (attached) {
+            console.log(chalk.dim('[1-9] swap  [esc] send back  [c] coordinator  [q] quit'));
+        } else {
+            console.log(chalk.dim('[1-9] pull pane  [i] next integration  [x] clean  [c] coordinator  [q] quit'));
+        }
     }
 }
 
@@ -251,23 +303,29 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     const intervalSec = parseInt(options.interval || '2', 10);
     const intervalMs = intervalSec * 1000;
 
+    // Detect tmux mode from config
+    const parallelConfig = getConfig('parallelWork') as any;
+    const tmuxMode: TmuxMode = parallelConfig?.tmux?.mode ?? 'window';
+
     if (!process.env.TMUX) {
-        console.log(chalk.yellow('Warning:'), 'Not inside a tmux session — pane-pull features will be unavailable.');
-        console.log(chalk.dim('Displaying read-only status. Ctrl+C to exit.'));
+        console.log(chalk.yellow('Warning:'), 'Not inside tmux — interactive features disabled.');
+        console.log(chalk.dim('Showing read-only status. Ctrl+C to exit.'));
         console.log();
     }
 
     let attached: AttachedPane | null = null;
+    // zoomedIssue removed — pane mode uses select-pane (focus) instead of zoom
+    let dashboardPaneId: string | null = null;
     let coordinatorWindow: string | null = null;
     let refreshTimer: ReturnType<typeof setInterval> | null = null;
-    let running = true;
 
-    // Detect coordinator pane once at startup
     if (process.env.TMUX) {
-        coordinatorWindow = await findCoordinatorPane();
+        dashboardPaneId = getDashboardPaneId();
+        if (tmuxMode === 'window') {
+            coordinatorWindow = await findCoordinatorPane();
+        }
     }
 
-    // Build entries
     async function buildEntries(): Promise<DashboardEntry[]> {
         const repoRoot = await getMainWorktreeRoot();
         if (!repoRoot) return [];
@@ -288,47 +346,66 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
 
     async function refresh(): Promise<void> {
         const entries = await buildEntries();
-        renderDashboard(entries, attached, new Date().toLocaleTimeString());
+        renderDashboard(entries, tmuxMode, attached, new Date().toLocaleTimeString());
     }
 
-    // Map attention-index → issue number for keypress handling
-    async function getAttentionMap(): Promise<Map<number, DashboardEntry>> {
-        const entries = await buildEntries();
-        const map = new Map<number, DashboardEntry>();
-        let idx = 1;
-        for (const e of entries) {
-            if (e.agent?.waitingForInput) {
-                map.set(idx++, e);
-            }
-        }
-        return map;
+    function getNumberedEntry(entries: DashboardEntry[], digit: number): DashboardEntry | undefined {
+        const triggerStage = getIntegrationTriggerStage();
+        const waiting = entries.filter(e => e.agent?.waitingForInput);
+        const working = entries.filter(e =>
+            !e.agent?.waitingForInput &&
+            e.pipeline.stage !== triggerStage &&
+            !e.inMainRepo
+        );
+        const numbered = [...waiting, ...working];
+        return numbered[digit - 1];
     }
 
-    async function pullAgentPane(issueNumber: number): Promise<void> {
-        if (attached) {
-            console.log(chalk.yellow('A pane is already attached. Send it back first (esc).'));
-            return;
-        }
+    // ---------------------------------------------------------------------------
+    // Pane mode: select (focus) agent pane
+    // ---------------------------------------------------------------------------
+
+    async function focusAgent(issueNumber: number): Promise<void> {
         const repoRoot = await getMainWorktreeRoot();
         if (!repoRoot) return;
 
         const entry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === issueNumber);
         if (!entry) return;
 
-        // Derive the tmux window name (matches the pattern used at spawn time)
-        const windowName = `ghp-${issueNumber}`;
-        const result = await pullPane(windowName);
-        if (!result) {
-            console.log(chalk.red('Could not pull pane from'), windowName);
-            return;
+        const paneId = await findPaneForWorktree(entry.worktreePath);
+        if (paneId) {
+            await selectPane(paneId);
         }
-        attached = { issueNumber, paneId: result.paneId, sourceWindow: result.sourceWindow };
+    }
+
+    // ---------------------------------------------------------------------------
+    // Window mode: pull/release
+    // ---------------------------------------------------------------------------
+
+    async function pullAgentPane(issueNumber: number): Promise<void> {
+        // Hot-swap: release current pane before pulling the new one
+        if (attached) {
+            if (attached.issueNumber === issueNumber) return; // already showing this one
+            await sendPaneBack();
+        }
+
+        const windowName = `ghp-${issueNumber}`;
+        if (!dashboardPaneId) return;
+        const result = await pullPaneFromWindow(windowName, dashboardPaneId);
+        if (!result) return;
+
+        // Set pane border title so it's visually clear which agent is shown
+        try {
+            await execFileAsync('tmux', ['select-pane', '-t', result.paneId, '-T', `Agent #${issueNumber}`]);
+        } catch { /* best effort */ }
+
+        attached = { issueNumber, paneId: result.paneId, sourceWindowName: result.sourceWindowName };
         await refresh();
     }
 
     async function sendPaneBack(): Promise<void> {
         if (!attached) return;
-        await releasePane(attached);
+        await releasePaneToWindow(attached);
         attached = null;
         await refresh();
     }
@@ -338,69 +415,74 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     // ---------------------------------------------------------------------------
 
     async function handleKey(key: string): Promise<void> {
-        // esc — send pane back
-        if (key === '\x1b' || key === '\x1b[') {
-            await sendPaneBack();
+        // esc — send pane back (window mode) or refocus dashboard (pane mode)
+        if (key === '\x1b') {
+            if (tmuxMode === 'pane' && dashboardPaneId) {
+                await selectPane(dashboardPaneId);
+            } else if (tmuxMode === 'window' && attached) {
+                await sendPaneBack();
+            }
             return;
         }
 
         // q — quit
         if (key === 'q' || key === 'Q') {
             if (attached) await sendPaneBack();
-            running = false;
             if (refreshTimer) clearInterval(refreshTimer);
-            process.stdin.setRawMode(false);
-            process.stdin.pause();
+            if (process.stdin.isTTY) {
+                process.stdin.setRawMode(false);
+                process.stdin.pause();
+            }
             console.log();
-            console.log(chalk.dim('Dashboard closed.'));
             process.exit(0);
         }
 
-        // c — pull coordinator pane
-        if (key === 'c' || key === 'C') {
+        // c — coordinator (window mode only)
+        if ((key === 'c' || key === 'C') && tmuxMode === 'window') {
             if (attached) {
                 await sendPaneBack();
                 return;
             }
+            if (!coordinatorWindow) coordinatorWindow = await findCoordinatorPane();
             if (!coordinatorWindow) {
-                // Try to detect again
-                coordinatorWindow = await findCoordinatorPane();
-            }
-            if (!coordinatorWindow) {
-                // Re-render with a brief note
                 process.stdout.write('\x1b[2J\x1b[H');
-                console.log(chalk.yellow('No coordinator window found (ghp-root, ghp-coordinator, or ghp-main)'));
+                console.log(chalk.yellow('No coordinator window found'));
                 setTimeout(() => refresh(), 1500);
                 return;
             }
-            const result = await pullPane(coordinatorWindow);
+            if (!dashboardPaneId) return;
+            const result = await pullPaneFromWindow(coordinatorWindow, dashboardPaneId);
             if (result) {
-                attached = { issueNumber: 0, paneId: result.paneId, sourceWindow: result.sourceWindow };
+                attached = { issueNumber: 0, paneId: result.paneId, sourceWindowName: result.sourceWindowName };
                 await refresh();
             }
             return;
         }
 
-        // i or n — swap next ready worktree (optionally with number)
+        // i or n — swap next ready worktree
         if (key === 'i' || key === 'I' || key === 'n' || key === 'N') {
-            await worktreeNextCommand(undefined);
+            await safeExec(() => worktreeNextCommand(undefined));
             await refresh();
             return;
         }
 
-        // x — clean (reverse current swap)
+        // x — clean
         if (key === 'x' || key === 'X') {
-            await worktreeCleanCommand({});
+            await safeExec(() => worktreeCleanCommand({}));
             await refresh();
             return;
         }
 
-        // 1-9 — pull attention pane
+        // 1-9 — zoom (pane mode) or pull (window mode)
         const digit = parseInt(key, 10);
         if (!isNaN(digit) && digit >= 1 && digit <= 9) {
-            const attentionMap = await getAttentionMap();
-            const entry = attentionMap.get(digit);
-            if (entry) {
+            const entries = await buildEntries();
+            const entry = getNumberedEntry(entries, digit);
+            if (!entry) return;
+
+            if (tmuxMode === 'pane') {
+                await focusAgent(entry.pipeline.issueNumber);
+            } else {
                 await pullAgentPane(entry.pipeline.issueNumber);
             }
             return;
@@ -416,23 +498,21 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         refresh().catch(() => {});
     }, intervalMs);
 
-    // Register cleanup
     registerCleanupHandler(() => {
+        if (suppressCleanup) return;
         if (refreshTimer) clearInterval(refreshTimer);
-        if (attached) releasePane(attached).catch(() => {});
+        if (attached) releasePaneToWindow(attached).catch(() => {});
         process.stdin.setRawMode?.(false);
         process.stdin.pause();
     });
 
-    // Raw keypress input
     if (process.stdin.isTTY) {
         process.stdin.setRawMode(true);
         process.stdin.resume();
         process.stdin.setEncoding('utf-8');
         process.stdin.on('data', (key: string) => {
-            // Ctrl+C
             if (key === '\u0003') {
-                if (attached) releasePane(attached).catch(() => {});
+                if (attached) releasePaneToWindow(attached).catch(() => {});
                 if (refreshTimer) clearInterval(refreshTimer);
                 process.stdin.setRawMode(false);
                 process.stdin.pause();
@@ -443,6 +523,5 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         });
     }
 
-    // Keep alive
     await new Promise<void>(() => {});
 }

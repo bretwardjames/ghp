@@ -1,31 +1,80 @@
 /**
- * Pipeline registry for tracking worktrees through workflow stages.
+ * Pipeline registry — configurable stage-based workflow for worktrees.
  *
- * Stored in .git/ghp-pipeline.json (alongside swap state).
- * Populated when ghp start --parallel creates a worktree.
- * Updated by ghp wt ready, ghp wt next, ghp wt clean.
+ * Stages are defined in ghp config under `pipeline.stages` as an ordered array
+ * of stage names. A worktree advances linearly through stages.
+ *
+ * Stored in .git/ghp-pipeline.json.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { getConfig } from './config.js';
 
-export type PipelineStage = 1 | 2 | 3;
-export type PipelineStageStatus = 'in_progress' | 'ready' | 'done';
+// ---------------------------------------------------------------------------
+// Default stages
+// ---------------------------------------------------------------------------
+
+const DEFAULT_STAGES = [
+    'initiating',
+    'planning',
+    'plan_ready',
+    'building_tests',
+    'working',
+    'needs_attention',
+    'code_review',
+    'ready_for_integration',
+    'integration_testing',
+    'code_review_loop',
+    'writing_pr',
+    'pr_submitted',
+];
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 export interface PipelineEntry {
     issueNumber: number;
     issueTitle: string;
     branch: string;
     worktreePath: string;
-    stage: PipelineStage;
-    stageStatus: PipelineStageStatus;
-    /** ISO timestamp when stageStatus was set to 'ready' */
-    readyAt?: string;
+    /** Current stage name (from configured stages list) */
+    stage: string;
+    /** ISO timestamp of when the entry moved to the current stage */
+    stageEnteredAt: string;
     /** ISO timestamp of initial registration */
     registeredAt: string;
 }
 
 type PipelineRegistry = Record<string, PipelineEntry>;
+
+// ---------------------------------------------------------------------------
+// Stage configuration
+// ---------------------------------------------------------------------------
+
+/** Get the configured pipeline stages (or defaults). */
+export function getPipelineStages(): string[] {
+    const config = getConfig('pipeline') as any;
+    const stages = config?.stages;
+    if (Array.isArray(stages) && stages.length > 0) return stages;
+    return DEFAULT_STAGES;
+}
+
+/** Get the stage name after which integration testing (swap to main) is triggered. */
+export function getIntegrationTriggerStage(): string {
+    const config = getConfig('pipeline') as any;
+    return config?.integrationAfter ?? 'ready_for_integration';
+}
+
+/** Get the index of a stage in the pipeline (-1 if not found). */
+export function getStageIndex(stageName: string): number {
+    return getPipelineStages().indexOf(stageName);
+}
+
+// ---------------------------------------------------------------------------
+// Registry I/O
+// ---------------------------------------------------------------------------
 
 function getRegistryPath(repoRoot: string): string {
     return join(repoRoot, '.git', 'ghp-pipeline.json');
@@ -49,59 +98,57 @@ function saveRegistry(repoRoot: string, registry: PipelineRegistry): void {
 // Public API
 // ---------------------------------------------------------------------------
 
-/** Register a new worktree at stage 1 / in_progress. */
+/** Register a new worktree at the first stage (typically 'initiating'). */
 export function registerWorktree(
     repoRoot: string,
-    entry: Omit<PipelineEntry, 'stage' | 'stageStatus' | 'registeredAt'>
+    entry: Omit<PipelineEntry, 'stage' | 'stageEnteredAt' | 'registeredAt'>
 ): PipelineEntry {
     const registry = loadRegistry(repoRoot);
+    const stages = getPipelineStages();
+    const now = new Date().toISOString();
     const full: PipelineEntry = {
         ...entry,
-        stage: 1,
-        stageStatus: 'in_progress',
-        registeredAt: new Date().toISOString(),
+        stage: stages[0],
+        stageEnteredAt: now,
+        registeredAt: now,
     };
     registry[String(entry.issueNumber)] = full;
     saveRegistry(repoRoot, registry);
     return full;
 }
 
-/** Mark the current stage as complete (ready to advance). */
-export function markWorktreeReady(repoRoot: string, issueNumber: number): PipelineEntry | null {
-    const registry = loadRegistry(repoRoot);
-    const entry = registry[String(issueNumber)];
-    if (!entry) return null;
-    entry.stageStatus = 'ready';
-    entry.readyAt = new Date().toISOString();
-    saveRegistry(repoRoot, registry);
-    return entry;
-}
-
-/** Advance a worktree to the next stage (1→2 or 2→3). */
+/** Advance a worktree to the next stage in the pipeline. Returns null if not found or already at last stage. */
 export function advanceWorktreeStage(repoRoot: string, issueNumber: number): PipelineEntry | null {
     const registry = loadRegistry(repoRoot);
     const entry = registry[String(issueNumber)];
     if (!entry) return null;
-    if (entry.stage < 3) {
-        entry.stage = (entry.stage + 1) as PipelineStage;
-        entry.stageStatus = 'in_progress';
-        delete entry.readyAt;
-    }
+
+    const stages = getPipelineStages();
+    const currentIndex = stages.indexOf(entry.stage);
+    if (currentIndex < 0 || currentIndex >= stages.length - 1) return entry;
+
+    entry.stage = stages[currentIndex + 1];
+    entry.stageEnteredAt = new Date().toISOString();
     saveRegistry(repoRoot, registry);
     return entry;
 }
 
-/** Mark a worktree's stage as done (e.g. PR opened at end of stage 3). */
-export function markWorktreeDone(repoRoot: string, issueNumber: number): PipelineEntry | null {
+/** Set a worktree to a specific stage by name. */
+export function setWorktreeStage(repoRoot: string, issueNumber: number, stageName: string): PipelineEntry | null {
     const registry = loadRegistry(repoRoot);
     const entry = registry[String(issueNumber)];
     if (!entry) return null;
-    entry.stageStatus = 'done';
+
+    const stages = getPipelineStages();
+    if (!stages.includes(stageName)) return null;
+
+    entry.stage = stageName;
+    entry.stageEnteredAt = new Date().toISOString();
     saveRegistry(repoRoot, registry);
     return entry;
 }
 
-/** Remove a worktree from the pipeline (e.g. when worktree is deleted). */
+/** Remove a worktree from the pipeline. */
 export function deregisterWorktree(repoRoot: string, issueNumber: number): void {
     const registry = loadRegistry(repoRoot);
     delete registry[String(issueNumber)];
@@ -118,13 +165,26 @@ export function getAllPipelineEntries(repoRoot: string): PipelineEntry[] {
     return Object.values(loadRegistry(repoRoot));
 }
 
-/** Get all entries with stageStatus === 'ready', sorted FIFO by readyAt. */
-export function getReadyWorktrees(repoRoot: string): PipelineEntry[] {
+/** Get entries at a specific stage, sorted FIFO by stageEnteredAt. */
+export function getWorktreesAtStage(repoRoot: string, stageName: string): PipelineEntry[] {
     return getAllPipelineEntries(repoRoot)
-        .filter(e => e.stageStatus === 'ready')
-        .sort((a, b) => {
-            if (!a.readyAt) return 1;
-            if (!b.readyAt) return -1;
-            return a.readyAt.localeCompare(b.readyAt);
-        });
+        .filter(e => e.stage === stageName)
+        .sort((a, b) => a.stageEnteredAt.localeCompare(b.stageEnteredAt));
+}
+
+/**
+ * Get worktrees that have reached the integration trigger stage,
+ * sorted FIFO by stageEnteredAt.
+ */
+export function getReadyWorktrees(repoRoot: string): PipelineEntry[] {
+    const triggerStage = getIntegrationTriggerStage();
+    return getWorktreesAtStage(repoRoot, triggerStage);
+}
+
+/** Check if a stage is at or past the integration trigger point. */
+export function isAtOrPastIntegration(stageName: string): boolean {
+    const stages = getPipelineStages();
+    const triggerIndex = stages.indexOf(getIntegrationTriggerStage());
+    const stageIndex = stages.indexOf(stageName);
+    return stageIndex >= triggerIndex && triggerIndex >= 0;
 }

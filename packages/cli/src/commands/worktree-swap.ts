@@ -20,10 +20,11 @@ import { detectRepository, listWorktrees, getMainWorktreeRoot, getCurrentBranch,
 import { getBranchForIssue } from '../branch-linker.js';
 import { exit } from '../exit.js';
 import {
-    markWorktreeReady,
     advanceWorktreeStage,
+    setWorktreeStage,
     getReadyWorktrees,
     getPipelineEntry,
+    getIntegrationTriggerStage,
     type PipelineEntry,
 } from '../pipeline-registry.js';
 
@@ -351,7 +352,7 @@ export async function worktreeCleanCommand(options: CleanOptions): Promise<void>
         console.log();
         console.log(chalk.bold(`${ready.length} worktree(s) ready for integration testing:`));
         for (const entry of ready) {
-            const age = entry.readyAt ? formatAge(entry.readyAt) : '';
+            const age = entry.stageEnteredAt ? formatAge(entry.stageEnteredAt) : '';
             console.log(`  ${chalk.cyan(`#${entry.issueNumber}`)}  ${entry.issueTitle.substring(0, 40).padEnd(40)}  ${chalk.dim(age)}`);
         }
         console.log();
@@ -451,7 +452,8 @@ export async function worktreeReadyCommand(issueArg?: string): Promise<void> {
         }
     }
 
-    const entry = markWorktreeReady(repoRoot, issueNumber);
+    const triggerStage = getIntegrationTriggerStage();
+    const entry = setWorktreeStage(repoRoot, issueNumber, triggerStage);
     if (!entry) {
         console.error(chalk.red('Error:'), `Issue #${issueNumber} is not registered in the pipeline.`);
         console.error('It may not have been started with --parallel, or the pipeline registry is missing.');
@@ -459,7 +461,7 @@ export async function worktreeReadyCommand(issueArg?: string): Promise<void> {
         return;
     }
 
-    console.log(chalk.green('✓'), `#${issueNumber} marked ready for integration testing`);
+    console.log(chalk.green('✓'), `#${issueNumber} marked ${chalk.cyan(triggerStage)}`);
     console.log(chalk.dim(`  Branch: ${entry.branch}`));
     console.log(chalk.dim(`  Worktree: ${entry.worktreePath}`));
     console.log();
@@ -472,7 +474,7 @@ export async function worktreeReadyCommand(issueArg?: string): Promise<void> {
 
 /**
  * Swap the next ready worktree into the main repo.
- * Picks FIFO by readyAt unless a specific issue is given.
+ * Picks FIFO by stageEnteredAt unless a specific issue is given.
  */
 export async function worktreeNextCommand(issueArg?: string): Promise<void> {
     const repoRoot = await getMainWorktreeRoot();
@@ -497,8 +499,9 @@ export async function worktreeNextCommand(issueArg?: string): Promise<void> {
             exit(1);
             return;
         }
-        if (found.stageStatus !== 'ready') {
-            console.error(chalk.red('Error:'), `Issue #${issueNumber} is not ready (status: ${found.stageStatus}).`);
+        const triggerStage = getIntegrationTriggerStage();
+        if (found.stage !== triggerStage) {
+            console.error(chalk.red('Error:'), `Issue #${issueNumber} is not ready (stage: ${found.stage}, need: ${triggerStage}).`);
             exit(1);
             return;
         }

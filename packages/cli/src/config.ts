@@ -167,6 +167,14 @@ export interface Config {
     // Event hooks configuration
     hooks?: HooksConfig;
 
+    // Pipeline configuration
+    pipeline?: {
+        /** Ordered list of pipeline stage names */
+        stages?: string[];
+        /** Stage name after which integration testing is triggered */
+        integrationAfter?: string;
+    };
+
     // Command defaults
     defaults?: {
         plan?: PlanShortcut;

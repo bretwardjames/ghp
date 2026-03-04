@@ -17,6 +17,14 @@ const cleanupHandlers: CleanupHandler[] = [];
 let isExiting = false;
 
 /**
+ * Reset the exit state. Used by embedded contexts (e.g., the pipeline dashboard)
+ * that intercept exit() to prevent process termination.
+ */
+export function resetExitState(): void {
+    isExiting = false;
+}
+
+/**
  * Register a cleanup handler to run before process exit.
  * Handlers are called in reverse order (LIFO - last registered runs first).
  *

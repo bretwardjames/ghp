@@ -8,7 +8,13 @@
 
 import chalk from 'chalk';
 import { getMainWorktreeRoot } from '../git-utils.js';
-import { getAllPipelineEntries, getReadyWorktrees, type PipelineEntry } from '../pipeline-registry.js';
+import {
+    getAllPipelineEntries,
+    getReadyWorktrees,
+    getIntegrationTriggerStage,
+    isAtOrPastIntegration,
+    type PipelineEntry,
+} from '../pipeline-registry.js';
 import { getAgentSummaries, type AgentSummary } from '@bretwardjames/ghp-core';
 import { readSwapState } from './worktree-swap-state.js';
 import { exit } from '../exit.js';
@@ -21,9 +27,8 @@ export interface StatusEntry {
     worktreePath: string;
 
     // Pipeline
-    stage: number;
-    stageStatus: string;
-    readyAt?: string;
+    stage: string;
+    stageEnteredAt: string;
     registeredAt: string;
 
     // Swap
@@ -69,8 +74,7 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
             branch: p.branch,
             worktreePath: p.worktreePath,
             stage: p.stage,
-            stageStatus: p.stageStatus,
-            readyAt: p.readyAt,
+            stageEnteredAt: p.stageEnteredAt,
             registeredAt: p.registeredAt,
             inMainRepo,
             agentStatus: agent?.status,
@@ -93,19 +97,24 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
     }
 
     // Group by bucket
+    const triggerStage = getIntegrationTriggerStage();
     const waiting = entries.filter(e => e.waitingForInput);
-    const ready   = entries.filter(e => e.stageStatus === 'ready' && !e.inMainRepo);
+    const ready   = entries.filter(e => e.stage === triggerStage && !e.inMainRepo);
     const testing = entries.filter(e => e.inMainRepo);
-    const working = entries.filter(e => !e.waitingForInput && e.stageStatus === 'in_progress' && !e.inMainRepo);
+    const working = entries.filter(e =>
+        !e.waitingForInput &&
+        e.stage !== triggerStage &&
+        !e.inMainRepo
+    );
 
     const printBucket = (label: string, color: (s: string) => string, items: StatusEntry[]) => {
         if (items.length === 0) return;
         console.log(color(label));
         for (const e of items) {
-            const stage = chalk.dim(`S${e.stage}`);
+            const stage = chalk.dim(e.stage);
             const agent = e.agentStatus ? ` · ${e.agentStatus}` : '';
             const time = e.uptime ? chalk.dim(` · ${e.uptime}`) : '';
-            console.log(`  ${chalk.cyan(`#${e.issueNumber}`)}  ${e.issueTitle.substring(0, 45).padEnd(45)}  ${stage}${agent}${time}`);
+            console.log(`  ${chalk.cyan(`#${e.issueNumber}`)}  ${e.issueTitle.substring(0, 40).padEnd(40)}  ${stage}${agent}${time}`);
             if (e.currentAction) {
                 console.log(`       ${chalk.dim(`└─ ${e.currentAction}`)}`);
             }

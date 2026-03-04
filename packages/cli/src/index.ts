@@ -36,6 +36,7 @@ import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { statusCommand } from './commands/status.js';
 import { pipelineDashboardCommand } from './commands/dashboard-pipeline.js';
+import { pipelineAdvanceCommand, pipelineSetCommand, pipelineStagesCommand } from './commands/pipeline-commands.js';
 import { progressCommand } from './commands/progress.js';
 import { standupCommand } from './commands/standup.js';
 import { fieldsCommand } from './commands/fields.js';
@@ -272,6 +273,7 @@ program
     .option('--keep-branch', 'With --parallel: never switch branches in the main repo (zero-checkout worktree creation)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--admin', 'Open admin pane (ghp agents watch) with --parallel')
+    .option('--background', 'Open agent terminal in background (don\'t switch focus)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
     // Terminal mode overrides (for use with --parallel)
     .option('--nvim', 'Use nvim with claudecode.nvim plugin (overrides config)')
@@ -313,6 +315,7 @@ program
     .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--admin', 'Open admin pane (ghp agents watch) with --parallel')
+    .option('--background', 'Open agent terminal in background (don\'t switch focus)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
     // Terminal mode overrides (for use with --parallel)
     .option('--nvim', 'Use nvim with claudecode.nvim plugin (overrides config)')
@@ -622,13 +625,33 @@ agentsCmd
     .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
     .action(agentsWatchCommand);
 
-// Pipeline dashboard (kanban + pane pull)
-program
+// Pipeline management
+const pipelineCmd = program
     .command('pipeline')
     .alias('pl')
-    .description('Pipeline dashboard — kanban view of all worktrees with interactive pane-pull')
+    .description('Pipeline management and dashboard');
+
+pipelineCmd
+    .command('dashboard')
+    .alias('db')
+    .description('Pipeline dashboard — kanban view with interactive pane-pull')
     .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
     .action(pipelineDashboardCommand);
+
+pipelineCmd
+    .command('advance [issue]')
+    .description('Advance a worktree to the next pipeline stage')
+    .action(pipelineAdvanceCommand);
+
+pipelineCmd
+    .command('set <stage> [issue]')
+    .description('Set a worktree to a specific pipeline stage')
+    .action(pipelineSetCommand);
+
+pipelineCmd
+    .command('stages')
+    .description('List configured pipeline stages')
+    .action(pipelineStagesCommand);
 
 // Self-update
 program

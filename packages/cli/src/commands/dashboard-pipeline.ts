@@ -7,12 +7,13 @@
  */
 
 import chalk from 'chalk';
-import { execFile, execFileSync } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { getAgentSummaries, type AgentSummary } from '@bretwardjames/ghp-core';
 import { getMainWorktreeRoot } from '../git-utils.js';
-import { getConfig } from '../config.js';
-import { getAllPipelineEntries, getReadyWorktrees, getIntegrationTriggerStage, getStageEmoji, type PipelineEntry } from '../pipeline-registry.js';
+import { getConfig, getParallelWorkConfig } from '../config.js';
+import { resolveHookScript, runUserHookScript } from './pipeline-commands.js';
+import { getAllPipelineEntries, getReadyWorktrees, getIntegrationTriggerStage, getPipelineStages, getStageEmoji, type PipelineEntry } from '../pipeline-registry.js';
 import { readSwapState } from './worktree-swap-state.js';
 import { worktreeCleanCommand, worktreeNextCommand } from './worktree-swap.js';
 import { registerCleanupHandler, resetExitState } from '../exit.js';
@@ -160,6 +161,29 @@ function getDashboardPaneId(): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Hook: dashboard-opened
+// ---------------------------------------------------------------------------
+
+async function fireDashboardOpenedHook(paneId: string, mode?: string | null): Promise<void> {
+    const repoRoot = await getMainWorktreeRoot();
+    if (!repoRoot) return;
+
+    const scriptPath = resolveHookScript(repoRoot, 'dashboard-opened', mode);
+    if (!scriptPath) return;
+
+    try {
+        const child = spawn(scriptPath, [], {
+            cwd: repoRoot,
+            stdio: ['pipe', 'ignore', 'ignore'],
+            detached: true,
+        });
+        child.stdin.write(JSON.stringify({ pane_id: paneId, window_name: 'ghp-admin' }));
+        child.stdin.end();
+        child.unref();
+    } catch { /* silent */ }
+}
+
+// ---------------------------------------------------------------------------
 // Coordinator pane detection
 // ---------------------------------------------------------------------------
 
@@ -238,23 +262,34 @@ function renderDashboard(
     tmuxMode: TmuxMode,
     attached: AttachedPane | null,
     now: string,
-    mainDirty: boolean
+    mainDirty: boolean,
+    hookMode?: string | null,
+    hookModes?: string[],
 ): void {
     process.stdout.write('\x1b[2J\x1b[H'); // clear
 
     const triggerStage = getIntegrationTriggerStage();
+    const stages = getPipelineStages();
+    const hasTriggerStage = stages.includes(triggerStage);
+
     const waiting = entries.filter(e => e.agent?.waitingForInput || e.pipeline.stage === 'needs_attention');
-    const ready   = entries.filter(e => e.pipeline.stage === triggerStage && !e.inMainRepo);
+    const ready   = hasTriggerStage ? entries.filter(e => e.pipeline.stage === triggerStage && !e.inMainRepo) : [];
     const testing = entries.filter(e => e.inMainRepo);
+    const stopped = entries.filter(e =>
+        e.pipeline.stage === 'stopped' &&
+        !e.agent?.waitingForInput &&
+        !e.inMainRepo
+    );
     const working = entries.filter(e =>
         !e.agent?.waitingForInput &&
         e.pipeline.stage !== 'needs_attention' &&
-        e.pipeline.stage !== triggerStage &&
+        e.pipeline.stage !== 'stopped' &&
+        (!hasTriggerStage || e.pipeline.stage !== triggerStage) &&
         !e.inMainRepo
     );
 
-    // Number all entries for keypress selection (attention first, then working)
-    const numbered = [...waiting, ...working];
+    // Number all entries for keypress selection (attention first, then stopped, then working)
+    const numbered = [...waiting, ...stopped, ...working];
     numbered.forEach((e, i) => { e.attentionIndex = i + 1; });
 
     const attachedLabel = attached
@@ -269,6 +304,15 @@ function renderDashboard(
         for (const e of waiting) {
             const key = chalk.yellow(`[${e.attentionIndex}]`);
             renderEntry(e, key, attached, true);
+        }
+        console.log();
+    }
+
+    if (stopped.length > 0) {
+        console.log(chalk.dim.bold('  STOPPED'));
+        for (const e of stopped) {
+            const key = e.attentionIndex ? chalk.dim(`[${e.attentionIndex}]`) : '   ';
+            renderEntry(e, `${key} ${chalk.dim('⏸')}`, attached, false);
         }
         console.log();
     }
@@ -319,13 +363,17 @@ function renderDashboard(
 
     console.log(chalk.dim('─'.repeat(70)));
 
+    const modeLabel = (hookModes && hookModes.length > 0)
+        ? `  [m] mode: ${hookMode ? chalk.cyan(hookMode) : chalk.dim('default')}`
+        : '';
+
     if (tmuxMode === 'pane') {
-        console.log(chalk.dim('[1-9] focus agent  [i] next integration  [x] clean  [q] quit'));
+        console.log(chalk.dim(`[1-9] focus agent${modeLabel}  [i] next integration  [x] clean  [q] quit`));
     } else {
         if (attached) {
-            console.log(chalk.dim('[1-9] swap  [esc] send back  [c] coordinator  [q] quit'));
+            console.log(chalk.dim(`[1-9] swap  [esc] send back${modeLabel}  [c] coordinator  [q] quit`));
         } else {
-            console.log(chalk.dim('[1-9] pull pane  [i] next integration  [x] clean  [c] coordinator  [q] quit'));
+            console.log(chalk.dim(`[1-9] pull pane${modeLabel}  [i] next integration  [x] clean  [c] coordinator  [q] quit`));
         }
     }
 }
@@ -353,6 +401,16 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     let dashboardPaneId: string | null = null;
     let coordinatorWindow: string | null = null;
     let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Hook mode state — runtime only, initialized from config
+    const pipelineConfig = getConfig('pipeline') as any;
+    const hookModes: string[] = pipelineConfig?.hookModes ?? [];
+    let currentHookMode: string | null = pipelineConfig?.defaultHookMode ?? null;
+    // Validate that defaultHookMode is in the hookModes list
+    if (currentHookMode && hookModes.length > 0 && !hookModes.includes(currentHookMode)) {
+        currentHookMode = hookModes[0];
+    }
+    if (hookModes.length === 0) currentHookMode = null;
 
     if (process.env.TMUX) {
         dashboardPaneId = getDashboardPaneId();
@@ -383,19 +441,28 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         const repoRoot = await getMainWorktreeRoot();
         const entries = await buildEntries();
         const dirty = repoRoot ? await isMainRepoDirty(repoRoot) : false;
-        renderDashboard(entries, tmuxMode, attached, new Date().toLocaleTimeString(), dirty);
+        renderDashboard(entries, tmuxMode, attached, new Date().toLocaleTimeString(), dirty, currentHookMode, hookModes);
     }
 
     function getNumberedEntry(entries: DashboardEntry[], digit: number): DashboardEntry | undefined {
         const triggerStage = getIntegrationTriggerStage();
+        const stages = getPipelineStages();
+        const hasTriggerStage = stages.includes(triggerStage);
+
         const waiting = entries.filter(e => e.agent?.waitingForInput || e.pipeline.stage === 'needs_attention');
+        const stopped = entries.filter(e =>
+            e.pipeline.stage === 'stopped' &&
+            !e.agent?.waitingForInput &&
+            !e.inMainRepo
+        );
         const working = entries.filter(e =>
             !e.agent?.waitingForInput &&
             e.pipeline.stage !== 'needs_attention' &&
-            e.pipeline.stage !== triggerStage &&
+            e.pipeline.stage !== 'stopped' &&
+            (!hasTriggerStage || e.pipeline.stage !== triggerStage) &&
             !e.inMainRepo
         );
-        const numbered = [...waiting, ...working];
+        const numbered = [...waiting, ...stopped, ...working];
         return numbered[digit - 1];
     }
 
@@ -420,11 +487,70 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     // Window mode: pull/release
     // ---------------------------------------------------------------------------
 
+    /** Build the JSON payload for a focused/unfocused hook. */
+    function agentPayload(entry: PipelineEntry): string {
+        return JSON.stringify({
+            issueNumber: entry.issueNumber,
+            worktreePath: entry.worktreePath,
+            branch: entry.branch,
+        });
+    }
+
+    /** Fire the agent-swapped hook, or fall back to sequential unfocus→focus. */
+    async function fireSwapHook(oldEntry: PipelineEntry, newEntry: PipelineEntry): Promise<void> {
+        const repoRoot = await getMainWorktreeRoot();
+        if (!repoRoot) return;
+
+        const swapScript = resolveHookScript(repoRoot, 'agent-swapped', currentHookMode);
+
+        if (swapScript) {
+            // Atomic swap hook
+            const payload = JSON.stringify({
+                old: { issueNumber: oldEntry.issueNumber, worktreePath: oldEntry.worktreePath, branch: oldEntry.branch },
+                new: { issueNumber: newEntry.issueNumber, worktreePath: newEntry.worktreePath, branch: newEntry.branch },
+            });
+            try {
+                const child = spawn(swapScript, [], {
+                    cwd: newEntry.worktreePath,
+                    stdio: ['pipe', 'ignore', 'ignore'],
+                    detached: true,
+                });
+                child.stdin.write(payload);
+                child.stdin.end();
+                child.unref();
+            } catch { /* silent */ }
+        } else {
+            // Fallback: sequential unfocus→focus (respecting hookModeSwapOrder)
+            // Await the first to guarantee ordering; second is fire-and-forget
+            const swapOrder = pipelineConfig?.hookModeSwapOrder ?? 'unfocus-first';
+            if (swapOrder === 'focus-first') {
+                await runUserHookScript('agent-focused', agentPayload(newEntry), newEntry.worktreePath, currentHookMode);
+                runUserHookScript('agent-unfocused', agentPayload(oldEntry), oldEntry.worktreePath, currentHookMode);
+            } else {
+                await runUserHookScript('agent-unfocused', agentPayload(oldEntry), oldEntry.worktreePath, currentHookMode);
+                runUserHookScript('agent-focused', agentPayload(newEntry), newEntry.worktreePath, currentHookMode);
+            }
+        }
+    }
+
     async function pullAgentPane(issueNumber: number): Promise<void> {
-        // Hot-swap: release current pane before pulling the new one
+        let previousEntry: PipelineEntry | null = null;
+
+        // Hot-swap: if already viewing a different agent
         if (attached) {
             if (attached.issueNumber === issueNumber) return; // already showing this one
-            await sendPaneBack();
+
+            // Look up the old entry before releasing
+            if (attached.issueNumber > 0) {
+                const repoRoot = await getMainWorktreeRoot();
+                if (repoRoot) {
+                    previousEntry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === attached!.issueNumber) ?? null;
+                }
+            }
+
+            // Release the tmux pane
+            await releasePaneToWindow(attached);
+            attached = null;
         }
 
         if (!dashboardPaneId) return;
@@ -438,9 +564,14 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         const agent = await findAgentByWorktreePath(pipelineEntry.worktreePath);
         if (!agent) return;
 
+        // Read focused agent config for direction/size
+        const { dashboard: dbConfig } = getParallelWorkConfig();
+        const dirFlag = dbConfig.focusedAgent.direction === 'horizontal' ? '-h' : '-v';
+        const size = dbConfig.focusedAgent.size;
+
         // Pull the pane into dashboard
         try {
-            await execFileAsync('tmux', ['join-pane', '-v', '-l', '50%', '-t', dashboardPaneId, '-s', agent.paneId]);
+            await execFileAsync('tmux', ['join-pane', dirFlag, '-l', size, '-t', dashboardPaneId, '-s', agent.paneId]);
         } catch { return; }
 
         // Set pane border title so it's visually clear which agent is shown
@@ -449,11 +580,33 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         } catch { /* best effort */ }
 
         attached = { issueNumber, paneId: agent.paneId, sourceWindowName: agent.windowName };
+
+        // Fire hooks
+        if (previousEntry) {
+            // Hot-swap: atomic agent-swapped or sequential fallback
+            fireSwapHook(previousEntry, pipelineEntry);
+        } else {
+            // Fresh pull: agent-focused only
+            runUserHookScript('agent-focused', agentPayload(pipelineEntry), pipelineEntry.worktreePath, currentHookMode);
+        }
+
         await refresh();
     }
 
     async function sendPaneBack(): Promise<void> {
         if (!attached) return;
+
+        // Fire agent-unfocused hook before releasing (fire-and-forget)
+        if (attached.issueNumber > 0) {
+            const repoRoot = await getMainWorktreeRoot();
+            if (repoRoot) {
+                const entry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === attached!.issueNumber);
+                if (entry) {
+                    runUserHookScript('agent-unfocused', agentPayload(entry), entry.worktreePath, currentHookMode);
+                }
+            }
+        }
+
         await releasePaneToWindow(attached);
         attached = null;
         await refresh();
@@ -515,6 +668,18 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
             return;
         }
 
+        // m — cycle hook modes (includes null/"default" as the last position)
+        if (key === 'm' || key === 'M') {
+            if (hookModes.length > 0) {
+                const currentIdx = currentHookMode ? hookModes.indexOf(currentHookMode) : -1;
+                const nextIdx = currentIdx + 1;
+                // After the last named mode, wrap to null (default/unsuffixed hooks)
+                currentHookMode = nextIdx < hookModes.length ? hookModes[nextIdx] : null;
+                await refresh();
+            }
+            return;
+        }
+
         // x — clean
         if (key === 'x' || key === 'X') {
             await safeExec(() => worktreeCleanCommand({}));
@@ -543,6 +708,12 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     // ---------------------------------------------------------------------------
 
     await refresh();
+
+    // Fire dashboard-opened hook (fire-and-forget)
+    if (dashboardPaneId) {
+        fireDashboardOpenedHook(dashboardPaneId, currentHookMode);
+    }
+
     refreshTimer = setInterval(() => {
         refresh().catch(() => {});
     }, intervalMs);

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.0
+
+### Minor Changes
+
+- Add hook modes and hot-swap support to the pipeline dashboard
+
+  - Hook modes: configure workflow modes (e.g., planning, testing, review) that change which hook scripts run. Mode-specific hooks use a dot-suffix convention (`.ghp/hooks/agent-focused.testing`), falling back to the unsuffixed script.
+  - Dashboard `[m]` keystroke cycles through configured modes (including a "default" position for unsuffixed hooks).
+  - Hot-swap: switching between focused agents fires a single `agent-swapped` hook with both old and new agent payloads, avoiding port conflicts. Falls back to sequential unfocus→focus if no swap hook exists.
+  - New config fields: `pipeline.hookModes`, `pipeline.defaultHookMode`, `pipeline.hookModeSwapOrder`.
+  - New commands: `ghp pipeline agent-swapped`, `ghp pipeline mode`.
+  - `--mode` flag on `agent-focused` and `agent-unfocused` commands.
+  - Expanded setup wizard with all 13 hook questions (6 directory hooks, 7 event hooks) plus mode configuration. Adds flavor save option to interactive wizard.
+  - Dashboard now calls hook scripts directly instead of spawning `ghp` child processes.
+
 ## 0.16.3
 
 ### Patch Changes

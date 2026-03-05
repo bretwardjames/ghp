@@ -36,7 +36,8 @@ import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
 import { statusCommand } from './commands/status.js';
 import { pipelineDashboardCommand } from './commands/dashboard-pipeline.js';
-import { pipelineAdvanceCommand, pipelineSetCommand, pipelineStagesCommand } from './commands/pipeline-commands.js';
+import { pipelineAdvanceCommand, pipelineSetCommand, pipelineRemoveCommand, pipelineStagesCommand, pipelineAgentActiveCommand, pipelineAgentStoppedCommand, pipelineAgentFocusedCommand, pipelineAgentUnfocusedCommand, pipelineAgentSwappedCommand, pipelineModeCommand } from './commands/pipeline-commands.js';
+import { pipelineSetupCommand } from './commands/pipeline-setup.js';
 import { progressCommand } from './commands/progress.js';
 import { standupCommand } from './commands/standup.js';
 import { fieldsCommand } from './commands/fields.js';
@@ -649,9 +650,59 @@ pipelineCmd
     .action(pipelineSetCommand);
 
 pipelineCmd
+    .command('remove [issue]')
+    .alias('rm')
+    .description('Remove a worktree entry from the pipeline registry')
+    .action(pipelineRemoveCommand);
+
+pipelineCmd
     .command('stages')
     .description('List configured pipeline stages')
     .action(pipelineStagesCommand);
+
+pipelineCmd
+    .command('setup')
+    .description('Setup wizard for pipeline configuration (agent-friendly)')
+    .option('--questions', 'Output question schema as JSON (no side effects)')
+    .option('--apply', 'Read answers JSON from stdin and apply configuration')
+    .option('--save <name>', 'Save answers from stdin as a named flavor')
+    .option('--flavor <name>', 'Load and apply a saved flavor')
+    .option('--flavors', 'List saved flavors')
+    .option('--delete-flavor <name>', 'Delete a saved flavor')
+    .action(pipelineSetupCommand);
+
+pipelineCmd
+    .command('agent-active')
+    .description('Set agent to working + fire user hooks (called by PostToolUse)')
+    .action(pipelineAgentActiveCommand);
+
+pipelineCmd
+    .command('agent-stopped')
+    .description('Set agent to stopped + fire user hooks (called by Stop)')
+    .action(pipelineAgentStoppedCommand);
+
+pipelineCmd
+    .command('agent-focused <issue>')
+    .description('Fire user hooks when agent is pulled into dashboard view')
+    .option('--mode <mode>', 'Hook mode for mode-aware resolution')
+    .action(pipelineAgentFocusedCommand);
+
+pipelineCmd
+    .command('agent-unfocused <issue>')
+    .description('Fire user hooks when agent is released from dashboard view')
+    .option('--mode <mode>', 'Hook mode for mode-aware resolution')
+    .action(pipelineAgentUnfocusedCommand);
+
+pipelineCmd
+    .command('agent-swapped <oldIssue> <newIssue>')
+    .description('Fire user hooks when switching between focused agents (hot-swap)')
+    .option('--mode <mode>', 'Hook mode for mode-aware resolution')
+    .action(pipelineAgentSwappedCommand);
+
+pipelineCmd
+    .command('mode [name]')
+    .description('Show or validate hook modes')
+    .action(pipelineModeCommand);
 
 // Self-update
 program

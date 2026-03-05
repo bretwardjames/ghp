@@ -51,6 +51,22 @@ export interface WorkDefaults {
  */
 export type TerminalMode = 'claude' | 'nvim-claude' | 'terminal';
 
+export interface DashboardConfig {
+    /** Where to open the dashboard: 'pane' (split current window) or 'window' (new tmux window) */
+    mode?: 'pane' | 'window';
+    /** Split direction when mode is 'pane': 'horizontal' (side-by-side) or 'vertical' (stacked) */
+    direction?: 'horizontal' | 'vertical';
+    /** Dashboard size as percentage or cells (e.g., '50%', '80') */
+    size?: string;
+    /** Where focused agents appear relative to dashboard */
+    focusedAgent?: {
+        /** Split direction: 'horizontal' (side-by-side) or 'vertical' (stacked below) */
+        direction?: 'horizontal' | 'vertical';
+        /** Size of the focused agent pane */
+        size?: string;
+    };
+}
+
 export interface ParallelWorkConfig {
     /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'tmux') */
     terminal?: string;
@@ -73,6 +89,8 @@ export interface ParallelWorkConfig {
         /** Direction to split when mode is 'pane' */
         paneDirection?: 'horizontal' | 'vertical';
     };
+    /** Dashboard layout configuration */
+    dashboard?: DashboardConfig;
 }
 
 /**
@@ -174,6 +192,12 @@ export interface Config {
         stages?: string[];
         /** Stage name after which integration testing is triggered */
         integrationAfter?: string;
+        /** Available hook modes (e.g., ["planning", "testing", "review"]) */
+        hookModes?: string[];
+        /** Default hook mode at dashboard startup (must be in hookModes) */
+        defaultHookMode?: string;
+        /** When hot-swapping agents, run unfocus hooks first or focus hooks first */
+        hookModeSwapOrder?: 'unfocus-first' | 'focus-first';
     };
 
     // Command defaults
@@ -210,6 +234,15 @@ const DEFAULT_CONFIG: Config = {
     parallelWork: {
         openTerminal: true,
         autoRunClaude: true,
+        dashboard: {
+            mode: 'pane',
+            direction: 'horizontal',
+            size: '50%',
+            focusedAgent: {
+                direction: 'vertical',
+                size: '50%',
+            },
+        },
     },
     defaults: {},
     shortcuts: {},
@@ -682,6 +715,16 @@ export function getWorktreeConfig(): WorktreeConfig {
     };
 }
 
+export interface ResolvedDashboardConfig {
+    mode: 'pane' | 'window';
+    direction: 'horizontal' | 'vertical';
+    size: string;
+    focusedAgent: {
+        direction: 'horizontal' | 'vertical';
+        size: string;
+    };
+}
+
 export interface ResolvedParallelWorkConfig {
     terminal?: string;
     openTerminal: boolean;
@@ -690,6 +733,7 @@ export interface ResolvedParallelWorkConfig {
     autoResume: boolean;
     terminalMode: TerminalMode;
     nvimCommand: string;
+    dashboard: ResolvedDashboardConfig;
 }
 
 /**
@@ -698,6 +742,8 @@ export interface ResolvedParallelWorkConfig {
 export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
     const config = loadConfig();
     const parallelWork = config.parallelWork ?? {};
+    const db = parallelWork.dashboard ?? {};
+    const fa = db.focusedAgent ?? {};
     return {
         terminal: parallelWork.terminal,
         openTerminal: parallelWork.openTerminal ?? true,
@@ -706,6 +752,15 @@ export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
         autoResume: parallelWork.autoResume ?? true,
         terminalMode: parallelWork.terminalMode ?? 'claude',
         nvimCommand: parallelWork.nvimCommand ?? 'nvim',
+        dashboard: {
+            mode: db.mode ?? 'pane',
+            direction: db.direction ?? 'horizontal',
+            size: db.size ?? '50%',
+            focusedAgent: {
+                direction: fa.direction ?? 'vertical',
+                size: fa.size ?? '50%',
+            },
+        },
     };
 }
 

@@ -199,7 +199,8 @@ function isAttached(entry: DashboardEntry, attached: AttachedPane | null): boole
     return attached !== null && attached.issueNumber === entry.pipeline.issueNumber;
 }
 
-function renderEntry(
+function renderEntryToLines(
+    lines: string[],
     e: DashboardEntry,
     prefix: string,
     attached: AttachedPane | null,
@@ -210,9 +211,9 @@ function renderEntry(
         ? chalk.bgCyan.black(` #${e.pipeline.issueNumber} `) + '  ' + chalk.bold(e.pipeline.issueTitle.substring(0, 35))
         : issueLabel(e);
     const marker = active ? chalk.cyan('►') : ' ';
-    console.log(`  ${marker}${prefix} ${label}  ${stageLine(e)}`);
+    lines.push(`  ${marker}${prefix} ${label}  ${stageLine(e)}`);
     if (showAction && e.agent?.currentAction) {
-        console.log(`          ${chalk.dim(`└─ ${e.agent.currentAction.substring(0, 55)}`)}`);
+        lines.push(`          ${chalk.dim(`└─ ${e.agent.currentAction.substring(0, 55)}`)}`);
     }
 }
 
@@ -223,7 +224,7 @@ function renderDashboard(
     now: string,
     mainDirty: boolean
 ): void {
-    process.stdout.write('\x1b[2J\x1b[H'); // clear
+    const lines: string[] = [];
 
     const triggerStage = getIntegrationTriggerStage();
     const waiting = entries.filter(e => e.agent?.waitingForInput || e.pipeline.stage === 'needs_attention');
@@ -244,21 +245,21 @@ function renderDashboard(
         ? chalk.bgCyan.black(` VIEWING: #${attached.issueNumber} `)
         : '';
 
-    console.log(chalk.bold('GHP Pipeline'), chalk.dim(`[${now}]`), attachedLabel);
-    console.log(chalk.dim('─'.repeat(70)));
+    lines.push(chalk.bold('GHP Pipeline') + ' ' + chalk.dim(`[${now}]`) + ' ' + attachedLabel);
+    lines.push(chalk.dim('─'.repeat(70)));
 
     if (waiting.length > 0) {
-        console.log(chalk.yellow.bold('  NEEDS ATTENTION'));
+        lines.push(chalk.yellow.bold('  NEEDS ATTENTION'));
         for (const e of waiting) {
             const key = chalk.yellow(`[${e.attentionIndex}]`);
-            renderEntry(e, key, attached, true);
+            renderEntryToLines(lines, e, key, attached, true);
         }
-        console.log();
+        lines.push('');
     }
 
     if (ready.length > 0) {
         const blocked = mainDirty ? chalk.red.bold('  BLOCKED') + chalk.red(' — main repo has uncommitted changes') : '';
-        console.log(chalk.green.bold('  READY FOR INTEGRATION') + blocked);
+        lines.push(chalk.green.bold('  READY FOR INTEGRATION') + blocked);
         for (const e of ready) {
             const age = formatAge(e.pipeline.stageEnteredAt);
             const active = isAttached(e, attached);
@@ -266,51 +267,56 @@ function renderDashboard(
             const label = active
                 ? chalk.bgCyan.black(` #${e.pipeline.issueNumber} `) + '  ' + chalk.bold(e.pipeline.issueTitle.substring(0, 35))
                 : issueLabel(e);
-            console.log(`  ${marker}${chalk.green('✓')}  ${label}  ${chalk.dim(age)}`);
+            lines.push(`  ${marker}${chalk.green('✓')}  ${label}  ${chalk.dim(age)}`);
         }
-        console.log();
+        lines.push('');
     }
 
     if (testing.length > 0) {
-        console.log(chalk.blue.bold('  IN TESTING (main repo)'));
+        lines.push(chalk.blue.bold('  IN TESTING (main repo)'));
         for (const e of testing) {
             const active = isAttached(e, attached);
             const marker = active ? chalk.cyan('►') : ' ';
             const label = active
                 ? chalk.bgCyan.black(` #${e.pipeline.issueNumber} `) + '  ' + chalk.bold(e.pipeline.issueTitle.substring(0, 35))
                 : issueLabel(e);
-            console.log(`  ${marker}${chalk.blue('⟳')}  ${label}`);
+            lines.push(`  ${marker}${chalk.blue('⟳')}  ${label}`);
         }
-        console.log();
+        lines.push('');
     }
 
     if (working.length > 0) {
-        console.log(chalk.white.bold('  WORKING'));
+        lines.push(chalk.white.bold('  WORKING'));
         for (const e of working) {
             const sym = e.agent?.status === 'running' ? chalk.green('●') : chalk.dim('○');
             const key = e.attentionIndex ? chalk.dim(`[${e.attentionIndex}]`) : '   ';
-            renderEntry(e, `${key} ${sym}`, attached, true);
+            renderEntryToLines(lines, e, `${key} ${sym}`, attached, true);
         }
-        console.log();
+        lines.push('');
     }
 
     if (entries.length === 0) {
-        console.log(chalk.dim('  No worktrees in pipeline.'));
-        console.log(chalk.dim('  ghp start <issue> --parallel'));
-        console.log();
+        lines.push(chalk.dim('  No worktrees in pipeline.'));
+        lines.push(chalk.dim('  ghp start <issue> --parallel'));
+        lines.push('');
     }
 
-    console.log(chalk.dim('─'.repeat(70)));
+    lines.push(chalk.dim('─'.repeat(70)));
 
     if (tmuxMode === 'pane') {
-        console.log(chalk.dim('[1-9] focus agent  [i] next integration  [x] clean  [q] quit'));
+        lines.push(chalk.dim('[1-9] focus agent  [i] next integration  [x] clean  [q] quit'));
     } else {
         if (attached) {
-            console.log(chalk.dim('[1-9] swap  [esc] send back  [c] coordinator  [q] quit'));
+            lines.push(chalk.dim('[1-9] swap  [esc] send back  [c] coordinator  [q] quit'));
         } else {
-            console.log(chalk.dim('[1-9] pull pane  [i] next integration  [x] clean  [c] coordinator  [q] quit'));
+            lines.push(chalk.dim('[1-9] pull pane  [i] next integration  [x] clean  [c] coordinator  [q] quit'));
         }
     }
+
+    // Flicker-free render: move cursor home, write all lines, then erase
+    // any leftover content below. This avoids the blank-frame flash caused
+    // by clearing the entire screen before writing.
+    process.stdout.write('\x1b[H' + lines.join('\n') + '\n' + '\x1b[J');
 }
 
 // ---------------------------------------------------------------------------
@@ -466,8 +472,7 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
             }
             if (!coordinatorWindow) coordinatorWindow = await findCoordinatorPane();
             if (!coordinatorWindow) {
-                process.stdout.write('\x1b[2J\x1b[H');
-                console.log(chalk.yellow('No coordinator window found'));
+                process.stdout.write('\x1b[H' + chalk.yellow('No coordinator window found') + '\n\x1b[J');
                 setTimeout(() => refresh(), 1500);
                 return;
             }

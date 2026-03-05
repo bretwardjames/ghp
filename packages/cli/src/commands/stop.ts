@@ -1,9 +1,10 @@
 import chalk from 'chalk';
 import { api } from '../github-api.js';
-import { detectRepository, listWorktrees, removeWorktree, GitError } from '../git-utils.js';
+import { detectRepository, listWorktrees, removeWorktree, GitError, getMainWorktreeRoot } from '../git-utils.js';
 import { removeActiveLabelSafely } from '../active-label.js';
 import { getBranchForIssue, unlinkBranch } from '../branch-linker.js';
 import { exit } from '../exit.js';
+import { deregisterWorktree } from '../pipeline-registry.js';
 
 interface StopOptions {
     unlink?: boolean;
@@ -80,6 +81,14 @@ export async function stopCommand(issue: string, options: StopOptions): Promise<
                 try {
                     await removeWorktree(worktree.path);
                     console.log(chalk.green('✓'), 'Removed worktree:', worktree.path);
+
+                    // Clean up pipeline registry entry
+                    try {
+                        const mainRoot = await getMainWorktreeRoot();
+                        if (mainRoot) {
+                            deregisterWorktree(mainRoot, issueNumber);
+                        }
+                    } catch { /* pipeline cleanup is best-effort */ }
                 } catch (error) {
                     console.log(chalk.yellow('⚠'), 'Could not remove worktree');
                     if (error instanceof GitError) {

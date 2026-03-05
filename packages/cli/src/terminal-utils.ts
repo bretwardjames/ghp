@@ -1,10 +1,10 @@
-import { exec, spawn } from 'child_process';
+import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { getConfig, getParallelWorkConfig, type TerminalMode } from './config.js';
+import { getConfig, getParallelWorkConfig, type TerminalMode, type ResolvedDashboardConfig } from './config.js';
 import type { SubagentSpawnDirective } from './types.js';
 
 const execAsync = promisify(exec);
@@ -130,34 +130,52 @@ export async function openTmuxTerminal(
 }
 
 /**
- * Kill a tmux window by name
- * @param windowName - The name of the window to kill (e.g., "ghp-39")
+ * Kill a tmux window by name.
+ *
+ * Handles renamed windows (e.g., the pipeline registry renames "ghp-86" to
+ * "📋 ghp-86"). Searches across ALL tmux sessions for a window whose name
+ * contains the given base name.
+ *
+ * Works even when the caller is not inside tmux — tmux just needs to be
+ * running on the system.
+ *
+ * @param windowName - The base name of the window to kill (e.g., "ghp-39")
  */
 export async function killTmuxWindow(windowName: string): Promise<{ success: boolean; error?: string }> {
-    return new Promise((resolve) => {
-        const child = spawn('tmux', ['kill-window', '-t', windowName], {
-            stdio: 'ignore',
-        });
+    try {
+        // List all windows across all sessions. Format: "session:index\twindow_name"
+        const { stdout } = await execAsync(
+            `tmux list-windows -a -F '#{session_name}:#{window_index}\t#{window_name}' 2>/dev/null`
+        );
 
-        child.on('error', (err) => {
-            resolve({
-                success: false,
-                error: `Failed to kill tmux window: ${err.message}`,
+        // Find windows whose name contains the base window name (handles emoji prefixes)
+        const matches = stdout
+            .trim()
+            .split('\n')
+            .filter((line) => {
+                const name = line.split('\t')[1];
+                return name && name.includes(windowName);
             });
-        });
 
-        child.on('close', (code) => {
-            if (code === 0) {
-                resolve({ success: true });
-            } else {
-                // Window might not exist - that's okay
-                resolve({
-                    success: false,
-                    error: `Window "${windowName}" not found`,
-                });
+        if (matches.length === 0) {
+            return { success: false, error: `Window "${windowName}" not found` };
+        }
+
+        // Kill all matching windows (there could be duplicates from re-starts)
+        for (const match of matches) {
+            const target = match.split('\t')[0]; // "session:index"
+            try {
+                await execAsync(`tmux kill-window -t '${target}'`);
+            } catch {
+                // Window may have already been killed
             }
-        });
-    });
+        }
+
+        return { success: true };
+    } catch {
+        // tmux not running or not installed
+        return { success: false, error: 'tmux not available' };
+    }
 }
 
 const TERMINALS: Record<string, Array<{ command: string; args: (dir: string, cmd?: string) => string[] }>> = {
@@ -501,9 +519,15 @@ export function captureOriginPane(): string | null {
 }
 
 /**
- * Open the pipeline dashboard as a split pane in the specified target pane
- * (or current pane if no target). Always splits the caller's window, never
- * the agent window, regardless of which has focus.
+ * Open the pipeline dashboard as a split pane or new window, based on config.
+ * Always splits the caller's window (or creates new window), never the agent window.
+ *
+ * Reads dashboard config from `parallelWork.dashboard`:
+ * - mode: 'pane' (split current window) or 'window' (new tmux window)
+ * - direction: 'horizontal' or 'vertical' (for pane mode)
+ * - size: pane/window size (e.g., '50%')
+ *
+ * After opening, fires `.ghp/hooks/dashboard-opened` user hook.
  */
 export async function openAdminPane(targetPaneId?: string | null): Promise<{ success: boolean; alreadyOpen?: boolean; error?: string }> {
     if (!isInsideTmux()) {
@@ -514,14 +538,22 @@ export async function openAdminPane(targetPaneId?: string | null): Promise<{ suc
         return { success: true, alreadyOpen: true };
     }
 
+    const dashboardConfig = getParallelWorkConfig().dashboard;
     const command = 'ghp pipeline dashboard';
 
     return new Promise((resolve) => {
-        // -h = horizontal split (side by side: claude left, dashboard right)
-        // -l 35% = dashboard gets 35% width
-        const tmuxArgs = targetPaneId
-            ? ['split-window', '-h', '-d', '-l', '50%', '-t', targetPaneId, command]
-            : ['split-window', '-h', '-d', '-l', '50%', command];
+        let tmuxArgs: string[];
+
+        if (dashboardConfig.mode === 'window') {
+            // Open dashboard in a new tmux window
+            tmuxArgs = ['new-window', '-d', '-n', 'ghp-admin', command];
+        } else {
+            // Open dashboard as a split pane
+            const dirFlag = dashboardConfig.direction === 'vertical' ? '-v' : '-h';
+            tmuxArgs = targetPaneId
+                ? ['split-window', dirFlag, '-d', '-l', dashboardConfig.size, '-t', targetPaneId, command]
+                : ['split-window', dirFlag, '-d', '-l', dashboardConfig.size, command];
+        }
 
         const child = spawn('tmux', tmuxArgs, {
             stdio: 'ignore',
@@ -533,6 +565,8 @@ export async function openAdminPane(targetPaneId?: string | null): Promise<{ suc
 
         child.on('close', (code) => {
             if (code === 0) {
+                // Hook is fired by ghp pipeline dashboard itself (dashboard-pipeline.ts)
+                // since it has direct access to its own TMUX_PANE.
                 resolve({ success: true });
             } else {
                 resolve({ success: false, error: `tmux exited with code ${code}` });

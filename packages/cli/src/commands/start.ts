@@ -965,7 +965,7 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         }
     }
 
-    // Register worktree in pipeline (starts at first stage, typically 'initiating')
+    // Register worktree in pipeline (starts at first stage, default: 'working')
     // Always register in parallel mode — even if the worktree already existed —
     // so re-running `ghp start` on an existing worktree still shows up in the dashboard.
     if (isParallelMode && worktreePath && worktreeBranch) {

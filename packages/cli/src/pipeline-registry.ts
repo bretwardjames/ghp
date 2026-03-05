@@ -16,19 +16,7 @@ import { getConfig } from './config.js';
 // Default stages
 // ---------------------------------------------------------------------------
 
-const DEFAULT_STAGES = [
-    'initiating',
-    'planning',
-    'plan_ready',
-    'building_tests',
-    'working',
-    'code_review',
-    'ready_for_integration',
-    'integration_testing',
-    'code_review_loop',
-    'writing_pr',
-    'pr_submitted',
-];
+const DEFAULT_STAGES = ['working', 'stopped'];
 
 /**
  * Special non-linear stage. Can be entered from any stage; advancing from it
@@ -85,18 +73,9 @@ export function getStageIndex(stageName: string): number {
 // ---------------------------------------------------------------------------
 
 const STAGE_EMOJIS: Record<string, string> = {
-    initiating: '⏳',
-    planning: '📋',
-    plan_ready: '📝',
-    building_tests: '🧪',
     working: '🔨',
+    stopped: '⏸',
     needs_attention: '🚨',
-    code_review: '👀',
-    ready_for_integration: '✅',
-    integration_testing: '🔄',
-    code_review_loop: '🔍',
-    writing_pr: '📤',
-    pr_submitted: '🏁',
 };
 
 /** Get the emoji for a pipeline stage. Returns empty string for unknown stages. */
@@ -140,7 +119,7 @@ function saveRegistry(repoRoot: string, registry: PipelineRegistry): void {
 // Public API
 // ---------------------------------------------------------------------------
 
-/** Register a new worktree at the first stage (typically 'initiating'). */
+/** Register a new worktree at the first stage (default: 'working'). */
 export function registerWorktree(
     repoRoot: string,
     entry: Omit<PipelineEntry, 'stage' | 'previousStage' | 'stageEnteredAt' | 'registeredAt'>

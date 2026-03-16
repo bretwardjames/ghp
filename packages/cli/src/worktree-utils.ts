@@ -6,7 +6,7 @@
 import chalk from 'chalk';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync, copyFileSync, cpSync, lstatSync, mkdirSync } from 'fs';
+import { existsSync, copyFileSync, cpSync, lstatSync, mkdirSync, symlinkSync, unlinkSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { getWorktreeConfig, getConfig } from './config.js';
 import {
@@ -49,6 +49,34 @@ export async function setupWorktree(worktreePath: string, sourcePath: string): P
             }
             console.log(chalk.dim(`  Copied ${file}`));
         }
+    }
+
+    // Symlink configured files
+    for (const file of config.symlinkFiles) {
+        const srcFile = join(sourcePath, file);
+        const destFile = join(worktreePath, file);
+
+        if (!existsSync(srcFile)) continue;
+
+        // Remove existing file/dir if it's not already a symlink
+        try {
+            const stat = lstatSync(destFile);
+            if (stat.isSymbolicLink()) continue; // already symlinked
+            if (stat.isDirectory()) {
+                rmSync(destFile, { recursive: true });
+            } else {
+                unlinkSync(destFile);
+            }
+        } catch {
+            // destFile doesn't exist — that's fine
+        }
+
+        const destDir = dirname(destFile);
+        if (!existsSync(destDir)) {
+            mkdirSync(destDir, { recursive: true });
+        }
+        symlinkSync(srcFile, destFile);
+        console.log(chalk.dim(`  Symlinked ${file}`));
     }
 
     // Run setup command if enabled

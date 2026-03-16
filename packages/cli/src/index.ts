@@ -30,9 +30,14 @@ import { editCommand } from './commands/edit.js';
 import { mcpCommand } from './commands/mcp.js';
 import { installCommandsCommand } from './commands/install-commands.js';
 import { worktreeRemoveCommand, worktreeListCommand } from './commands/worktree.js';
+import { worktreeMoveToCommand, worktreeCleanCommand, worktreeSwapStatusCommand, worktreeReadyCommand, worktreeNextCommand } from './commands/worktree-swap.js';
 import { planEpicCommand } from './commands/plan-epic.js';
 import { setParentCommand } from './commands/set-parent.js';
 import { agentsListCommand, agentsStopCommand, agentsWatchCommand } from './commands/agents.js';
+import { statusCommand } from './commands/status.js';
+import { pipelineDashboardCommand } from './commands/dashboard-pipeline.js';
+import { pipelineAdvanceCommand, pipelineSetCommand, pipelineRemoveCommand, pipelineStagesCommand, pipelineAgentActiveCommand, pipelineAgentStoppedCommand, pipelineAgentFocusedCommand, pipelineAgentUnfocusedCommand, pipelineAgentSwappedCommand, pipelineModeCommand } from './commands/pipeline-commands.js';
+import { pipelineSetupCommand } from './commands/pipeline-setup.js';
 import { progressCommand } from './commands/progress.js';
 import { standupCommand } from './commands/standup.js';
 import { fieldsCommand } from './commands/fields.js';
@@ -269,6 +274,7 @@ program
     .option('--keep-branch', 'With --parallel: never switch branches in the main repo (zero-checkout worktree creation)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--admin', 'Open admin pane (ghp agents watch) with --parallel')
+    .option('--background', 'Open agent terminal in background (don\'t switch focus)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
     // Terminal mode overrides (for use with --parallel)
     .option('--nvim', 'Use nvim with claudecode.nvim plugin (overrides config)')
@@ -310,6 +316,7 @@ program
     .option('--parallel', 'Create worktree and open new terminal (work in parallel)')
     .option('--no-open', 'Skip opening terminal (with --parallel, just create worktree)')
     .option('--admin', 'Open admin pane (ghp agents watch) with --parallel')
+    .option('--background', 'Open agent terminal in background (don\'t switch focus)')
     .option('--worktree-path <path>', 'Custom path for parallel worktree')
     // Terminal mode overrides (for use with --parallel)
     .option('--nvim', 'Use nvim with claudecode.nvim plugin (overrides config)')
@@ -526,6 +533,7 @@ program
     .option('-i, --install', 'Auto-configure Claude Desktop')
     .option('--install-claude-commands', 'Also install Claude slash commands (use with --install)')
     .option('-s, --status', 'Show enabled/disabled MCP tools')
+    .option('-r, --repo <owner/name>', 'Scope MCP server to a specific repo')
     .action(mcpCommand);
 
 // Slash command installation
@@ -558,6 +566,40 @@ worktreeCmd
     .option('--json', 'Output as JSON (for programmatic use)')
     .action(worktreeListCommand);
 
+worktreeCmd
+    .command('move-to <issue>')
+    .description('Swap a worktree branch into the main repo for live testing')
+    .option('-f, --force', 'Proceed even with uncommitted changes in main')
+    .action(worktreeMoveToCommand);
+
+worktreeCmd
+    .command('clean')
+    .description('Reverse a move-to swap: restore main and re-attach the worktree')
+    .option('-f, --force', 'Restore repos even if branches have diverged')
+    .action(worktreeCleanCommand);
+
+worktreeCmd
+    .command('status')
+    .description('Show current worktree swap state')
+    .action(worktreeSwapStatusCommand);
+
+worktreeCmd
+    .command('ready [issue]')
+    .description('Mark this worktree\'s stage complete — queues it for integration testing')
+    .action(worktreeReadyCommand);
+
+worktreeCmd
+    .command('next [issue]')
+    .description('Swap the next ready worktree into main (FIFO, or specify issue to override)')
+    .action(worktreeNextCommand);
+
+// Unified status
+program
+    .command('status')
+    .description('Show pipeline + agent status for all worktrees')
+    .option('--json', 'Output as JSON (for slash commands and dashboard)')
+    .action(statusCommand);
+
 // Agent management
 const agentsCmd = program
     .command('agents')
@@ -584,6 +626,84 @@ agentsCmd
     .description('Watch agents with auto-refresh (simple dashboard)')
     .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
     .action(agentsWatchCommand);
+
+// Pipeline management
+const pipelineCmd = program
+    .command('pipeline')
+    .alias('pl')
+    .description('Pipeline management and dashboard');
+
+pipelineCmd
+    .command('dashboard')
+    .alias('db')
+    .description('Pipeline dashboard — kanban view with interactive pane-pull')
+    .option('-i, --interval <seconds>', 'Refresh interval in seconds', '2')
+    .action(pipelineDashboardCommand);
+
+pipelineCmd
+    .command('advance [issue]')
+    .description('Advance a worktree to the next pipeline stage')
+    .action(pipelineAdvanceCommand);
+
+pipelineCmd
+    .command('set <stage> [issue]')
+    .description('Set a worktree to a specific pipeline stage')
+    .action(pipelineSetCommand);
+
+pipelineCmd
+    .command('remove [issue]')
+    .alias('rm')
+    .description('Remove a worktree entry from the pipeline registry')
+    .action(pipelineRemoveCommand);
+
+pipelineCmd
+    .command('stages')
+    .description('List configured pipeline stages')
+    .action(pipelineStagesCommand);
+
+pipelineCmd
+    .command('setup')
+    .description('Setup wizard for pipeline configuration (agent-friendly)')
+    .option('--questions', 'Output question schema as JSON (no side effects)')
+    .option('--apply', 'Read answers JSON from stdin and apply configuration')
+    .option('--save <name>', 'Save answers from stdin as a named flavor')
+    .option('--flavor <name>', 'Load and apply a saved flavor')
+    .option('--flavors', 'List saved flavors')
+    .option('--delete-flavor <name>', 'Delete a saved flavor')
+    .action(pipelineSetupCommand);
+
+pipelineCmd
+    .command('agent-active')
+    .description('Set agent to working + fire user hooks (called by PostToolUse)')
+    .action(pipelineAgentActiveCommand);
+
+pipelineCmd
+    .command('agent-stopped')
+    .description('Set agent to stopped + fire user hooks (called by Stop)')
+    .action(pipelineAgentStoppedCommand);
+
+pipelineCmd
+    .command('agent-focused <issue>')
+    .description('Fire user hooks when agent is pulled into dashboard view')
+    .option('--mode <mode>', 'Hook mode for mode-aware resolution')
+    .action(pipelineAgentFocusedCommand);
+
+pipelineCmd
+    .command('agent-unfocused <issue>')
+    .description('Fire user hooks when agent is released from dashboard view')
+    .option('--mode <mode>', 'Hook mode for mode-aware resolution')
+    .action(pipelineAgentUnfocusedCommand);
+
+pipelineCmd
+    .command('agent-swapped <oldIssue> <newIssue>')
+    .description('Fire user hooks when switching between focused agents (hot-swap)')
+    .option('--mode <mode>', 'Hook mode for mode-aware resolution')
+    .action(pipelineAgentSwappedCommand);
+
+pipelineCmd
+    .command('mode [name]')
+    .description('Show or validate hook modes')
+    .action(pipelineModeCommand);
 
 // Self-update
 program

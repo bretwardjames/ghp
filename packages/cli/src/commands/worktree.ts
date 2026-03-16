@@ -16,6 +16,8 @@ import {
 } from '@bretwardjames/ghp-core';
 import { exit } from '../exit.js';
 import { getHooksConfig } from '../config.js';
+import { deregisterWorktree } from '../pipeline-registry.js';
+import { getMainWorktreeRoot } from '../git-utils.js';
 
 interface WorktreeRemoveOptions {
     force?: boolean;
@@ -133,6 +135,14 @@ export async function worktreeRemoveCommand(
     }
 
     console.log(chalk.green('✓'), `Removed worktree: ${result.worktree?.path}`);
+
+    // Clean up pipeline registry entry
+    try {
+        const mainRoot = await getMainWorktreeRoot();
+        if (mainRoot) {
+            deregisterWorktree(mainRoot, issueNumber);
+        }
+    } catch { /* pipeline cleanup is best-effort */ }
 
     // Display hook results
     if (result.hookResults.length > 0) {

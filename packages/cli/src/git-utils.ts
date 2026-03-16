@@ -5,6 +5,8 @@
  * The core library accepts an optional { cwd } parameter for IDE integrations.
  */
 
+import { listWorktrees as _listWorktrees } from '@bretwardjames/ghp-core';
+
 // Re-export all git utilities from core
 // These all use process.cwd() by default, which is correct for CLI usage
 export {
@@ -43,3 +45,21 @@ export {
 
 // Re-export the RepoInfo and WorktreeInfo types
 export type { RepoInfo, GitOptions, WorktreeInfo } from '@bretwardjames/ghp-core';
+
+/**
+ * Return the path of the main (non-linked) worktree.
+ *
+ * Unlike `getRepositoryRoot()`, which resolves relative to process.cwd() and
+ * therefore returns the linked worktree's root when called from inside one,
+ * this function always returns the primary worktree path by reading
+ * `git worktree list --porcelain` and finding the entry marked as `isMain`.
+ */
+export async function getMainWorktreeRoot(): Promise<string | null> {
+    try {
+        const worktrees = await _listWorktrees();
+        const main = worktrees.find(wt => wt.isMain);
+        return main?.path ?? null;
+    } catch {
+        return null;
+    }
+}

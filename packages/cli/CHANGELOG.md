@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.18.0
+
+### Minor Changes
+
+- Add `--repo owner/name` flag to scope MCP server instances to a specific GitHub repo. The CLI's `ghp mcp --config --repo` generates per-repo config with unique server keys. Also includes pipeline dashboard enhancements, hook modes, and terminal utility improvements.
+
+## 0.17.0
+
+### Minor Changes
+
+- Add hook modes and hot-swap support to the pipeline dashboard
+
+  - Hook modes: configure workflow modes (e.g., planning, testing, review) that change which hook scripts run. Mode-specific hooks use a dot-suffix convention (`.ghp/hooks/agent-focused.testing`), falling back to the unsuffixed script.
+  - Dashboard `[m]` keystroke cycles through configured modes (including a "default" position for unsuffixed hooks).
+  - Hot-swap: switching between focused agents fires a single `agent-swapped` hook with both old and new agent payloads, avoiding port conflicts. Falls back to sequential unfocus→focus if no swap hook exists.
+  - New config fields: `pipeline.hookModes`, `pipeline.defaultHookMode`, `pipeline.hookModeSwapOrder`.
+  - New commands: `ghp pipeline agent-swapped`, `ghp pipeline mode`.
+  - `--mode` flag on `agent-focused` and `agent-unfocused` commands.
+  - Expanded setup wizard with all 13 hook questions (6 directory hooks, 7 event hooks) plus mode configuration. Adds flavor save option to interactive wizard.
+  - Dashboard now calls hook scripts directly instead of spawning `ghp` child processes.
+
+## 0.16.3
+
+### Patch Changes
+
+- Always register worktrees in the pipeline dashboard when in parallel mode, even if the worktree already existed
+
+## 0.16.2
+
+### Patch Changes
+
+- Fix pane-pull parsing to use tab separators, preventing emoji window names from breaking field splitting
+
+## 0.16.1
+
+### Patch Changes
+
+- Fix dashboard pane-pull to use worktree path lookup instead of window name matching, preventing breakage from emoji-prefixed window titles
+
+## 0.13.0
+
+### Minor Changes
+
+- Add worktree swap commands, configurable pipeline stages, dashboard with pane-pull, and stage emoji indicators
+
+  - `ghp wt move-to/clean/status/ready/next` — swap worktree branches into main repo for integration testing
+  - `ghp pipeline dashboard` — interactive kanban dashboard with tmux pane-pull
+  - `ghp pipeline advance/set/stages` — agents self-report pipeline progress
+  - `ghp status` — unified pipeline + agent status view
+  - `--background` flag on `ghp start/switch --parallel` to open agent terminals without stealing focus
+  - Stage emojis in tmux window titles (e.g., 🔨 ghp-271) update automatically on transitions
+  - Configurable pipeline stages via `ghp config pipeline.stages`
+
 ## 0.12.0
 
 ### Minor Changes

@@ -26,7 +26,9 @@ import { linkBranch, getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, promptSelectWithDefault, isInteractive } from '../prompts.js';
 import { applyActiveLabel } from '../active-label.js';
 import { createParallelWorktree, getBranchWorktree } from '../worktree-utils.js';
-import { openParallelWorkTerminal, openAdminPane, isInsideTmux } from '../terminal-utils.js';
+import { registerWorktree, getPipelineEntry } from '../pipeline-registry.js';
+import { getMainWorktreeRoot } from '../git-utils.js';
+import { openParallelWorkTerminal, openAdminPane, isDashboardOpen, isInsideTmux } from '../terminal-utils.js';
 import type { SubagentSpawnDirective } from '../types.js';
 import {
     registerAgent,
@@ -82,6 +84,8 @@ interface StartOptions {
     open?: boolean;
     /** Whether to open the admin pane (ghp agents watch) in parallel mode */
     admin?: boolean;
+    /** Open agent terminal in background (don't switch focus to it) */
+    background?: boolean;
     // Terminal mode overrides
     /** Use nvim with claudecode.nvim plugin */
     nvim?: boolean;
@@ -961,6 +965,21 @@ export async function startCommand(issue: string, options: StartOptions): Promis
         }
     }
 
+    // Register worktree in pipeline (starts at first stage, default: 'working')
+    // Always register in parallel mode — even if the worktree already existed —
+    // so re-running `ghp start` on an existing worktree still shows up in the dashboard.
+    if (isParallelMode && worktreePath && worktreeBranch) {
+        const mainRoot = await getMainWorktreeRoot();
+        if (mainRoot && !getPipelineEntry(mainRoot, issueNumber)) {
+            registerWorktree(mainRoot, {
+                issueNumber,
+                issueTitle: item.title,
+                branch: worktreeBranch,
+                worktreePath,
+            });
+        }
+    }
+
     // Show path info for parallel worktree
     if (isParallelMode && worktreePath) {
         console.log();
@@ -1033,13 +1052,30 @@ Use the GHP tools available via MCP to:
             }
 
             console.log(chalk.dim('Opening terminal...'));
+            // Open pipeline dashboard BEFORE spawning agent window
+            // (so the split targets this window, not the agent's)
+            const dashboardAlreadyOpen = await isDashboardOpen();
+            if (!dashboardAlreadyOpen) {
+                let shouldOpen = options.admin === true;
+                if (!shouldOpen && isInteractive() && !options.forceDefaults) {
+                    shouldOpen = await confirmWithDefault('Open pipeline dashboard?', true);
+                }
+                if (shouldOpen) {
+                    const adminResult = await openAdminPane();
+                    if (adminResult.success) {
+                        console.log(chalk.dim('Opened pipeline dashboard'));
+                    }
+                }
+            }
+
             const modeOverride = getTerminalModeOverride(options);
             const result = await openParallelWorkTerminal(
                 worktreePath,
                 issueNumber,
                 item.title,
                 directive,
-                modeOverride
+                modeOverride,
+                { background: options.background }
             );
 
             if (result.success) {
@@ -1057,14 +1093,6 @@ Use the GHP tools available via MCP to:
                 });
                 updateAgent(agent.id, { status: 'running' });
                 console.log(chalk.dim(`Agent registered: ${agent.id.substring(0, 8)}...`));
-
-                // Open admin pane (ghp agents watch) if --admin flag is set
-                if (options.admin) {
-                    const adminResult = await openAdminPane();
-                    if (adminResult.success && !adminResult.alreadyOpen) {
-                        console.log(chalk.dim('Opened admin pane (ghp-admin window)'));
-                    }
-                }
             } else {
                 console.log(chalk.yellow('⚠'), 'Could not open terminal:', result.error);
                 console.log(chalk.dim('Run manually:'), `cd ${worktreePath} && claude`);

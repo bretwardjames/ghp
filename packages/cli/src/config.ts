@@ -51,6 +51,22 @@ export interface WorkDefaults {
  */
 export type TerminalMode = 'claude' | 'nvim-claude' | 'terminal';
 
+export interface DashboardConfig {
+    /** Where to open the dashboard: 'pane' (split current window) or 'window' (new tmux window) */
+    mode?: 'pane' | 'window';
+    /** Split direction when mode is 'pane': 'horizontal' (side-by-side) or 'vertical' (stacked) */
+    direction?: 'horizontal' | 'vertical';
+    /** Dashboard size as percentage or cells (e.g., '50%', '80') */
+    size?: string;
+    /** Where focused agents appear relative to dashboard */
+    focusedAgent?: {
+        /** Split direction: 'horizontal' (side-by-side) or 'vertical' (stacked below) */
+        direction?: 'horizontal' | 'vertical';
+        /** Size of the focused agent pane */
+        size?: string;
+    };
+}
+
 export interface ParallelWorkConfig {
     /** Terminal emulator to use (e.g., 'ghostty', 'gnome-terminal', 'tmux') */
     terminal?: string;
@@ -68,11 +84,15 @@ export interface ParallelWorkConfig {
     nvimCommand?: string;
     /** Tmux-specific configuration (used when terminal is 'tmux' or auto-detected inside tmux) */
     tmux?: {
-        /** Whether to spawn a new window or split the current window into a pane */
-        mode?: 'window' | 'pane';
+        /** Whether to spawn a new window, split pane, or create a separate session per agent */
+        mode?: 'window' | 'pane' | 'session';
         /** Direction to split when mode is 'pane' */
         paneDirection?: 'horizontal' | 'vertical';
+        /** Prefix for all tmux naming (windows, sessions, admin). Default: 'ghp' */
+        prefix?: string;
     };
+    /** Dashboard layout configuration */
+    dashboard?: DashboardConfig;
 }
 
 /**
@@ -152,6 +172,7 @@ export interface Config {
     // Worktree settings for parallel work mode
     worktreePath?: string;           // Base path for worktrees (default: ~/.ghp/worktrees)
     worktreeCopyFiles?: string[];    // Files to copy to new worktrees (default: ['.env', '.env.local'])
+    worktreeSymlinkFiles?: string[]; // Files to symlink from main repo into new worktrees
     worktreeSetupCommand?: string;   // Command to run in new worktrees (default: 'pnpm install')
     worktreeAutoSetup?: boolean;     // Whether to run setup automatically (default: true)
 
@@ -166,6 +187,20 @@ export interface Config {
 
     // Event hooks configuration
     hooks?: HooksConfig;
+
+    // Pipeline configuration
+    pipeline?: {
+        /** Ordered list of pipeline stage names */
+        stages?: string[];
+        /** Stage name after which integration testing is triggered */
+        integrationAfter?: string;
+        /** Available hook modes (e.g., ["planning", "testing", "review"]) */
+        hookModes?: string[];
+        /** Default hook mode at dashboard startup (must be in hookModes) */
+        defaultHookMode?: string;
+        /** When hot-swapping agents, run unfocus hooks first or focus hooks first */
+        hookModeSwapOrder?: 'unfocus-first' | 'focus-first';
+    };
 
     // Command defaults
     defaults?: {
@@ -201,6 +236,15 @@ const DEFAULT_CONFIG: Config = {
     parallelWork: {
         openTerminal: true,
         autoRunClaude: true,
+        dashboard: {
+            mode: 'pane',
+            direction: 'horizontal',
+            size: '50%',
+            focusedAgent: {
+                direction: 'vertical',
+                size: '50%',
+            },
+        },
     },
     defaults: {},
     shortcuts: {},
@@ -627,7 +671,7 @@ export function getAddIssueDefaults(): { template?: string; project?: string; st
     return config.defaults?.addIssue || {};
 }
 
-export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSetupCommand', 'worktreeAutoSetup', 'parallelWork'] as const;
+export const CONFIG_KEYS = ['mainBranch', 'branchPattern', 'startWorkingStatus', 'doneStatus', 'columns', 'worktreePath', 'worktreeCopyFiles', 'worktreeSymlinkFiles', 'worktreeSetupCommand', 'worktreeAutoSetup', 'parallelWork'] as const;
 
 export type ConfigSource = 'default' | 'workspace' | 'user';
 
@@ -645,6 +689,7 @@ export function listConfig(): Record<string, string | string[] | boolean | undef
         doneStatus: config.doneStatus,
         worktreePath: config.worktreePath,
         worktreeCopyFiles: config.worktreeCopyFiles,
+        worktreeSymlinkFiles: config.worktreeSymlinkFiles,
         worktreeSetupCommand: config.worktreeSetupCommand,
         worktreeAutoSetup: config.worktreeAutoSetup,
     };
@@ -653,6 +698,7 @@ export function listConfig(): Record<string, string | string[] | boolean | undef
 export interface WorktreeConfig {
     path: string;
     copyFiles: string[];
+    symlinkFiles: string[];
     setupCommand: string;
     autoSetup: boolean;
 }
@@ -665,8 +711,19 @@ export function getWorktreeConfig(): WorktreeConfig {
     return {
         path: config.worktreePath ?? DEFAULT_CONFIG.worktreePath!,
         copyFiles: config.worktreeCopyFiles ?? DEFAULT_CONFIG.worktreeCopyFiles!,
+        symlinkFiles: config.worktreeSymlinkFiles ?? [],
         setupCommand: config.worktreeSetupCommand ?? DEFAULT_CONFIG.worktreeSetupCommand!,
         autoSetup: config.worktreeAutoSetup ?? DEFAULT_CONFIG.worktreeAutoSetup!,
+    };
+}
+
+export interface ResolvedDashboardConfig {
+    mode: 'pane' | 'window';
+    direction: 'horizontal' | 'vertical';
+    size: string;
+    focusedAgent: {
+        direction: 'horizontal' | 'vertical';
+        size: string;
     };
 }
 
@@ -678,6 +735,7 @@ export interface ResolvedParallelWorkConfig {
     autoResume: boolean;
     terminalMode: TerminalMode;
     nvimCommand: string;
+    dashboard: ResolvedDashboardConfig;
 }
 
 /**
@@ -686,6 +744,8 @@ export interface ResolvedParallelWorkConfig {
 export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
     const config = loadConfig();
     const parallelWork = config.parallelWork ?? {};
+    const db = parallelWork.dashboard ?? {};
+    const fa = db.focusedAgent ?? {};
     return {
         terminal: parallelWork.terminal,
         openTerminal: parallelWork.openTerminal ?? true,
@@ -694,6 +754,15 @@ export function getParallelWorkConfig(): ResolvedParallelWorkConfig {
         autoResume: parallelWork.autoResume ?? true,
         terminalMode: parallelWork.terminalMode ?? 'claude',
         nvimCommand: parallelWork.nvimCommand ?? 'nvim',
+        dashboard: {
+            mode: db.mode ?? 'pane',
+            direction: db.direction ?? 'horizontal',
+            size: db.size ?? '50%',
+            focusedAgent: {
+                direction: fa.direction ?? 'vertical',
+                size: fa.size ?? '50%',
+            },
+        },
     };
 }
 

@@ -27,6 +27,9 @@ firebase-debug.log
 .env.local
 .env.*.local
 
+# Ragtime local context
+.ragtime/
+
 # Source repos (being migrated)
 ghp-cli/
 ghp-core/

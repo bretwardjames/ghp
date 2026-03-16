@@ -11,6 +11,7 @@ interface McpOptions {
     install?: boolean;
     installClaudeCommands?: boolean;
     status?: boolean;
+    repo?: string;
 }
 
 /**
@@ -34,8 +35,24 @@ function getClaudeConfigPath(): string | null {
 
 /**
  * Generate the MCP server config for ghp.
+ * When repo is provided, the server is scoped to that repo with a unique key.
  */
-function getClaudeDesktopConfig(): object {
+function getClaudeDesktopConfig(repo?: string): object {
+    if (repo) {
+        if (!repo.includes('/')) {
+            throw new Error('--repo requires owner/name format (e.g., bretwardjames/ghp)');
+        }
+        const serverKey = `ghp-${repo.replace('/', '-')}`;
+        return {
+            mcpServers: {
+                [serverKey]: {
+                    command: 'ghp-mcp',
+                    args: ['--repo', repo],
+                },
+            },
+        };
+    }
+
     return {
         mcpServers: {
             ghp: {
@@ -98,7 +115,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
         console.log();
         console.log('Add this to your Claude Desktop config file:');
         console.log();
-        console.log(chalk.cyan(JSON.stringify(getClaudeDesktopConfig(), null, 2)));
+        console.log(chalk.cyan(JSON.stringify(getClaudeDesktopConfig(options.repo), null, 2)));
         console.log();
 
         const configPath = getClaudeConfigPath();
@@ -143,13 +160,18 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             config.mcpServers = {};
         }
 
-        // Check if ghp is already configured
+        // Determine server key based on --repo
+        const serverKey = options.repo
+            ? `ghp-${options.repo.replace('/', '-')}`
+            : 'ghp';
+
+        // Check if already configured
         const mcpServers = config.mcpServers as Record<string, unknown>;
-        if (mcpServers.ghp) {
-            console.log(chalk.yellow('ghp MCP server is already configured'));
-            console.log('Current config:', JSON.stringify(mcpServers.ghp, null, 2));
+        if (mcpServers[serverKey]) {
+            console.log(chalk.yellow(`${serverKey} MCP server is already configured`));
+            console.log('Current config:', JSON.stringify(mcpServers[serverKey], null, 2));
             console.log();
-            console.log('To reconfigure, remove the "ghp" entry from your config and run this again.');
+            console.log(`To reconfigure, remove the "${serverKey}" entry from your config and run this again.`);
 
             // Still install Claude commands if requested
             if (options.installClaudeCommands) {
@@ -170,10 +192,10 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
             return;
         }
 
-        // Add ghp config
-        mcpServers.ghp = {
-            command: 'ghp-mcp',
-        };
+        // Add server config
+        mcpServers[serverKey] = options.repo
+            ? { command: 'ghp-mcp', args: ['--repo', options.repo] }
+            : { command: 'ghp-mcp' };
 
         // Write config
         try {

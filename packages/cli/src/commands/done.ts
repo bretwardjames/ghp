@@ -7,6 +7,7 @@ import { getBranchForIssue } from '../branch-linker.js';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
 import { exit } from '../exit.js';
 import { deregisterWorktree } from '../pipeline-registry.js';
+import { killTmuxWindow, killTmuxSession, agentWindowName, agentSessionName } from '../terminal-utils.js';
 
 export async function doneCommand(issue: string): Promise<void> {
     const issueNumber = parseInt(issue, 10);
@@ -98,6 +99,10 @@ export async function doneCommand(issue: string): Promise<void> {
                     try {
                         await removeWorktree(worktree.path);
                         console.log(chalk.green('✓'), 'Removed worktree');
+
+                        // Kill tmux window/session for this agent (best-effort)
+                        await killTmuxWindow(agentWindowName(issueNumber)).catch(() => {});
+                        await killTmuxSession(agentSessionName(issueNumber)).catch(() => {});
 
                         // Clean up pipeline registry entry
                         try {

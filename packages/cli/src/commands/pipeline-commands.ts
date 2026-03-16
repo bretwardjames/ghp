@@ -13,7 +13,7 @@
 import chalk from 'chalk';
 import { execFileSync, spawn } from 'child_process';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { getMainWorktreeRoot } from '../git-utils.js';
 import { getConfig } from '../config.js';
 import {
@@ -24,6 +24,7 @@ import {
     getPipelineStages,
     getIntegrationTriggerStage,
     getStageEmoji,
+    type PipelineEntry,
 } from '../pipeline-registry.js';
 import { exit } from '../exit.js';
 
@@ -110,6 +111,35 @@ export async function runUserHookScript(hookName: string, stdinData: string, cwd
         child.unref();
     } catch {
         // Silent — user scripts failing should never break the pipeline
+    }
+}
+
+/**
+ * Send a desktop notification for agent lifecycle events (Linux only).
+ * Fire-and-forget — never breaks the pipeline on failure.
+ */
+function sendAgentNotification(
+    status: 'stopped' | 'working',
+    entry: PipelineEntry,
+    repoRoot: string,
+): void {
+    if (process.platform !== 'linux') return;
+    try {
+        const repoName = basename(repoRoot);
+        const title = status === 'stopped'
+            ? `Agent stopped — #${entry.issueNumber}`
+            : `Agent working — #${entry.issueNumber}`;
+        const body = entry.issueTitle
+            ? `${entry.issueTitle}\n${repoName}`
+            : repoName;
+        spawn('notify-send', [
+            '--app-name=claude',
+            `--urgency=${status === 'stopped' ? 'normal' : 'low'}`,
+            title,
+            body,
+        ], { stdio: 'ignore', detached: true }).unref();
+    } catch {
+        // Non-critical — never break pipeline for notification failure
     }
 }
 
@@ -284,6 +314,7 @@ export async function pipelineAgentActiveCommand(): Promise<void> {
     const entry = getPipelineEntry(repoRoot, issueNumber);
     if (entry && entry.stage !== 'working') {
         setWorktreeStage(repoRoot, issueNumber, 'working');
+        sendAgentNotification('working', entry, repoRoot);
     }
 
     // Fire user hook script (fire-and-forget)
@@ -319,6 +350,7 @@ export async function pipelineAgentStoppedCommand(): Promise<void> {
     const entry = getPipelineEntry(repoRoot, issueNumber);
     if (entry && entry.stage !== 'stopped') {
         setWorktreeStage(repoRoot, issueNumber, 'stopped');
+        sendAgentNotification('stopped', entry, repoRoot);
     }
 
     // Fire user hook script (fire-and-forget)

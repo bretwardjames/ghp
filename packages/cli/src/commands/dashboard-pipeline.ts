@@ -17,6 +17,7 @@ import { getAllPipelineEntries, getReadyWorktrees, getIntegrationTriggerStage, g
 import { readSwapState } from './worktree-swap-state.js';
 import { worktreeCleanCommand, worktreeNextCommand } from './worktree-swap.js';
 import { registerCleanupHandler, resetExitState } from '../exit.js';
+import { adminWindowName, agentSessionName, getTmuxPrefix, tmuxSessionExists } from '../terminal-utils.js';
 
 // Guard: when true, the dashboard cleanup handler is a no-op
 let suppressCleanup = false;
@@ -59,11 +60,16 @@ interface AttachedPane {
     sourceWindowName: string;
 }
 
+interface ViewportState {
+    paneId: string;
+    attachedIssue: number | null;
+}
+
 interface DashboardOptions {
     interval?: string;
 }
 
-type TmuxMode = 'pane' | 'window';
+type TmuxMode = 'pane' | 'window' | 'session';
 
 // ---------------------------------------------------------------------------
 // tmux helpers — window mode (join-pane pull/release)
@@ -153,6 +159,59 @@ async function selectPane(paneId: string): Promise<void> {
     } catch { /* ignore */ }
 }
 
+// ---------------------------------------------------------------------------
+// tmux helpers — session mode (viewport with nested attach)
+// ---------------------------------------------------------------------------
+
+/** Create the viewport pane next to the dashboard. Returns the pane ID. */
+async function createViewportPane(dashPaneId: string): Promise<string | null> {
+    const { dashboard: dbConfig } = getParallelWorkConfig();
+    const dirFlag = dbConfig.focusedAgent.direction === 'horizontal' ? '-h' : '-v';
+    const size = dbConfig.focusedAgent.size;
+
+    try {
+        const { stdout } = await execFileAsync('tmux', [
+            'split-window', dirFlag, '-l', size, '-t', dashPaneId, '-d',
+            '-P', '-F', '#{pane_id}',
+            'echo "Press [1-9] to view an agent"; read',
+        ]);
+        return stdout.trim() || null;
+    } catch {
+        return null;
+    }
+}
+
+/** Attach the viewport pane to an agent session via respawn-pane. */
+async function attachViewportToSession(viewportPaneId: string, sessionName: string): Promise<void> {
+    try {
+        // TMUX="" prevents nested-tmux errors; the respawn replaces the viewport process.
+        // The = prefix forces exact session name matching (prevents ghp-agent-8 matching ghp-agent-86).
+        // Session names are validated to [a-zA-Z0-9_-]+ via prefix validation + integer issue numbers.
+        const escaped = sessionName.replace(/'/g, "'\\''");
+        await execFileAsync('tmux', [
+            'respawn-pane', '-k', '-t', viewportPaneId,
+            `TMUX="" tmux attach-session -t '=${escaped}'`,
+        ]);
+    } catch { /* best effort */ }
+}
+
+/** Detach the viewport pane (show placeholder). */
+async function detachViewport(viewportPaneId: string): Promise<void> {
+    try {
+        await execFileAsync('tmux', [
+            'respawn-pane', '-k', '-t', viewportPaneId,
+            'echo "Press [1-9] to view an agent"; read',
+        ]);
+    } catch { /* best effort */ }
+}
+
+/** Kill the viewport pane. */
+async function killViewportPane(viewportPaneId: string): Promise<void> {
+    try {
+        await execFileAsync('tmux', ['kill-pane', '-t', viewportPaneId]);
+    } catch { /* best effort */ }
+}
+
 /** Get the pane ID of the dashboard itself (this process). */
 function getDashboardPaneId(): string | null {
     // TMUX_PANE is set by tmux for each pane's process — unlike display-message
@@ -177,7 +236,7 @@ async function fireDashboardOpenedHook(paneId: string, mode?: string | null): Pr
             stdio: ['pipe', 'ignore', 'ignore'],
             detached: true,
         });
-        child.stdin.write(JSON.stringify({ pane_id: paneId, window_name: 'ghp-admin' }));
+        child.stdin.write(JSON.stringify({ pane_id: paneId, window_name: adminWindowName() }));
         child.stdin.end();
         child.unref();
     } catch { /* silent */ }
@@ -188,7 +247,8 @@ async function fireDashboardOpenedHook(paneId: string, mode?: string | null): Pr
 // ---------------------------------------------------------------------------
 
 async function findCoordinatorPane(): Promise<string | null> {
-    const candidates = ['ghp-root', 'ghp-coordinator', 'ghp-main'];
+    const prefix = getTmuxPrefix();
+    const candidates = [`${prefix}-root`, `${prefix}-coordinator`, `${prefix}-main`];
     for (const name of candidates) {
         try {
             const { stdout } = await execFileAsync('tmux', ['display-message', '-t', name, '-p', '#{window_name}']);
@@ -369,6 +429,12 @@ function renderDashboard(
 
     if (tmuxMode === 'pane') {
         console.log(chalk.dim(`[1-9] focus agent${modeLabel}  [i] next integration  [x] clean  [q] quit`));
+    } else if (tmuxMode === 'session') {
+        if (attached) {
+            console.log(chalk.dim(`[1-9] swap  [esc] detach${modeLabel}  [i] next integration  [x] clean  [q] quit`));
+        } else {
+            console.log(chalk.dim(`[1-9] attach session${modeLabel}  [i] next integration  [x] clean  [q] quit`));
+        }
     } else {
         if (attached) {
             console.log(chalk.dim(`[1-9] swap  [esc] send back${modeLabel}  [c] coordinator  [q] quit`));
@@ -401,6 +467,9 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     let dashboardPaneId: string | null = null;
     let coordinatorWindow: string | null = null;
     let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Session mode viewport state
+    let viewport: ViewportState | null = null;
 
     // Hook mode state — runtime only, initialized from config
     const pipelineConfig = getConfig('pipeline') as any;
@@ -438,6 +507,25 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     }
 
     async function refresh(): Promise<void> {
+        // Session mode: validate attached session still exists
+        if (tmuxMode === 'session' && viewport?.attachedIssue != null) {
+            const sessionName = agentSessionName(viewport.attachedIssue);
+            const exists = await tmuxSessionExists(sessionName);
+            if (!exists) {
+                // Fire agent-unfocused hook before clearing state (fire-and-forget)
+                const repoRoot = await getMainWorktreeRoot();
+                if (repoRoot) {
+                    const entry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === viewport!.attachedIssue);
+                    if (entry) {
+                        runUserHookScript('agent-unfocused', agentPayload(entry), entry.worktreePath, currentHookMode);
+                    }
+                }
+                viewport.attachedIssue = null;
+                attached = null;
+                await detachViewport(viewport.paneId);
+            }
+        }
+
         const repoRoot = await getMainWorktreeRoot();
         const entries = await buildEntries();
         const dirty = repoRoot ? await isMainRepoDirty(repoRoot) : false;
@@ -613,14 +701,94 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     }
 
     // ---------------------------------------------------------------------------
+    // Session mode: attach/detach via viewport
+    // ---------------------------------------------------------------------------
+
+    async function attachSessionToViewport(issueNumber: number): Promise<void> {
+        if (!viewport) return;
+        if (viewport.attachedIssue === issueNumber) return; // already attached
+
+        const sessionName = agentSessionName(issueNumber);
+        const exists = await tmuxSessionExists(sessionName);
+        if (!exists) return;
+
+        let previousEntry: PipelineEntry | null = null;
+
+        // Hot-swap: if already viewing a different agent
+        if (viewport.attachedIssue != null) {
+            const repoRoot = await getMainWorktreeRoot();
+            if (repoRoot) {
+                previousEntry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === viewport!.attachedIssue) ?? null;
+            }
+        }
+
+        await attachViewportToSession(viewport.paneId, sessionName);
+        viewport.attachedIssue = issueNumber;
+        attached = { issueNumber, paneId: viewport.paneId, sourceWindowName: '' };
+
+        // Set pane border title
+        try {
+            await execFileAsync('tmux', ['select-pane', '-t', viewport.paneId, '-T', `Agent #${issueNumber}`]);
+        } catch { /* best effort */ }
+
+        // Fire hooks
+        const repoRoot = await getMainWorktreeRoot();
+        if (repoRoot) {
+            const newEntry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === issueNumber);
+            if (newEntry) {
+                if (previousEntry) {
+                    fireSwapHook(previousEntry, newEntry);
+                } else {
+                    runUserHookScript('agent-focused', agentPayload(newEntry), newEntry.worktreePath, currentHookMode);
+                }
+            }
+        }
+
+        await refresh();
+    }
+
+    /** Fire agent-unfocused hook and kill the viewport pane. Fire-and-forget safe. */
+    function cleanupViewport(): void {
+        if (!viewport) return;
+        if (viewport.attachedIssue != null) {
+            getMainWorktreeRoot().then(repoRoot => {
+                if (!repoRoot) return;
+                const entry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === viewport!.attachedIssue);
+                if (entry) runUserHookScript('agent-unfocused', agentPayload(entry), entry.worktreePath, currentHookMode);
+            }).catch(() => {});
+        }
+        killViewportPane(viewport.paneId).catch(() => {});
+    }
+
+    async function detachSessionFromViewport(): Promise<void> {
+        if (!viewport || viewport.attachedIssue == null) return;
+
+        // Fire agent-unfocused hook
+        const repoRoot = await getMainWorktreeRoot();
+        if (repoRoot) {
+            const entry = getAllPipelineEntries(repoRoot).find(e => e.issueNumber === viewport!.attachedIssue);
+            if (entry) {
+                runUserHookScript('agent-unfocused', agentPayload(entry), entry.worktreePath, currentHookMode);
+            }
+        }
+
+        await detachViewport(viewport.paneId);
+        viewport.attachedIssue = null;
+        attached = null;
+        await refresh();
+    }
+
+    // ---------------------------------------------------------------------------
     // Keypress handler
     // ---------------------------------------------------------------------------
 
     async function handleKey(key: string): Promise<void> {
-        // esc — send pane back (window mode) or refocus dashboard (pane mode)
+        // esc — send pane back (window mode), detach (session mode), or refocus dashboard (pane mode)
         if (key === '\x1b') {
             if (tmuxMode === 'pane' && dashboardPaneId) {
                 await selectPane(dashboardPaneId);
+            } else if (tmuxMode === 'session') {
+                await detachSessionFromViewport();
             } else if (tmuxMode === 'window' && attached) {
                 await sendPaneBack();
             }
@@ -629,7 +797,11 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
 
         // q — quit
         if (key === 'q' || key === 'Q') {
-            if (attached) await sendPaneBack();
+            if (tmuxMode === 'session' && viewport) {
+                cleanupViewport();
+            } else if (attached) {
+                await sendPaneBack();
+            }
             if (refreshTimer) clearInterval(refreshTimer);
             if (process.stdin.isTTY) {
                 process.stdin.setRawMode(false);
@@ -671,10 +843,17 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         // m — cycle hook modes (includes null/"default" as the last position)
         if (key === 'm' || key === 'M') {
             if (hookModes.length > 0) {
+                const oldMode = currentHookMode;
                 const currentIdx = currentHookMode ? hookModes.indexOf(currentHookMode) : -1;
                 const nextIdx = currentIdx + 1;
                 // After the last named mode, wrap to null (default/unsuffixed hooks)
                 currentHookMode = nextIdx < hookModes.length ? hookModes[nextIdx] : null;
+                // Fire mode-switched hook (fire-and-forget, never mode-suffixed)
+                const modePayload = JSON.stringify({ oldMode: oldMode ?? null, newMode: currentHookMode ?? null });
+                const modeRoot = await getMainWorktreeRoot();
+                if (modeRoot) {
+                    runUserHookScript('mode-switched', modePayload, modeRoot, null);
+                }
                 await refresh();
             }
             return;
@@ -687,7 +866,7 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
             return;
         }
 
-        // 1-9 — zoom (pane mode) or pull (window mode)
+        // 1-9 — focus (pane mode), pull (window mode), or attach (session mode)
         const digit = parseInt(key, 10);
         if (!isNaN(digit) && digit >= 1 && digit <= 9) {
             const entries = await buildEntries();
@@ -696,6 +875,8 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
 
             if (tmuxMode === 'pane') {
                 await focusAgent(entry.pipeline.issueNumber);
+            } else if (tmuxMode === 'session') {
+                await attachSessionToViewport(entry.pipeline.issueNumber);
             } else {
                 await pullAgentPane(entry.pipeline.issueNumber);
             }
@@ -706,6 +887,14 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     // ---------------------------------------------------------------------------
     // Start
     // ---------------------------------------------------------------------------
+
+    // Session mode: create viewport pane at startup
+    if (tmuxMode === 'session' && dashboardPaneId) {
+        const vpPaneId = await createViewportPane(dashboardPaneId);
+        if (vpPaneId) {
+            viewport = { paneId: vpPaneId, attachedIssue: null };
+        }
+    }
 
     await refresh();
 
@@ -721,7 +910,11 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
     registerCleanupHandler(() => {
         if (suppressCleanup) return;
         if (refreshTimer) clearInterval(refreshTimer);
-        if (attached) releasePaneToWindow(attached).catch(() => {});
+        if (viewport) {
+            cleanupViewport();
+        } else if (attached) {
+            releasePaneToWindow(attached).catch(() => {});
+        }
         process.stdin.setRawMode?.(false);
         process.stdin.pause();
     });
@@ -732,7 +925,11 @@ export async function pipelineDashboardCommand(options: DashboardOptions = {}): 
         process.stdin.setEncoding('utf-8');
         process.stdin.on('data', (key: string) => {
             if (key === '\u0003') {
-                if (attached) releasePaneToWindow(attached).catch(() => {});
+                if (viewport) {
+                    cleanupViewport();
+                } else if (attached) {
+                    releasePaneToWindow(attached).catch(() => {});
+                }
                 if (refreshTimer) clearInterval(refreshTimer);
                 process.stdin.setRawMode(false);
                 process.stdin.pause();

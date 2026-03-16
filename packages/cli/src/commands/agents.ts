@@ -18,7 +18,7 @@ import {
     type SessionWatcher,
 } from '@bretwardjames/ghp-core';
 import { confirmWithDefault, isInteractive } from '../prompts.js';
-import { killTmuxWindow } from '../terminal-utils.js';
+import { killTmuxWindow, killTmuxSession, agentWindowName, agentSessionName } from '../terminal-utils.js';
 import { exit, registerCleanupHandler } from '../exit.js';
 
 // Track active session watchers
@@ -196,11 +196,14 @@ async function stopAgent(agentId: string, issueNumber: number): Promise<void> {
 
     console.log(chalk.dim(`Stopping agent for #${issueNumber}...`));
 
-    // Try to kill the tmux window (works even if we're not inside tmux)
-    const windowName = `ghp-${issueNumber}`;
-    const result = await killTmuxWindow(windowName);
-    if (result.success) {
-        console.log(chalk.dim(`Killed tmux window: ${windowName}`));
+    // Try to kill the tmux window and/or session (works even if we're not inside tmux)
+    const windowName = agentWindowName(issueNumber);
+    const sessionName = agentSessionName(issueNumber);
+    const windowResult = await killTmuxWindow(windowName);
+    const sessionResult = await killTmuxSession(sessionName);
+    if (windowResult.success || sessionResult.success) {
+        const killed = [windowResult.success && 'window', sessionResult.success && 'session'].filter(Boolean).join(' + ');
+        console.log(chalk.dim(`Killed tmux ${killed}: ${windowName}`));
     } else if (agent.pid > 0) {
         // Fall back to PID-based kill if tmux window wasn't found
         try {
@@ -244,10 +247,12 @@ async function stopAllAgents(force?: boolean): Promise<void> {
 
     let stopped = 0;
     for (const agent of agents) {
-        // Try to kill tmux window (works even if we're not inside tmux)
-        const windowName = `ghp-${agent.issueNumber}`;
-        const result = await killTmuxWindow(windowName);
-        if (!result.success && agent.pid > 0) {
+        // Try to kill tmux window and/or session (works even if we're not inside tmux)
+        const windowName = agentWindowName(agent.issueNumber);
+        const sessionName = agentSessionName(agent.issueNumber);
+        const windowResult = await killTmuxWindow(windowName);
+        const sessionResult = await killTmuxSession(sessionName);
+        if (!windowResult.success && !sessionResult.success && agent.pid > 0) {
             // Fall back to PID-based kill
             try {
                 process.kill(agent.pid, 'SIGTERM');
@@ -278,7 +283,7 @@ async function startSessionWatchers(): Promise<void> {
 
         try {
             // Pass tmux window name for permission detection
-            const tmuxWindowName = `ghp-${agent.issueNumber}`;
+            const tmuxWindowName = agentWindowName(agent.issueNumber);
             const watcher = await createSessionWatcher(agent.worktreePath, tmuxWindowName);
             if (watcher) {
                 // Update registry when status changes

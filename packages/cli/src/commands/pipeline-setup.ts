@@ -78,6 +78,26 @@ const QUESTIONS: Question[] = [
         hint: 'Reapply later with: ghp pipeline setup --flavor <name>',
     },
 
+    // ── Agent spawn mode ─────────────────────────────────────────────────────
+    {
+        id: 'agent_spawn_mode',
+        question: 'How should agents be spawned in tmux?',
+        type: 'select',
+        options: [
+            { value: 'window', label: 'Window (default)', description: 'Each agent gets its own tmux window' },
+            { value: 'pane', label: 'Pane', description: 'Split the current tmux window into panes' },
+            { value: 'session', label: 'Session', description: 'Each agent gets its own tmux session (nested attach in dashboard viewport)' },
+        ],
+        default: 'window',
+    },
+    {
+        id: 'tmux_prefix',
+        question: 'Tmux naming prefix (used for windows, sessions, admin):',
+        type: 'text',
+        default: 'ghp',
+        hint: 'All tmux names use this prefix (e.g., myproj → myproj-86, myproj-admin). Useful when multiple projects share a tmux server.',
+    },
+
     // ── Dashboard layout ────────────────────────────────────────────────────
     {
         id: 'dashboard_mode',
@@ -210,6 +230,13 @@ const QUESTIONS: Question[] = [
         type: 'text',
         default: '',
         hint: 'Creates .ghp/hooks/agent-swapped. Fires when you press [3] while [1] is focused — an atomic swap. Stdin JSON: {"old":{"issueNumber":123,"worktreePath":"/old","branch":"..."},"new":{"issueNumber":456,"worktreePath":"/new","branch":"..."}}. If this hook doesn\'t exist, falls back to sequential unfocus→focus. If modes are configured, mode-specific variants will also be scaffolded. Leave blank to skip.',
+    },
+    {
+        id: 'hook_mode_switched',
+        question: 'What should happen when the dashboard hook mode changes (via [m] key)?',
+        type: 'text',
+        default: '',
+        hint: 'Creates .ghp/hooks/mode-switched. Fires when you press [m] to cycle hook modes. Stdin JSON: {"oldMode":"planning","newMode":"testing"} (null = default/no mode). Runs from the main repo root. Unlike other hooks, mode-specific variants are NOT created (this hook IS the mode change notification). Leave blank to skip.',
     },
 
     // ── Event hooks (registered via ghp hooks add) ──────────────────────────
@@ -360,6 +387,7 @@ const DIRECTORY_HOOKS: Record<string, { hookName: string; template: string }> = 
     hook_agent_focused: { hookName: 'agent-focused', template: DEFAULT_AGENT_FOCUSED_SCRIPT() },
     hook_agent_unfocused: { hookName: 'agent-unfocused', template: DEFAULT_AGENT_UNFOCUSED_SCRIPT() },
     hook_agent_swapped: { hookName: 'agent-swapped', template: DEFAULT_AGENT_SWAPPED_SCRIPT() },
+    hook_mode_switched: { hookName: 'mode-switched', template: DEFAULT_MODE_SWITCHED_SCRIPT() },
 };
 
 /** Map of event hook answer IDs to event names. */
@@ -429,6 +457,21 @@ async function applyAnswers(answers: Answers): Promise<void> {
         summary.push(`Saved flavor "${answers.flavor_name.trim()}" — reapply with: ghp pipeline setup --flavor ${answers.flavor_name.trim()}`);
     }
 
+    // Agent spawn mode + tmux prefix
+    if (answers.agent_spawn_mode) {
+        setConfigByPath('parallelWork.tmux.mode', answers.agent_spawn_mode, scope);
+        summary.push(`tmux.mode = ${answers.agent_spawn_mode}`);
+    }
+    if (answers.tmux_prefix && typeof answers.tmux_prefix === 'string' && answers.tmux_prefix.trim() && answers.tmux_prefix !== 'ghp') {
+        const trimmed = answers.tmux_prefix.trim();
+        if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+            console.log(chalk.yellow('Warning:'), 'Prefix contains invalid characters — use only letters, numbers, hyphens, and underscores. Skipped.');
+        } else {
+            setConfigByPath('parallelWork.tmux.prefix', trimmed, scope);
+            summary.push(`tmux.prefix = ${trimmed}`);
+        }
+    }
+
     // Dashboard config
     if (answers.dashboard_mode) {
         setConfigByPath('parallelWork.dashboard.mode', answers.dashboard_mode, scope);
@@ -486,7 +529,9 @@ async function applyAnswers(answers: Answers): Promise<void> {
                 if (!existsSync(hooksDir)) {
                     mkdirSync(hooksDir, { recursive: true });
                 }
-                const msgs = scaffoldDirectoryHook(hooksDir, hookName, template, answer.trim(), hookModes);
+                // mode-switched should never have mode-specific variants (it IS the mode notification)
+                const modes = hookName === 'mode-switched' ? [] : hookModes;
+                const msgs = scaffoldDirectoryHook(hooksDir, hookName, template, answer.trim(), modes);
                 summary.push(...msgs);
             }
         }
@@ -685,6 +730,40 @@ NEW_BRANCH=$(echo "$INPUT" | jq -r '.new.branch')
 #   kill $(cat "$OLD_WORKTREE/.dev-server.pid") 2>/dev/null
 #   cd "$NEW_WORKTREE" && pnpm dev &
 #   echo $! > "$NEW_WORKTREE/.dev-server.pid"
+# ─────────────────────────────────────────────────────────────────────────────
+`;
+}
+
+function DEFAULT_MODE_SWITCHED_SCRIPT(): string {
+    return `#!/usr/bin/env bash
+# Hook: mode-switched
+# Runs when the dashboard hook mode changes (via [m] key).
+# Use this to start/stop dev servers, swap tmux layouts, toggle test watchers, etc.
+#
+# Receives JSON on stdin with these exact keys:
+#   { "oldMode": "planning", "newMode": "testing" }
+#
+# null means "default" (no mode active).
+# This script runs from the main repo root as its working directory.
+# NOTE: Mode-specific variants of this hook are NOT created — this hook
+# IS the mode change notification.
+
+INPUT=$(cat)
+OLD_MODE=$(echo "$INPUT" | jq -r '.oldMode // "null"')
+NEW_MODE=$(echo "$INPUT" | jq -r '.newMode // "null"')
+
+# ── Add your mode-switch actions below ────────────────────────────────────────
+# Examples:
+#
+# Start test watcher when entering testing mode:
+#   if [ "$NEW_MODE" = "testing" ]; then
+#     pnpm test --watch &
+#   fi
+#
+# Stop dev server when leaving planning mode:
+#   if [ "$OLD_MODE" = "planning" ]; then
+#     kill $(cat .dev-server.pid) 2>/dev/null
+#   fi
 # ─────────────────────────────────────────────────────────────────────────────
 `;
 }

@@ -5,6 +5,7 @@ import { removeActiveLabelSafely } from '../active-label.js';
 import { getBranchForIssue, unlinkBranch } from '../branch-linker.js';
 import { exit } from '../exit.js';
 import { deregisterWorktree } from '../pipeline-registry.js';
+import { killTmuxWindow, killTmuxSession, agentWindowName, agentSessionName } from '../terminal-utils.js';
 
 interface StopOptions {
     unlink?: boolean;
@@ -108,6 +109,10 @@ export async function stopCommand(issue: string, options: StopOptions): Promise<
             console.log(chalk.dim('No branch linked to this issue'));
         }
     }
+
+    // Kill tmux window/session for this agent (best-effort)
+    await killTmuxWindow(agentWindowName(issueNumber)).catch(() => {});
+    await killTmuxSession(agentSessionName(issueNumber)).catch(() => {});
 
     console.log(chalk.green('✓'), 'Stopped work on issue');
 }

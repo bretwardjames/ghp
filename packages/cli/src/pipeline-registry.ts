@@ -11,6 +11,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join } from 'path';
 import { getConfig } from './config.js';
+import { agentWindowName } from './terminal-utils.js';
 
 // ---------------------------------------------------------------------------
 // Default stages
@@ -86,10 +87,10 @@ export function getStageEmoji(stage: string): string {
 /** Rename the tmux window for an issue to reflect its current stage. */
 function renameWorktreeWindow(issueNumber: number, stage: string): void {
     const emoji = getStageEmoji(stage);
-    const prefix = emoji ? `${emoji} ` : '';
-    const windowName = `ghp-${issueNumber}`;
+    const emojiPrefix = emoji ? `${emoji} ` : '';
+    const windowName = agentWindowName(issueNumber);
     try {
-        execFileSync('tmux', ['rename-window', '-t', windowName, `${prefix}${windowName}`], { stdio: 'ignore' });
+        execFileSync('tmux', ['rename-window', '-t', windowName, `${emojiPrefix}${windowName}`], { stdio: 'ignore' });
     } catch { /* not in tmux or window doesn't exist — fine */ }
 }
 

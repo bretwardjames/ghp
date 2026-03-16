@@ -84,10 +84,12 @@ export interface ParallelWorkConfig {
     nvimCommand?: string;
     /** Tmux-specific configuration (used when terminal is 'tmux' or auto-detected inside tmux) */
     tmux?: {
-        /** Whether to spawn a new window or split the current window into a pane */
-        mode?: 'window' | 'pane';
+        /** Whether to spawn a new window, split pane, or create a separate session per agent */
+        mode?: 'window' | 'pane' | 'session';
         /** Direction to split when mode is 'pane' */
         paneDirection?: 'horizontal' | 'vertical';
+        /** Prefix for all tmux naming (windows, sessions, admin). Default: 'ghp' */
+        prefix?: string;
     };
     /** Dashboard layout configuration */
     dashboard?: DashboardConfig;

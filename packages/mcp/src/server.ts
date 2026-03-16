@@ -29,7 +29,7 @@ export function createServer(tokenProvider: TokenProvider, lockedRepo?: RepoInfo
     const api = new GitHubAPI({ tokenProvider });
     const repoContext = lockedRepo
         ? RepoContext.locked(lockedRepo)
-        : new RepoContext();
+        : RepoContext.auto();
 
     const context: ServerContext = {
         api,

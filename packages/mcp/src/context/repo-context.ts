@@ -14,8 +14,19 @@ export class RepoContext {
     private cwd: string;
     private readonly lockedRepo?: RepoInfo;
 
-    constructor(cwd?: string) {
-        this.cwd = cwd ?? process.cwd();
+    private constructor(options: { cwd?: string; lockedRepo?: RepoInfo } = {}) {
+        this.cwd = options.cwd ?? process.cwd();
+        this.lockedRepo = options.lockedRepo;
+        if (this.lockedRepo) {
+            this.cachedRepo = this.lockedRepo;
+        }
+    }
+
+    /**
+     * Creates a RepoContext that auto-detects the repo from the working directory.
+     */
+    static auto(cwd?: string): RepoContext {
+        return new RepoContext({ cwd });
     }
 
     /**
@@ -23,10 +34,7 @@ export class RepoContext {
      * Git detection is skipped entirely — `getRepo()` always returns the locked value.
      */
     static locked(repo: RepoInfo): RepoContext {
-        const ctx = new RepoContext();
-        (ctx as { lockedRepo?: RepoInfo }).lockedRepo = repo;
-        ctx.cachedRepo = repo;
-        return ctx;
+        return new RepoContext({ lockedRepo: repo });
     }
 
     /**

@@ -42,10 +42,10 @@ function getClaudeDesktopConfig(repo?: string): object {
         if (!repo.includes('/')) {
             throw new Error('--repo requires owner/name format (e.g., bretwardjames/ghp)');
         }
-        const repoName = repo.split('/')[1];
+        const serverKey = `ghp-${repo.replace('/', '-')}`;
         return {
             mcpServers: {
-                [`ghp-${repoName}`]: {
+                [serverKey]: {
                     command: 'ghp-mcp',
                     args: ['--repo', repo],
                 },
@@ -162,7 +162,7 @@ export async function mcpCommand(options: McpOptions): Promise<void> {
 
         // Determine server key based on --repo
         const serverKey = options.repo
-            ? `ghp-${options.repo.split('/')[1]}`
+            ? `ghp-${options.repo.replace('/', '-')}`
             : 'ghp';
 
         // Check if already configured

@@ -15,8 +15,9 @@ export interface ServerContext {
 
 /**
  * Creates and configures the MCP server with all tools and resources.
+ * When `lockedRepo` is provided, the server is scoped to that repo only.
  */
-export function createServer(tokenProvider: TokenProvider): {
+export function createServer(tokenProvider: TokenProvider, lockedRepo?: RepoInfo): {
     server: McpServer;
     context: ServerContext;
 } {
@@ -26,7 +27,9 @@ export function createServer(tokenProvider: TokenProvider): {
     });
 
     const api = new GitHubAPI({ tokenProvider });
-    const repoContext = new RepoContext();
+    const repoContext = lockedRepo
+        ? RepoContext.locked(lockedRepo)
+        : new RepoContext();
 
     const context: ServerContext = {
         api,

@@ -533,6 +533,7 @@ program
     .option('-i, --install', 'Auto-configure Claude Desktop')
     .option('--install-claude-commands', 'Also install Claude slash commands (use with --install)')
     .option('-s, --status', 'Show enabled/disabled MCP tools')
+    .option('-r, --repo <owner/name>', 'Scope MCP server to a specific repo')
     .action(mcpCommand);
 
 // Slash command installation

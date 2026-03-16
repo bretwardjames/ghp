@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0
+
+### Minor Changes
+
+- Add `--repo owner/name` flag to scope MCP server instances to a specific GitHub repo. The CLI's `ghp mcp --config --repo` generates per-repo config with unique server keys. Also includes pipeline dashboard enhancements, hook modes, and terminal utility improvements.
+
 ## 0.17.0
 
 ### Minor Changes

@@ -51,7 +51,14 @@ vi.mock('@bretwardjames/ghp-core', () => ({
 }));
 
 // Import after mocks
-import { loadMcpConfig, getToolList, registerEnabledTools } from './tool-registry.js';
+import {
+    loadMcpConfig,
+    getToolList,
+    registerEnabledTools,
+    getToolsByCapability,
+    pureApiTools,
+    localOnlyTools,
+} from './tool-registry.js';
 import { existsSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
 
@@ -143,23 +150,116 @@ describe('tool-registry', () => {
     });
 
     describe('getToolList', () => {
-        it('should return all registered tools with their categories', () => {
+        it('should return all registered tools with their categories and capabilities', () => {
             const tools = getToolList();
 
             // Should have multiple tools
             expect(tools.length).toBeGreaterThan(0);
 
-            // Each tool should have name and category
+            // Each tool should have name, category, and capability
             for (const tool of tools) {
                 expect(tool).toHaveProperty('name');
                 expect(tool).toHaveProperty('category');
+                expect(tool).toHaveProperty('capability');
                 expect(['read', 'action']).toContain(tool.category);
+                expect(['pure-api', 'local-only']).toContain(tool.capability);
             }
 
             // Check some expected tools exist
             const toolNames = tools.map(t => t.name);
             expect(toolNames).toContain('create_issue');
             expect(toolNames).toContain('get_my_work'); // actual tool name
+        });
+    });
+
+    describe('capability partitioning', () => {
+        it('every tool belongs to exactly one capability list', () => {
+            const all = getToolList();
+            const pure = pureApiTools.map(t => t.meta.name);
+            const local = localOnlyTools.map(t => t.meta.name);
+
+            // partition covers all tools
+            expect(pure.length + local.length).toBe(all.length);
+
+            // disjoint sets
+            for (const name of pure) {
+                expect(local).not.toContain(name);
+            }
+        });
+
+        it('pure-api list excludes subprocess/filesystem tools', () => {
+            const pureNames = pureApiTools.map(t => t.meta.name);
+
+            // These shell out to git / gh / ghp and must never be hosted
+            expect(pureNames).not.toContain('create_worktree');
+            expect(pureNames).not.toContain('remove_worktree');
+            expect(pureNames).not.toContain('list_worktrees');
+            expect(pureNames).not.toContain('merge_pr');
+            expect(pureNames).not.toContain('create_pr');
+            expect(pureNames).not.toContain('release');
+            expect(pureNames).not.toContain('sync_merged_prs');
+            expect(pureNames).not.toContain('start_work');
+            expect(pureNames).not.toContain('stop_work');
+            expect(pureNames).not.toContain('get_tags');
+        });
+
+        it('pure-api list includes GraphQL-only tools', () => {
+            const pureNames = pureApiTools.map(t => t.meta.name);
+
+            expect(pureNames).toContain('get_my_work');
+            expect(pureNames).toContain('get_project_board');
+            expect(pureNames).toContain('create_issue');
+            expect(pureNames).toContain('update_issue');
+            expect(pureNames).toContain('move_issue');
+            expect(pureNames).toContain('add_comment');
+        });
+
+        it('getToolsByCapability returns the same result as direct exports', () => {
+            expect(getToolsByCapability('pure-api')).toEqual(pureApiTools);
+            expect(getToolsByCapability('local-only')).toEqual(localOnlyTools);
+        });
+    });
+
+    describe('registerEnabledTools with capability filter', () => {
+        it('only registers pure-api tools when capability=pure-api', () => {
+            const mockServer = { registerTool: vi.fn() };
+            const mockContext = {
+                ensureAuthenticated: vi.fn(),
+                getRepo: vi.fn(),
+                api: {},
+            };
+
+            registerEnabledTools(
+                mockServer as any,
+                mockContext as any,
+                {
+                    tools: { read: true, action: true },
+                    disabledTools: [],
+                    // force-enable opt-in tools so local-only ones would show up
+                    // if capability filter didn't apply
+                    enabledTools: [
+                        'create_pr',
+                        'merge_pr',
+                        'list_worktrees',
+                        'remove_worktree',
+                        'link_branch',
+                        'unlink_branch',
+                    ],
+                },
+                'pure-api'
+            );
+
+            const registered = mockServer.registerTool.mock.calls.map(c => c[0]);
+            // local-only never registered
+            expect(registered).not.toContain('create_pr');
+            expect(registered).not.toContain('merge_pr');
+            expect(registered).not.toContain('list_worktrees');
+            expect(registered).not.toContain('remove_worktree');
+            // pure-api still registered
+            expect(registered).toContain('link_branch');
+            expect(registered).toContain('unlink_branch');
+            expect(registered).toContain('get_my_work');
+            expect(registered).toContain('create_issue');
         });
     });
 

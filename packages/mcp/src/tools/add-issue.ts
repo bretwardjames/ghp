@@ -13,6 +13,7 @@ import {
 export const meta: ToolMeta = {
     name: 'create_issue',
     category: 'action',
+    capability: 'pure-api',
 };
 
 /**

@@ -8,6 +8,7 @@ import { parseSince, formatStandupText } from '@bretwardjames/ghp-core';
 export const meta: ToolMeta = {
     name: 'get_standup',
     category: 'read',
+    capability: 'pure-api',
 };
 
 /**

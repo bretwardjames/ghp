@@ -8,6 +8,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'get_issue',
     category: 'read',
+    capability: 'pure-api',
     disabledByDefault: true,
 };
 

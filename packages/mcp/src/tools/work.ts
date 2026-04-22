@@ -7,6 +7,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'get_my_work',
     category: 'read',
+    capability: 'pure-api',
 };
 
 /**

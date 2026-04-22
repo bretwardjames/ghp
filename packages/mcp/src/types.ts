@@ -4,6 +4,15 @@
 export type ToolCategory = 'read' | 'action';
 
 /**
+ * Capability classification: does the tool touch the host filesystem / shell,
+ * or is it purely a GitHub API client? Hosted deployments (e.g. ghp-mcp-hosted)
+ * must only register `pure-api` tools; `local-only` tools spawn git / gh / ghp
+ * subprocesses or read from the user's home directory and cannot be safely
+ * executed on a shared server.
+ */
+export type ToolCapability = 'pure-api' | 'local-only';
+
+/**
  * Metadata about a tool for registry purposes
  */
 export interface ToolMeta {
@@ -11,6 +20,8 @@ export interface ToolMeta {
     name: string;
     /** Tool category for filtering */
     category: ToolCategory;
+    /** Host capability requirements — see ToolCapability */
+    capability: ToolCapability;
     /** If true, tool is disabled unless explicitly enabled via enabledTools config */
     disabledByDefault?: boolean;
 }

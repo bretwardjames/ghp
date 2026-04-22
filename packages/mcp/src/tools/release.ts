@@ -10,6 +10,7 @@ import { getConfigValue } from '../tool-registry.js';
 export const meta: ToolMeta = {
     name: 'release',
     category: 'action',
+    capability: 'local-only',
     disabledByDefault: false,
 };
 

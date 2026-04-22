@@ -15,6 +15,7 @@ import {
 export const meta: ToolMeta = {
     name: 'start_work',
     category: 'action',
+    capability: 'local-only',
 };
 
 /**

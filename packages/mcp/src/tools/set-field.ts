@@ -7,6 +7,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'set_field',
     category: 'action',
+    capability: 'pure-api',
 };
 
 /**

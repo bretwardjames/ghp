@@ -12,6 +12,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'link_branch',
     category: 'action',
+    capability: 'pure-api',
     disabledByDefault: true,
 };
 

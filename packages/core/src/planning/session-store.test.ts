@@ -28,7 +28,7 @@ function fixture(
         queue: [],
         decisions: {},
         parked: [],
-        activeItemNumber: null,
+        activeItem: null,
         activeItemSince: null,
         ...overrides,
     };
@@ -82,9 +82,18 @@ describe('PlanningSessionStore', () => {
     it('update mutates an existing session without touching inactive ones', () => {
         store.start(fixture());
         const session = store.get('s1')!;
-        session.activeItemNumber = 42;
+        session.activeItem = {
+            number: 42,
+            title: 'T',
+            url: '',
+            priority: null,
+            size: null,
+            lastReviewed: null,
+            assignees: [],
+            bucket: 'untriaged-backlog',
+        };
         store.update(session);
-        expect(store.get('s1')?.activeItemNumber).toBe(42);
+        expect(store.get('s1')?.activeItem?.number).toBe(42);
     });
 
     it('update on unknown id is a no-op', () => {

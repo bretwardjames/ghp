@@ -41,6 +41,12 @@ import * as fieldsTool from './tools/fields.js';
 import * as tagsTool from './tools/tags.js';
 // Planning meeting driver
 import * as planningAuditTool from './tools/planning-audit.js';
+import * as planningStartTool from './tools/planning-start.js';
+import * as planningNextTool from './tools/planning-next.js';
+import * as planningDecideTool from './tools/planning-decide.js';
+import * as planningParkTool from './tools/planning-park.js';
+import * as planningStatusTool from './tools/planning-status.js';
+import * as planningEndTool from './tools/planning-end.js';
 
 // Re-export types
 export type { ToolCategory, ToolCapability, McpConfig, McpToolsConfig } from './types.js';
@@ -94,8 +100,14 @@ const TOOLS: ToolModule[] = [
     // Worktree tools
     worktreeTool,
     removeWorktreeTool,
-    // Planning
+    // Planning — readiness + stateful meeting driver
     planningAuditTool,
+    planningStartTool,
+    planningNextTool,
+    planningDecideTool,
+    planningParkTool,
+    planningStatusTool,
+    planningEndTool,
 ];
 
 /**

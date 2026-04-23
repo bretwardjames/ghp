@@ -13,6 +13,12 @@ import {
 export const meta: ToolMeta = {
     name: 'create_issue',
     category: 'action',
+    // Hook dispatch (`executeHooksForEvent('issue-created', ...)`) can run
+    // user-supplied shell commands via `loadHooksConfig` + `runCommand`.
+    // Classified local-only to match other hook-dispatching tools
+    // (start_work, create_pr, remove_worktree). Hosted mode must gate the
+    // hook block (tracked in #278) before this can be re-promoted to pure-api.
+    capability: 'local-only',
 };
 
 /**

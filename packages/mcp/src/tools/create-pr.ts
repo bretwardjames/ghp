@@ -13,6 +13,7 @@ import {
 export const meta: ToolMeta = {
     name: 'create_pr',
     category: 'action',
+    capability: 'local-only',
     disabledByDefault: true,
 };
 

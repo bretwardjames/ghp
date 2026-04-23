@@ -8,6 +8,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'remove_label',
     category: 'action',
+    capability: 'pure-api',
     disabledByDefault: true,
 };
 

@@ -9,6 +9,7 @@ import { loadHooksConfig } from '../tool-registry.js';
 export const meta: ToolMeta = {
     name: 'remove_worktree',
     category: 'action',
+    capability: 'local-only',
     disabledByDefault: true,
 };
 

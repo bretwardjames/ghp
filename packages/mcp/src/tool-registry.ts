@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerContext } from './server.js';
-import type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
+import type { ToolCategory, ToolCapability, McpConfig, McpToolsConfig } from './types.js';
 import type { OnFailureBehavior } from '@bretwardjames/ghp-core';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
@@ -41,13 +41,18 @@ import * as fieldsTool from './tools/fields.js';
 import * as tagsTool from './tools/tags.js';
 
 // Re-export types
-export type { ToolCategory, McpConfig, McpToolsConfig } from './types.js';
+export type { ToolCategory, ToolCapability, McpConfig, McpToolsConfig } from './types.js';
 
 /**
  * Tool module with metadata and registration function
  */
 interface ToolModule {
-    meta: { name: string; category: ToolCategory; disabledByDefault?: boolean };
+    meta: {
+        name: string;
+        category: ToolCategory;
+        capability: ToolCapability;
+        disabledByDefault?: boolean;
+    };
     register: (server: McpServer, context: ServerContext) => void;
 }
 
@@ -256,12 +261,43 @@ export function getConfigValue<T = string>(key: string, defaultValue: T): T {
 /**
  * Get list of all tool names and categories
  */
-export function getToolList(): Array<{ name: string; category: ToolCategory }> {
+export function getToolList(): Array<{
+    name: string;
+    category: ToolCategory;
+    capability: ToolCapability;
+}> {
     return TOOLS.map(tool => ({
         name: tool.meta.name,
         category: tool.meta.category,
+        capability: tool.meta.capability,
     }));
 }
+
+/**
+ * Filter the tool registry to a given capability class. Hosted deployments
+ * (ghp-mcp-hosted) should pass 'pure-api' to exclude subprocess / filesystem
+ * tools that cannot safely run on a shared server.
+ */
+export function getToolsByCapability(
+    capability: ToolCapability
+): ReadonlyArray<ToolModule> {
+    return TOOLS.filter(tool => tool.meta.capability === capability);
+}
+
+/**
+ * Tools whose handlers only call the GitHub API — safe for hosted servers.
+ */
+export const pureApiTools: ReadonlyArray<ToolModule> = TOOLS.filter(
+    t => t.meta.capability === 'pure-api'
+);
+
+/**
+ * Tools that spawn local processes (git/gh/ghp) or read user-local state.
+ * Only usable when the MCP server is running on the end-user's machine.
+ */
+export const localOnlyTools: ReadonlyArray<ToolModule> = TOOLS.filter(
+    t => t.meta.capability === 'local-only'
+);
 
 /**
  * Check if a tool is enabled based on config
@@ -291,16 +327,22 @@ function isToolEnabled(tool: ToolModule, config: McpConfig): boolean {
 }
 
 /**
- * Register enabled tools with the MCP server
+ * Register enabled tools with the MCP server.
+ *
+ * When `capability` is supplied, only tools matching that capability class
+ * are considered — this is how ghp-mcp-hosted requests the 'pure-api'
+ * subset. Defaults to all capabilities (stdio behavior unchanged).
  */
 export function registerEnabledTools(
     server: McpServer,
     context: ServerContext,
-    config?: McpConfig
+    config?: McpConfig,
+    capability?: ToolCapability
 ): void {
     const mcpConfig = config || loadMcpConfig();
+    const pool = capability ? getToolsByCapability(capability) : TOOLS;
 
-    for (const tool of TOOLS) {
+    for (const tool of pool) {
         if (isToolEnabled(tool, mcpConfig)) {
             tool.register(server, context);
         }

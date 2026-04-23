@@ -9,6 +9,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'create_worktree',
     category: 'action',
+    capability: 'local-only',
 };
 
 /**

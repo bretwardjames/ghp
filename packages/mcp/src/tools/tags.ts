@@ -8,6 +8,7 @@ import { listTags } from '@bretwardjames/ghp-core';
 export const meta: ToolMeta = {
     name: 'get_tags',
     category: 'read',
+    capability: 'local-only',
 };
 
 /**

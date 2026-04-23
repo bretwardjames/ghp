@@ -7,6 +7,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'add_comment',
     category: 'action',
+    capability: 'pure-api',
 };
 
 /**

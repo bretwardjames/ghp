@@ -9,6 +9,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'merge_pr',
     category: 'action',
+    capability: 'local-only',
     disabledByDefault: true,
 };
 

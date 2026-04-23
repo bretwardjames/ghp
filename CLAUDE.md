@@ -113,7 +113,8 @@ gh ssh-key ...    # SSH key management
 
 - `packages/core/` - Shared library (@bretwardjames/ghp-core)
 - `packages/cli/` - CLI tool (@bretwardjames/ghp-cli)
-- `packages/mcp/` - MCP server (@bretwardjames/ghp-mcp)
+- `packages/mcp/` - Stdio MCP server for local use (@bretwardjames/ghp-mcp)
+- `packages/mcp-hosted/` - HTTP MCP server for hosted multi-tenant platforms (@bretwardjames/ghp-mcp-hosted)
 - `apps/vscode/` - VS Code extension (gh-projects)
 
 ## Publishing

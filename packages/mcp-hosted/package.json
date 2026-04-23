@@ -1,7 +1,7 @@
 {
-  "name": "@bretwardjames/ghp-mcp",
-  "version": "0.7.0",
-  "description": "MCP server for ghp (GitHub Projects)",
+  "name": "@bretwardjames/ghp-mcp-hosted",
+  "version": "0.1.0",
+  "description": "Hosted (HTTP) MCP server for ghp — multi-tenant GitHub Projects tooling for platforms like runtight",
   "publishConfig": {
     "access": "public"
   },
@@ -9,7 +9,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "ghp-mcp": "dist/bin.js"
+    "ghp-mcp-hosted": "dist/bin.js"
   },
   "exports": {
     ".": {
@@ -20,6 +20,7 @@
   "scripts": {
     "build": "tsup src/bin.ts src/index.ts --format esm --dts",
     "dev": "tsup src/bin.ts src/index.ts --format esm --dts --watch",
+    "start": "GHP_MCP_MODE=hosted node dist/bin.js",
     "clean": "rm -rf dist",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -28,21 +29,27 @@
     "mcp",
     "github",
     "projects",
-    "claude",
-    "ai"
+    "hosted",
+    "http",
+    "oauth"
   ],
   "author": "Bret Ward James",
   "license": "MIT",
   "dependencies": {
     "@bretwardjames/ghp-core": "workspace:*",
+    "@bretwardjames/ghp-mcp": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.21.1",
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^20.10.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.2",
-    "vitest": "^3.0.5"
+    "vitest": "^3.0.5",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2"
   },
   "engines": {
     "node": ">=18"

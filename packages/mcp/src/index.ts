@@ -1,55 +1,33 @@
-#!/usr/bin/env node
-
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { RepoInfo } from '@bretwardjames/ghp-core';
-import { createServer } from './server.js';
-import { createTokenProvider } from './auth/token-provider.js';
-import { registerEnabledTools } from './tool-registry.js';
-import { registerAllResources } from './resources/index.js';
-
 /**
- * ghp MCP Server
+ * Library exports for @bretwardjames/ghp-mcp.
  *
- * Exposes GitHub Projects functionality to AI assistants via the
- * Model Context Protocol.
- *
- * Usage:
- *   ghp-mcp                         # auto-detect repo from cwd
- *   ghp-mcp --repo owner/name       # lock to a specific repo
+ * Consumers (including the sibling @bretwardjames/ghp-mcp-hosted package)
+ * can import the reusable runtime surface from here without triggering the
+ * stdio bin. The bin lives at `./bin.js` and is only invoked when the
+ * `ghp-mcp` command is run.
  */
 
-function parseRepoArg(): RepoInfo | undefined {
-    const idx = process.argv.indexOf('--repo');
-    if (idx === -1) {
-        return undefined;
-    }
+export { createServer } from './server.js';
+export type { ServerContext } from './server.js';
 
-    const value = process.argv[idx + 1];
-    if (!value || !value.includes('/')) {
-        console.error('Error: --repo requires owner/name format (e.g., --repo bretwardjames/ghp)');
-        process.exit(1);
-    }
+export {
+    registerEnabledTools,
+    loadMcpConfig,
+    loadHooksConfig,
+    getConfigValue,
+    getToolList,
+    getToolsByCapability,
+    pureApiTools,
+    localOnlyTools,
+} from './tool-registry.js';
+export type { HooksConfig } from './tool-registry.js';
 
-    const [owner, ...rest] = value.split('/');
-    const name = rest.join('/');
-    return { owner, name, fullName: `${owner}/${name}` };
-}
+export type {
+    ToolCategory,
+    ToolCapability,
+    ToolMeta,
+    McpConfig,
+    McpToolsConfig,
+} from './types.js';
 
-async function main(): Promise<void> {
-    const lockedRepo = parseRepoArg();
-    const tokenProvider = createTokenProvider();
-    const { server, context } = createServer(tokenProvider, lockedRepo);
-
-    // Register all tools and resources
-    registerEnabledTools(server, context);
-    registerAllResources(server, context);
-
-    // Connect via stdio
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-}
-
-main().catch((error) => {
-    console.error('Failed to start MCP server:', error);
-    process.exit(1);
-});
+export { registerAllResources } from './resources/index.js';

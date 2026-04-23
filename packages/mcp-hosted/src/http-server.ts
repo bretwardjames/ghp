@@ -9,8 +9,14 @@ import {
 import type { RepoInfo } from '@bretwardjames/ghp-core';
 import { BearerTokenProvider, extractBearer } from './auth/bearer-token-provider.js';
 import type { HostedConfig } from './config.js';
-import { parseRepoInfo } from './config.js';
+import { parseRepoInfo, parseAllowedRedirectUris } from './config.js';
 import { assertHostedSafe } from './mode-guard.js';
+import { mountOAuthRoutes, type OAuthDeps } from './oauth/routes.js';
+import { StateStore } from './oauth/state-store.js';
+import type {
+    AuthorizeContext,
+    AuthCodeContext,
+} from './oauth/state-store.js';
 
 /**
  * Build the Express app for the hosted GHP MCP server.
@@ -81,27 +87,28 @@ export function createApp(config: HostedConfig): Application {
         res.sendStatus(204);
     });
 
+    // Form-encoded body parsing for /oauth/token (application/x-www-form-urlencoded).
+    // Mounted narrowly so the /mcp endpoint continues to use JSON only.
+    app.use('/oauth/token', express.urlencoded({ extended: false, limit: '16kb' }));
+
     app.get('/healthz', (_req, res) => {
         res.type('text/plain').send('ok');
     });
 
-    // OAuth discovery stubs — filled in by #279. Returning 501 here keeps
-    // the routes documented without silently 404-ing clients that probe.
-    app.get('/.well-known/oauth-protected-resource', (_req, res) => {
-        res.status(501).json({
-            error: 'not_implemented',
-            error_description:
-                'OAuth discovery is not implemented in this build. Use a PAT via Authorization: Bearer <token>.',
-        });
-    });
-
-    app.get('/.well-known/oauth-authorization-server', (_req, res) => {
-        res.status(501).json({
-            error: 'not_implemented',
-            error_description:
-                'OAuth authorization server metadata is not implemented in this build.',
-        });
-    });
+    // Real OAuth 2.1 + PKCE + RFC 9728/8414 endpoints.
+    const oauthDeps: OAuthDeps = {
+        config,
+        githubClientId: config.githubOauthClientId,
+        githubClientSecret: config.githubOauthClientSecret,
+        allowedRedirectUris: parseAllowedRedirectUris(config.allowedRedirectUris),
+        authorizeStore: new StateStore<AuthorizeContext>(
+            config.oauthStateTtlSeconds * 1000
+        ),
+        authCodeStore: new StateStore<AuthCodeContext>(
+            config.oauthStateTtlSeconds * 1000
+        ),
+    };
+    mountOAuthRoutes(app, oauthDeps);
 
     app.post('/mcp', (req, res) =>
         handleMcpRequest(req, res, { config, lockedRepo, mcpConfig })

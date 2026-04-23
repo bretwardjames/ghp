@@ -9,8 +9,14 @@ import { z } from 'zod';
  */
 const configSchema = z
     .object({
-        /** Port to bind the HTTP server. Railway / Fly inject this. */
-        port: z.coerce.number().int().positive().default(3000),
+        /**
+         * Port to bind the HTTP server. Railway / Fly inject this.
+         * Default 8731 — chosen to avoid collisions with common local
+         * services (Node 3000, Vite 5173, Rails/http-server 8080). When
+         * fronted by Tailscale Funnel the public port is 443/8443/10000
+         * regardless of the local choice.
+         */
+        port: z.coerce.number().int().positive().default(8731),
 
         /**
          * Mode guard. Must be exactly 'hosted' — any other value refuses to
@@ -39,6 +45,30 @@ const configSchema = z
         /** Comma-separated CORS origin allowlist. '*' for dev. */
         allowedOrigins: z.string().default('*'),
 
+        /**
+         * GitHub OAuth App credentials. Required. The hosted server
+         * mediates PKCE between the MCP client and GitHub (which does
+         * not natively support PKCE on OAuth Apps), so the client_id
+         * and client_secret live here, NEVER on the MCP client.
+         */
+        githubOauthClientId: z.string().min(1, 'GHP_GITHUB_OAUTH_CLIENT_ID is required'),
+        githubOauthClientSecret: z
+            .string()
+            .min(1, 'GHP_GITHUB_OAUTH_CLIENT_SECRET is required'),
+
+        /**
+         * Comma-separated allowlist of redirect_uris MCP clients may
+         * use. Exact match. Required — refusing to accept an unknown
+         * redirect target is the primary defence against authorization
+         * code phishing.
+         */
+        allowedRedirectUris: z
+            .string()
+            .min(1, 'GHP_ALLOWED_REDIRECT_URIS is required (comma-separated list)'),
+
+        /** TTL (seconds) for ephemeral authorize state + auth codes. */
+        oauthStateTtlSeconds: z.coerce.number().int().positive().default(600),
+
         nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
     })
     .refine(
@@ -59,8 +89,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HostedConfig {
         baseUrl: env.GHP_HOSTED_BASE_URL,
         lockedRepo: env.GHP_REPO,
         allowedOrigins: env.GHP_ALLOWED_ORIGINS,
+        githubOauthClientId: env.GHP_GITHUB_OAUTH_CLIENT_ID,
+        githubOauthClientSecret: env.GHP_GITHUB_OAUTH_CLIENT_SECRET,
+        allowedRedirectUris: env.GHP_ALLOWED_REDIRECT_URIS,
+        oauthStateTtlSeconds: env.GHP_OAUTH_STATE_TTL_SECONDS,
         nodeEnv: env.NODE_ENV,
     });
+}
+
+export function parseAllowedRedirectUris(raw: string): string[] {
+    return raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
 }
 
 export function parseRepoInfo(lockedRepo: string): {

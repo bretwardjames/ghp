@@ -22,9 +22,13 @@ function buildConfig(overrides: Partial<HostedConfig> = {}): HostedConfig {
     return {
         port: 0,
         mode: 'hosted',
-        baseUrl: undefined,
+        baseUrl: 'https://ghp-mcp-hosted.test',
         lockedRepo: 'bretwardjames/ghp',
         allowedOrigins: '*',
+        githubOauthClientId: 'test-github-client-id',
+        githubOauthClientSecret: 'test-github-client-secret',
+        allowedRedirectUris: 'https://runtight.test/oauth/callback',
+        oauthStateTtlSeconds: 600,
         nodeEnv: 'test',
         ...overrides,
     };
@@ -53,10 +57,26 @@ describe('hosted http server', () => {
     });
 
     describe('/.well-known/oauth-protected-resource', () => {
-        it('returns 501 stub until OAuth ships in #279', async () => {
+        it('returns RFC 9728 metadata pointing at ourselves as the AS', async () => {
             const res = await request(app).get('/.well-known/oauth-protected-resource');
-            expect(res.status).toBe(501);
-            expect(res.body.error).toBe('not_implemented');
+            expect(res.status).toBe(200);
+            expect(res.body.resource).toBe('https://ghp-mcp-hosted.test');
+            expect(res.body.authorization_servers).toEqual([
+                'https://ghp-mcp-hosted.test',
+            ]);
+            expect(res.body.bearer_methods_supported).toContain('header');
+        });
+    });
+
+    describe('/.well-known/oauth-authorization-server', () => {
+        it('returns RFC 8414 metadata with PKCE S256 declared', async () => {
+            const res = await request(app).get('/.well-known/oauth-authorization-server');
+            expect(res.status).toBe(200);
+            expect(res.body.issuer).toBe('https://ghp-mcp-hosted.test');
+            expect(res.body.authorization_endpoint).toMatch(/\/oauth\/authorize$/);
+            expect(res.body.token_endpoint).toMatch(/\/oauth\/token$/);
+            expect(res.body.code_challenge_methods_supported).toEqual(['S256']);
+            expect(res.body.grant_types_supported).toContain('authorization_code');
         });
     });
 
@@ -70,7 +90,7 @@ describe('hosted http server', () => {
             expect(res.status).toBe(401);
             expect(res.headers['www-authenticate']).toMatch(/^Bearer /);
             expect(res.headers['www-authenticate']).toContain(
-                'resource_metadata="/.well-known/oauth-protected-resource"'
+                'resource_metadata="https://ghp-mcp-hosted.test/.well-known/oauth-protected-resource"'
             );
             expect(res.body.error.code).toBe(-32001);
         });

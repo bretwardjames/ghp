@@ -117,6 +117,10 @@ gh ssh-key ...    # SSH key management
 - `packages/mcp-hosted/` - HTTP MCP server for hosted multi-tenant platforms (@bretwardjames/ghp-mcp-hosted)
 - `apps/vscode/` - VS Code extension (gh-projects)
 
+## CI
+
+GitHub Actions runs `pnpm build` + `pnpm test` on every PR against `main` and every push to `main` via `.github/workflows/ci.yml`. Keep the suite green — if you hit a failing test that looks pre-existing, fix it as part of the PR that surfaces it rather than papering over it.
+
 ## Publishing
 
 Use `pnpm publish` (not `npm publish`) to properly resolve `workspace:*` references:

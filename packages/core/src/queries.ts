@@ -776,3 +776,24 @@ export const ISSUE_RELATIONSHIPS_QUERY = `
         }
     }
 `;
+
+/**
+ * Open milestones for the timeline audit. Fetches title / due date /
+ * open issue count so the planning driver can spot stale milestones
+ * without chasing per-milestone issue lists.
+ */
+export const REPO_OPEN_MILESTONES_QUERY = `
+    query($owner: String!, $name: String!) {
+        repository(owner: $owner, name: $name) {
+            milestones(first: 50, states: OPEN, orderBy: { field: DUE_DATE, direction: ASC }) {
+                nodes {
+                    number
+                    title
+                    state
+                    dueOn
+                    issues(states: OPEN) { totalCount }
+                }
+            }
+        }
+    }
+`;

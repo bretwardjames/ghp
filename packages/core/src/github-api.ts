@@ -1902,4 +1902,50 @@ export class GitHubAPI {
 
         return events;
     }
+
+    /**
+     * Fetch open milestones for a repo with enough context to run the
+     * planning-meeting timeline audit. Returns dueOn as an ISO date
+     * (or null) and the open issue count per milestone.
+     */
+    async listOpenMilestones(
+        repo: RepoInfo
+    ): Promise<
+        Array<{
+            number: number;
+            title: string;
+            state: 'open' | 'closed';
+            dueOn: string | null;
+            openIssueCount: number;
+        }>
+    > {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        interface Response {
+            repository: {
+                milestones: {
+                    nodes: Array<{
+                        number: number;
+                        title: string;
+                        state: string;
+                        dueOn: string | null;
+                        issues: { totalCount: number };
+                    }>;
+                };
+            };
+        }
+
+        const response: Response = await this.graphqlWithRetry(
+            queries.REPO_OPEN_MILESTONES_QUERY,
+            { owner: repo.owner, name: repo.name }
+        );
+
+        return response.repository.milestones.nodes.map((m) => ({
+            number: m.number,
+            title: m.title,
+            state: m.state.toLowerCase() === 'closed' ? 'closed' : 'open',
+            dueOn: m.dueOn ? m.dueOn.slice(0, 10) : null,
+            openIssueCount: m.issues.totalCount,
+        }));
+    }
 }

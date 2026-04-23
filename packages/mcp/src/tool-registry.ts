@@ -39,6 +39,8 @@ import * as getIssueTool from './tools/get-issue.js';
 import * as standupTool from './tools/standup.js';
 import * as fieldsTool from './tools/fields.js';
 import * as tagsTool from './tools/tags.js';
+// Planning meeting driver
+import * as planningAuditTool from './tools/planning-audit.js';
 
 // Re-export types
 export type { ToolCategory, ToolCapability, McpConfig, McpToolsConfig } from './types.js';
@@ -92,6 +94,8 @@ const TOOLS: ToolModule[] = [
     // Worktree tools
     worktreeTool,
     removeWorktreeTool,
+    // Planning
+    planningAuditTool,
 ];
 
 /**

@@ -468,3 +468,9 @@ export type {
     HookResult,
     HookExecutionOptions,
 } from './plugins/index.js';
+
+// =============================================================================
+// Planning meeting driver
+// =============================================================================
+
+export * as planning from './planning/index.js';

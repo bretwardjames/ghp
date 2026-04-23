@@ -136,18 +136,21 @@ export const PROJECT_FIELDS_QUERY = `
                         ... on ProjectV2Field {
                             id
                             name
+                            dataType
                         }
                         ... on ProjectV2SingleSelectField {
                             id
                             name
+                            dataType
                             options { id name }
                         }
                         ... on ProjectV2IterationField {
                             id
                             name
+                            dataType
                             configuration {
-                                iterations { id title }
-                                completedIterations { id title }
+                                iterations { id title startDate duration }
+                                completedIterations { id title startDate duration }
                             }
                         }
                     }
@@ -781,11 +784,18 @@ export const ISSUE_RELATIONSHIPS_QUERY = `
  * Open milestones for the timeline audit. Fetches title / due date /
  * open issue count so the planning driver can spot stale milestones
  * without chasing per-milestone issue lists.
+ *
+ * Capped at 50 (first page). `pageInfo.hasNextPage` is exposed so
+ * callers can surface an "audit may be incomplete" warning rather
+ * than silently truncate. Repos with >50 open milestones are rare;
+ * when they do exist, pagination can be added without breaking
+ * callers that treat the return as a list.
  */
 export const REPO_OPEN_MILESTONES_QUERY = `
     query($owner: String!, $name: String!) {
         repository(owner: $owner, name: $name) {
             milestones(first: 50, states: OPEN, orderBy: { field: DUE_DATE, direction: ASC }) {
+                pageInfo { hasNextPage }
                 nodes {
                     number
                     title

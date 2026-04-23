@@ -2,11 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
-import {
-    planning,
-    type IterationInfo,
-    type MilestoneInfo,
-} from '@bretwardjames/ghp-core';
+import { planning } from '@bretwardjames/ghp-core';
+type IterationInfo = planning.IterationInfo;
+type MilestoneInfo = planning.MilestoneInfo;
 
 /** Tool metadata for registry */
 export const meta: ToolMeta = {
@@ -88,42 +86,51 @@ export function register(server: McpServer, context: ServerContext): void {
                 fields
             );
 
-            // Extract iterations from the Sprint field (if present) so the
-            // timeline audit can reason about the rolling window.
+            // Extract iterations (with real startDate + duration) from
+            // the Sprint field — core.getProjectFields exposes the raw
+            // iteration list on the field metadata so we don't need a
+            // second query.
             const sprintField = fields.find(
-                (f) => f.name.toLowerCase() === 'sprint' && f.type.toLowerCase().includes('iteration')
+                (f) =>
+                    f.name.toLowerCase() === 'sprint' &&
+                    (f.type.toLowerCase() === 'iteration' ||
+                        f.dataType?.toLowerCase() === 'iteration')
             );
             const iterations: IterationInfo[] = [];
             let completedIterationCount = 0;
-            if (sprintField) {
-                // `options` holds both active + completed iterations once
-                // core.getProjectFields flattens them; dates aren't on the
-                // flattened shape so we re-query the raw field via the
-                // getProjectFields response. Simpler: fetch once, reflect
-                // from options.
-                const rawField = fields.find((f) => f.id === sprintField.id);
-                for (const opt of rawField?.options ?? []) {
-                    // Flattened options lose the startDate/duration; to
-                    // preserve them we'd need a dedicated query. For now
-                    // we surface iteration names only and skip the
-                    // rolling-window checks if dates are unknown.
+            if (sprintField?.iterations) {
+                for (const iter of sprintField.iterations) {
+                    if (iter.completed) {
+                        completedIterationCount += 1;
+                        continue;
+                    }
                     iterations.push({
-                        id: opt.id,
-                        title: opt.name,
-                        startDate: '', // unknown under the current flatten
-                        duration: 7,
+                        id: iter.id,
+                        title: iter.title,
+                        startDate: iter.startDate,
+                        duration: iter.duration,
                     });
                 }
-                // When startDates are missing, the audit won't find a
-                // "current" iteration — which surfaces the right finding
-                // (no-current-iteration) automatically.
             }
 
+            const warnings: string[] = [];
             let milestones: MilestoneInfo[] = [];
             try {
-                milestones = await context.api.listOpenMilestones(repo);
-            } catch {
-                // Non-fatal: the audit simply reports no milestones.
+                const ms = await context.api.listOpenMilestones(repo);
+                milestones = ms.milestones;
+                if (ms.truncated) {
+                    warnings.push(
+                        'More than 50 open milestones in this repo; audit covers only the first 50 ordered by dueOn asc. Stale-milestone findings may be accurate but current/upcoming picks may be wrong.'
+                    );
+                }
+            } catch (err) {
+                // Don't silently treat a fetch failure as "repo has no
+                // milestones" — that would invert the audit's advice.
+                warnings.push(
+                    `Failed to fetch milestones: ${
+                        err instanceof Error ? err.message : String(err)
+                    }. Milestone findings in this report may be incomplete.`
+                );
             }
 
             const timeline = planning.auditTimeline({
@@ -133,9 +140,12 @@ export function register(server: McpServer, context: ServerContext): void {
                 rollingWindowSize,
             });
 
-            const report: planning.PlanningCapabilityReport = {
+            const report = {
                 ...fieldProbe,
                 timeline,
+                ...(warnings.length > 0 ? { warnings } : {}),
+            } satisfies planning.PlanningCapabilityReport & {
+                warnings?: string[];
             };
 
             return {

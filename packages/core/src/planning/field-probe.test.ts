@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { probeProjectFields, type ProjectFieldMetadata } from './field-probe.js';
 
-function field(name: string, type: string): ProjectFieldMetadata {
-    return { id: `F_${name}`, name, type };
+function field(name: string, type: string, dataType?: string): ProjectFieldMetadata {
+    return { id: `F_${name}`, name, type, dataType };
 }
 
 describe('probeProjectFields', () => {
@@ -75,5 +75,30 @@ describe('probeProjectFields', () => {
         const sprintFallback = report.fallbacks.find((f) => f.field === 'Sprint');
         expect(sprintFallback?.strategy).toBe('milestone-group');
         expect(report.suggestions.find((s) => s.field === 'Sprint')).toBeTruthy();
+    });
+
+    it('Last Reviewed as a real Date field is detected when dataType=DATE', () => {
+        // GitHub's GraphQL collapses Date/Text/Number to __typename
+        // ProjectV2Field (type === ''), so dataType must be the
+        // authoritative source. Without this the user's "add a Date
+        // field" upgrade suggestion would never clear.
+        const report = probeProjectFields('P_1', 'X', [
+            field('Last Reviewed', '', 'DATE'),
+        ]);
+        expect(report.detected['Last Reviewed']).toBe(true);
+    });
+
+    it('Last Reviewed with wrong dataType is a fallback, not coerced', () => {
+        const report = probeProjectFields('P_1', 'X', [
+            field('Last Reviewed', '', 'TEXT'),
+        ]);
+        expect(report.detected['Last Reviewed']).toBe('fallback');
+    });
+
+    it('Priority via SINGLE_SELECT dataType is accepted (underscore normalization)', () => {
+        const report = probeProjectFields('P_1', 'X', [
+            field('Priority', 'SingleSelect', 'SINGLE_SELECT'),
+        ]);
+        expect(report.detected.Priority).toBe(true);
     });
 });

@@ -44,6 +44,35 @@ describe('parseSentinel', () => {
         expect(parseSentinel('<!-- ghp:reviewed: -->')).toBeNull();
         expect(parseSentinel('<!-- ghp:reviewed:not-a-date:backlog:bret -->')).toBeNull();
     });
+
+    it('accepts actor names with hyphens and bracketed bot suffixes', () => {
+        // Real GitHub handles: hyphens are common, bots use [bot] suffix.
+        expect(
+            parseSentinel('<!-- ghp:reviewed:2026-04-22:close:bret-james -->')
+        ).toEqual({ reviewedOn: '2026-04-22', decision: 'close', by: 'bret-james' });
+        expect(
+            parseSentinel('<!-- ghp:reviewed:2026-04-22:backlog:dependabot[bot] -->')
+        ).toEqual({
+            reviewedOn: '2026-04-22',
+            decision: 'backlog',
+            by: 'dependabot[bot]',
+        });
+    });
+});
+
+describe('upsertSentinel (regression: hyphenated actor names)', () => {
+    it('replaces a sentinel written by a hyphenated actor in-place', () => {
+        const body =
+            'body\n\n<!-- ghp:reviewed:2020-01-01:close:bret-james -->\n\ntail';
+        const out = upsertSentinel(body, {
+            reviewedOn: '2026-04-22',
+            decision: 'kill-list',
+            by: 'bret-james',
+        });
+        // Single sentinel — not appended to the end.
+        expect(out.match(/ghp:reviewed/g)?.length).toBe(1);
+        expect(out).toContain('2026-04-22');
+    });
 });
 
 describe('upsertSentinel', () => {

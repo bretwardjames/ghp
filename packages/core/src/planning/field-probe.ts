@@ -13,7 +13,19 @@ import type {
 export interface ProjectFieldMetadata {
     id: string;
     name: string;
-    type: string; // 'SingleSelect' | 'Iteration' | 'Date' | 'Text' | ...
+    /**
+     * Derived from GraphQL __typename — useful for SingleSelect /
+     * Iteration which have their own types, but collapses to '' for
+     * generic ProjectV2Field (Date / Text / Number). Check `dataType`
+     * when type is empty.
+     */
+    type: string;
+    /**
+     * GitHub's ProjectV2FieldType enum (DATE | TEXT | NUMBER |
+     * SINGLE_SELECT | ITERATION | ...). This is the authoritative
+     * source for distinguishing generic-typed fields.
+     */
+    dataType?: string;
     options?: Array<{ id: string; name: string }>;
 }
 
@@ -118,13 +130,26 @@ function fieldSupport(
     expectedType: 'single-select' | 'date' | 'iteration'
 ): FieldSupport {
     if (!field) return 'fallback';
+    // Prefer GitHub's ProjectV2FieldType enum (via `dataType`) since the
+    // derived `type` string is empty for generic ProjectV2Field (Date /
+    // Text / Number all collapse to the same variant in GraphQL). Fall
+    // back to the __typename-derived string for tests / older data.
+    const dataType = field.dataType?.toLowerCase();
     const normalizedType = field.type.toLowerCase();
     const expected = expectedType.replace('-', '');
-    if (normalizedType === expected || normalizedType.includes(expected)) {
+    // Compare against the enum form used by GitHub (e.g. 'DATE',
+    // 'SINGLE_SELECT', 'ITERATION'). Underscore-strip so 'single_select'
+    // matches 'singleselect'.
+    if (dataType) {
+        const normalizedDataType = dataType.replace(/_/g, '');
+        if (normalizedDataType === expected) return true;
+        // dataType is authoritative — mismatch means the field is the
+        // wrong kind, regardless of what the derived `type` string says.
+        return 'fallback';
+    }
+    if (normalizedType === expected || normalizedType.startsWith(expected)) {
         return true;
     }
-    // The field name matches but the type is wrong — treat as missing
-    // rather than force a coerce that would misbehave silently.
     return 'fallback';
 }
 

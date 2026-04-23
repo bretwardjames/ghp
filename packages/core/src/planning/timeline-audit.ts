@@ -187,12 +187,23 @@ function nextIterationStart(
     now: Date,
     defaultDur: number
 ): Date {
-    const last = upcoming.at(-1) ?? current;
-    if (!last) return now;
-    const end =
-        Date.parse(last.startDate) + last.duration * 24 * 60 * 60 * 1000;
-    if (Number.isNaN(end)) return now;
-    return new Date(end);
+    // Walk from the latest known iteration back to the earliest, using
+    // the first parseable endDate. This prevents a single malformed
+    // iteration (empty startDate, duration=0) from collapsing the
+    // suggestion to "start today" and clobbering a real active sprint.
+    const candidates = [...upcoming].reverse();
+    if (current) candidates.push(current);
+    for (const it of candidates) {
+        const start = Date.parse(it.startDate);
+        if (Number.isNaN(start)) continue;
+        const dur = it.duration > 0 ? it.duration : defaultDur;
+        const end = start + dur * 24 * 60 * 60 * 1000;
+        if (!Number.isNaN(end)) return new Date(end);
+    }
+    // No parseable anchor found — default the next iteration start to
+    // one iteration-width out from today so we don't overlap whatever
+    // the project actually has.
+    return new Date(now.getTime() + defaultDur * 24 * 60 * 60 * 1000);
 }
 
 function toIsoDate(d: Date): string {

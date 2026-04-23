@@ -14,7 +14,10 @@
  * definition a single value.
  */
 
-const SENTINEL_REGEX = /<!--\s*ghp:reviewed:(\d{4}-\d{2}-\d{2}):([a-z-]+):([^\s-]+)\s*-->/i;
+// Actor handle group accepts the full GitHub username charset plus
+// bracketed bot suffixes (e.g. `dependabot[bot]`). Excludes whitespace
+// and the characters that would terminate the sentinel comment.
+const SENTINEL_REGEX = /<!--\s*ghp:reviewed:(\d{4}-\d{2}-\d{2}):([a-z-]+):([A-Za-z0-9][A-Za-z0-9\-_.\[\]]*)\s*-->/i;
 
 export interface ReviewSentinel {
     reviewedOn: string; // yyyy-mm-dd

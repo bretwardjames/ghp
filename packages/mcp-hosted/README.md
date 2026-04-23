@@ -28,6 +28,10 @@ PORT=3000 \
   node packages/mcp-hosted/dist/bin.js
 ```
 
+`GHP_REPO` is required — the hosted server is scoped to a single GitHub
+repo per instance. Spin up multiple instances (one per repo) to serve
+multiple projects.
+
 Probe:
 
 ```bash
@@ -43,15 +47,15 @@ curl -X POST http://localhost:3000/mcp \
 
 ## Environment
 
-| Var                    | Required | Default         | Purpose                                             |
-|------------------------|----------|-----------------|-----------------------------------------------------|
-| `GHP_MCP_MODE`         | yes      | —               | Must be `hosted`. Refuses to start otherwise.       |
-| `PORT`                 | no       | `3000`          | HTTP listen port. Railway / Fly inject this.        |
-| `GHP_HOSTED_BASE_URL`  | prod     | —               | Public https URL. Required if `NODE_ENV=production`.|
-| `GHP_REPO`             | no       | —               | Lock every session to `owner/name`.                 |
-| `GHP_ALLOWED_ORIGINS`  | no       | `*`             | CORS allowlist.                                     |
-| `GHP_LOG_LEVEL`        | no       | `info`          | `trace` / `debug` / `info` / `warn` / `error`.      |
-| `NODE_ENV`             | no       | `development`   |                                                     |
+| Var                    | Required | Default         | Purpose                                                                       |
+|------------------------|----------|-----------------|-------------------------------------------------------------------------------|
+| `GHP_MCP_MODE`         | yes      | —               | Must be `hosted`. Refuses to start otherwise.                                 |
+| `GHP_REPO`             | yes      | —               | Locks every session to `owner/name`. Without it the server would attempt to  |
+|                        |          |                 | auto-detect via `git remote`, which is meaningless in a hosted context.       |
+| `PORT`                 | no       | `3000`          | HTTP listen port. Railway / Fly inject this.                                  |
+| `GHP_HOSTED_BASE_URL`  | prod     | —               | Public https URL. Required if `NODE_ENV=production`.                          |
+| `GHP_ALLOWED_ORIGINS`  | no       | `*`             | CORS allowlist.                                                               |
+| `NODE_ENV`             | no       | `development`   |                                                                               |
 
 ## Endpoints
 

@@ -25,7 +25,6 @@ function buildConfig(overrides: Partial<HostedConfig> = {}): HostedConfig {
         baseUrl: undefined,
         lockedRepo: 'bretwardjames/ghp',
         allowedOrigins: '*',
-        logLevel: 'error',
         nodeEnv: 'test',
         ...overrides,
     };
@@ -95,6 +94,19 @@ describe('hosted http server', () => {
         });
     });
 
+    describe('CORS', () => {
+        it('responds 204 to OPTIONS preflight so browsers can POST', async () => {
+            const res = await request(app)
+                .options('/mcp')
+                .set('Origin', 'https://example.com')
+                .set('Access-Control-Request-Method', 'POST')
+                .set('Access-Control-Request-Headers', 'Authorization, Content-Type');
+            expect(res.status).toBe(204);
+            expect(res.headers['access-control-allow-methods']).toContain('POST');
+            expect(res.headers['access-control-allow-headers']).toContain('Authorization');
+        });
+    });
+
     describe('POST /mcp with auth — MCP protocol', () => {
         it('initializes successfully', async () => {
             const res = await request(app)
@@ -116,6 +128,41 @@ describe('hosted http server', () => {
             const parsed = parseMcpResponse(res.text);
             expect(parsed.result.serverInfo.name).toBe('ghp');
             expect(parsed.result.protocolVersion).toBeDefined();
+        });
+
+        it('concurrent requests with different tokens do not share state', async () => {
+            // Fire two tools/list requests with different bearers in parallel.
+            // If any module-level state (token provider, repo context, tool
+            // registration) leaked across requests, we'd see inconsistent tool
+            // lists or error/success asymmetry. Both should return identical
+            // pure-api tool sets.
+            const tokenA = 'ghp_tenant_A_fake_token_000000001';
+            const tokenB = 'ghp_tenant_B_fake_token_000000002';
+
+            const [resA, resB] = await Promise.all([
+                request(app)
+                    .post('/mcp')
+                    .set(mcpHeaders(tokenA))
+                    .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+                request(app)
+                    .post('/mcp')
+                    .set(mcpHeaders(tokenB))
+                    .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+            ]);
+
+            expect(resA.status).toBe(200);
+            expect(resB.status).toBe(200);
+
+            const namesA = parseMcpResponse(resA.text)
+                .result.tools.map((t: { name: string }) => t.name)
+                .sort();
+            const namesB = parseMcpResponse(resB.text)
+                .result.tools.map((t: { name: string }) => t.name)
+                .sort();
+
+            expect(namesA).toEqual(namesB);
+            expect(namesA).toContain('get_my_work');
+            expect(namesA).not.toContain('create_worktree');
         });
 
         it('tools/list contains only pure-api tools', async () => {

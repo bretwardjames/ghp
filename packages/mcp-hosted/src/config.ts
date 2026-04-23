@@ -26,21 +26,18 @@ const configSchema = z
         baseUrl: z.string().url().optional(),
 
         /**
-         * Lock every session to a single GitHub repo. When set, every
-         * McpServer instance is created with this repo in RepoContext,
-         * skipping git remote detection (which wouldn't work server-side
-         * anyway). Format: "owner/name".
+         * Lock every session to a single GitHub repo. REQUIRED — without
+         * it, RepoContext would attempt to auto-detect by running
+         * `git remote get-url origin` in the server's cwd, which is
+         * meaningless and spawns a subprocess in a multi-tenant hosted
+         * deployment. Format: "owner/name".
          */
         lockedRepo: z
             .string()
-            .regex(/^[^/]+\/[^/]+$/, 'GHP_REPO must be owner/name')
-            .optional(),
+            .regex(/^[^/]+\/[^/]+$/, 'GHP_REPO is required and must be owner/name'),
 
         /** Comma-separated CORS origin allowlist. '*' for dev. */
         allowedOrigins: z.string().default('*'),
-
-        /** pino log level */
-        logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 
         nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
     })
@@ -62,7 +59,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HostedConfig {
         baseUrl: env.GHP_HOSTED_BASE_URL,
         lockedRepo: env.GHP_REPO,
         allowedOrigins: env.GHP_ALLOWED_ORIGINS,
-        logLevel: env.GHP_LOG_LEVEL,
         nodeEnv: env.NODE_ENV,
     });
 }

@@ -4,6 +4,7 @@ import {
     createServer as createMcpServer,
     registerEnabledTools,
     pureApiTools,
+    type McpConfig,
 } from '@bretwardjames/ghp-mcp';
 import type { RepoInfo } from '@bretwardjames/ghp-core';
 import { BearerTokenProvider, extractBearer } from './auth/bearer-token-provider.js';
@@ -25,6 +26,31 @@ import { assertHostedSafe } from './mode-guard.js';
  * hosted-safe subset is ever exposed.
  */
 export function createApp(config: HostedConfig): Application {
+    // One-time capability audit at startup. pureApiTools is already filtered
+    // by capability === 'pure-api', but re-asserting here catches the case
+    // where the list is ever regenerated in a future refactor and something
+    // local-only slips in. Doing this at createApp time rather than per
+    // request avoids paying the cost on every tool call.
+    for (const tool of pureApiTools) {
+        assertHostedSafe(tool.meta);
+    }
+
+    // Pre-resolve the locked repo once. Hosted mode requires GHP_REPO (the
+    // config schema enforces this), so this never branches into the auto
+    // detect path that would shell out to `git remote get-url origin` on
+    // the host machine — something we never want in a multi-tenant server.
+    const lockedRepo: RepoInfo = parseRepoInfo(config.lockedRepo);
+
+    // Pre-build a deterministic McpConfig for every request. Passing this
+    // explicitly prevents registerEnabledTools from falling back to
+    // loadMcpConfig(), which reads ~/.config/ghp-cli/config.json and runs
+    // `git rev-parse --show-toplevel` — behavior that is wrong for a
+    // multi-tenant server and would spawn a subprocess per request.
+    const mcpConfig: McpConfig = {
+        tools: { read: true, action: true },
+        disabledTools: [],
+    };
+
     const app = express();
     app.disable('x-powered-by');
 
@@ -45,6 +71,14 @@ export function createApp(config: HostedConfig): Application {
             'Content-Type, Authorization, MCP-Protocol-Version'
         );
         next();
+    });
+
+    // CORS preflight: browsers issue OPTIONS before any cross-origin POST
+    // that carries Authorization or non-simple Content-Type. Without this
+    // handler, the preflight would 404 and the POST would be blocked
+    // client-side.
+    app.options('/mcp', (_req, res) => {
+        res.sendStatus(204);
     });
 
     app.get('/healthz', (_req, res) => {
@@ -69,35 +103,33 @@ export function createApp(config: HostedConfig): Application {
         });
     });
 
-    app.post('/mcp', (req, res) => handleMcpRequest(req, res, config));
+    app.post('/mcp', (req, res) =>
+        handleMcpRequest(req, res, { config, lockedRepo, mcpConfig })
+    );
 
     return app;
+}
+
+interface RequestDeps {
+    config: HostedConfig;
+    lockedRepo: RepoInfo;
+    mcpConfig: McpConfig;
 }
 
 async function handleMcpRequest(
     req: Request,
     res: Response,
-    config: HostedConfig
+    deps: RequestDeps
 ): Promise<void> {
     const token = extractBearer(req.header('authorization'));
     if (!token) {
-        sendUnauthorized(res, config);
+        sendUnauthorized(res, deps.config);
         return;
     }
 
     const tokenProvider = new BearerTokenProvider(token);
-    const lockedRepo: RepoInfo | undefined = config.lockedRepo
-        ? parseRepoInfo(config.lockedRepo)
-        : undefined;
-
-    const { server, context } = createMcpServer(tokenProvider, lockedRepo);
-
-    // Defence-in-depth: every pure-api tool passes assertHostedSafe;
-    // a local-only tool sneaking in would throw before register().
-    for (const tool of pureApiTools) {
-        assertHostedSafe(tool.meta);
-    }
-    registerEnabledTools(server, context, undefined, 'pure-api');
+    const { server, context } = createMcpServer(tokenProvider, deps.lockedRepo);
+    registerEnabledTools(server, context, deps.mcpConfig, 'pure-api');
 
     const transport = new StreamableHTTPServerTransport({
         // Stateless per-request mode: no session IDs, no cross-request state.
@@ -106,16 +138,16 @@ async function handleMcpRequest(
         sessionIdGenerator: undefined,
     });
 
-    // When the client closes the stream we also close our handle so the
-    // request never dangles. Without this, long-running tool calls that
-    // the client abandons would keep the McpServer alive.
-    res.on('close', () => {
-        void transport.close();
-        void server.close();
-    });
-
     try {
         await server.connect(transport);
+
+        // Register cleanup after connect so we never try to close an
+        // uninitialized transport if the client disconnects during connect.
+        res.on('close', () => {
+            void transport.close();
+            void server.close();
+        });
+
         await transport.handleRequest(req, res, req.body);
     } catch (err) {
         // If connect/handleRequest throws before any response was sent,

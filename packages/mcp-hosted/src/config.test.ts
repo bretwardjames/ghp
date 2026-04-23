@@ -5,21 +5,26 @@ describe('loadConfig', () => {
     const base = {
         GHP_MCP_MODE: 'hosted',
         PORT: '3000',
+        GHP_REPO: 'bretwardjames/ghp',
     };
 
     it('accepts a minimal dev config', () => {
         const cfg = loadConfig({ ...base });
         expect(cfg.mode).toBe('hosted');
         expect(cfg.port).toBe(3000);
+        expect(cfg.lockedRepo).toBe('bretwardjames/ghp');
         expect(cfg.nodeEnv).toBe('development');
     });
 
     it('refuses to start when GHP_MCP_MODE is not hosted', () => {
-        expect(() => loadConfig({ GHP_MCP_MODE: 'local', PORT: '3000' })).toThrow();
+        expect(() =>
+            loadConfig({ ...base, GHP_MCP_MODE: 'local' })
+        ).toThrow();
     });
 
     it('refuses to start when GHP_MCP_MODE is missing', () => {
-        expect(() => loadConfig({ PORT: '3000' })).toThrow();
+        const { GHP_MCP_MODE: _omit, ...without } = base;
+        expect(() => loadConfig(without)).toThrow();
     });
 
     it('requires https baseUrl in production', () => {
@@ -44,11 +49,12 @@ describe('loadConfig', () => {
         ).not.toThrow();
     });
 
-    it('validates GHP_REPO format', () => {
-        expect(() =>
-            loadConfig({ ...base, GHP_REPO: 'owner/name' })
-        ).not.toThrow();
+    it('requires GHP_REPO', () => {
+        const { GHP_REPO: _omit, ...without } = base;
+        expect(() => loadConfig(without)).toThrow();
+    });
 
+    it('validates GHP_REPO format', () => {
         expect(() => loadConfig({ ...base, GHP_REPO: 'no-slash' })).toThrow();
     });
 });

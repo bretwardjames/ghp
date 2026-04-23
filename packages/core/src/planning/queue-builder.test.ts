@@ -155,4 +155,40 @@ describe('buildQueue — weekly', () => {
         });
         expect(queue).toEqual([]);
     });
+
+    it('projects without iterations still surface backlog items', () => {
+        // Regression: when currentSprintTitle is null, a `null === null`
+        // match in the sprint-assignment branch used to drop every
+        // item. Backlog items should still flow through.
+        const queue = buildQueue({
+            ...base,
+            currentSprintTitle: null,
+            upcomingSprintTitles: [],
+            items: [
+                item({ number: 1, status: 'Backlog', lastReviewed: null }),
+                item({ number: 2, status: 'Todo' }),
+            ],
+        });
+        expect(queue.map((q) => q.number).sort()).toEqual([1, 2]);
+    });
+
+    it('aliases common status names to the flow-doc buckets', () => {
+        // Todo / To Do / Committed all map to kill-list per STATUS_ALIASES.
+        const queue = buildQueue({
+            ...base,
+            currentSprintTitle: null,
+            upcomingSprintTitles: [],
+            items: [
+                item({ number: 1, status: 'Todo' }),
+                item({ number: 2, status: 'To Do' }),
+                item({ number: 3, status: 'Committed' }),
+                item({ number: 4, status: 'Ready' }),
+            ],
+        });
+        const buckets = Object.fromEntries(queue.map((q) => [q.number, q.bucket]));
+        expect(buckets[1]).toBe('unscheduled-kill-list');
+        expect(buckets[2]).toBe('unscheduled-kill-list');
+        expect(buckets[3]).toBe('unscheduled-kill-list');
+        expect(buckets[4]).toBe('ready-for-release');
+    });
 });

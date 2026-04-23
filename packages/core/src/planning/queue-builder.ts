@@ -121,37 +121,63 @@ export function buildQueue(input: QueueBuildInput): PlanningItem[] {
     return order.flatMap((b) => bucketed[b]);
 }
 
+/**
+ * Project-customizable status aliases. Teams name their columns
+ * differently ("Kill List" / "Todo" / "To Do" / "Committed" all map
+ * to the flow doc's "committed work not yet in progress" concept).
+ * Case-insensitive exact match against the item's status.
+ */
+const STATUS_ALIASES: Record<string, 'backlog' | 'kill-list' | 'ready-for-release'> = {
+    backlog: 'backlog',
+    'kill list': 'kill-list',
+    todo: 'kill-list',
+    'to do': 'kill-list',
+    committed: 'kill-list',
+    ready: 'ready-for-release',
+    'ready for release': 'ready-for-release',
+    'ready for release ✓': 'ready-for-release',
+};
+
+function normalizeStatus(
+    status: string | null
+): 'backlog' | 'kill-list' | 'ready-for-release' | 'other' {
+    const key = (status ?? '').trim().toLowerCase();
+    return STATUS_ALIASES[key] ?? 'other';
+}
+
 function classifyBucket(
     item: QueueInputItem,
     input: QueueBuildInput
 ): PlanningBucket | null {
-    const status = (item.status ?? '').toLowerCase();
+    const normalized = normalizeStatus(item.status);
 
-    // Step 4 — sprint assignment
-    if (item.iterationTitle === input.currentSprintTitle) {
-        if (item.assignees.length === 0 && status === 'kill list') {
-            return 'current-sprint-unassigned';
+    // Step 4 — sprint assignment. Skip entirely when the project has
+    // no iteration concept; `null === null` would otherwise pass the
+    // "item is in the current sprint" check for every item.
+    if (input.currentSprintTitle != null) {
+        if (item.iterationTitle === input.currentSprintTitle) {
+            if (item.assignees.length === 0 && normalized === 'kill-list') {
+                return 'current-sprint-unassigned';
+            }
+            return null; // current sprint, already assigned → not surfaced
         }
-        return null; // current sprint, already assigned → not surfaced
-    }
-    if (
-        item.iterationTitle &&
-        input.currentSprintTitle &&
-        item.iterationTitle !== input.currentSprintTitle &&
-        !input.upcomingSprintTitles.includes(item.iterationTitle) &&
-        status === 'kill list'
-    ) {
-        return 'past-sprint-stuck';
+        if (
+            item.iterationTitle &&
+            !input.upcomingSprintTitles.includes(item.iterationTitle) &&
+            normalized === 'kill-list'
+        ) {
+            return 'past-sprint-stuck';
+        }
     }
 
     // Step 5 — triage + backlog resurface
-    if (status === 'backlog') {
+    if (normalized === 'backlog') {
         if (!item.lastReviewed) return 'untriaged-backlog';
         return 'resurfacing-backlog';
     }
 
     // Step 6 — forward planning
-    if (status === 'kill list') {
+    if (normalized === 'kill-list') {
         if (item.iterationTitle === input.upcomingSprintTitles[0]) {
             return 'next-sprint';
         }
@@ -164,13 +190,9 @@ function classifyBucket(
     }
 
     // Step 7 — release check
-    if (status === 'ready for release') {
+    if (normalized === 'ready-for-release') {
         return 'ready-for-release';
     }
-
-    // Milestone-boundary extras are bucketed separately by the caller
-    // passing the right meetingType; for now they share the backlog
-    // buckets (the full-backlog pass is additive, not corrective).
 
     return null;
 }

@@ -666,7 +666,17 @@ export class GitHubAPI {
         id: string;
         name: string;
         type: string;
+        /** GitHub's ProjectV2FieldType enum — distinguishes Date vs Text vs Number. */
+        dataType?: string;
         options?: Array<{ id: string; name: string }>;
+        /** Populated only for Iteration fields — preserves per-iteration startDate + duration. */
+        iterations?: Array<{
+            id: string;
+            title: string;
+            startDate: string;
+            duration: number;
+            completed: boolean;
+        }>;
     }>> {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
 
@@ -677,10 +687,21 @@ export class GitHubAPI {
                         __typename: string;
                         id: string;
                         name: string;
+                        dataType?: string;
                         options?: Array<{ id: string; name: string }>;
                         configuration?: {
-                            iterations: Array<{ id: string; title: string }>;
-                            completedIterations: Array<{ id: string; title: string }>;
+                            iterations: Array<{
+                                id: string;
+                                title: string;
+                                startDate: string;
+                                duration: number;
+                            }>;
+                            completedIterations: Array<{
+                                id: string;
+                                title: string;
+                                startDate: string;
+                                duration: number;
+                            }>;
                         };
                     }>;
                 };
@@ -688,17 +709,31 @@ export class GitHubAPI {
         } = await this.graphqlWithRetry(queries.PROJECT_FIELDS_QUERY, { projectId });
 
         return response.node.fields.nodes.map(f => {
-            // Map iteration configurations into the options format
+            // Map iteration configurations into the options format for
+            // backwards-compatibility with existing callers, while also
+            // preserving the richer per-iteration metadata on a new field.
             let options = f.options;
+            let iterations: Array<{
+                id: string;
+                title: string;
+                startDate: string;
+                duration: number;
+                completed: boolean;
+            }> | undefined;
             if (f.configuration) {
-                const all = [...f.configuration.iterations, ...f.configuration.completedIterations];
-                options = all.map(i => ({ id: i.id, name: i.title }));
+                iterations = [
+                    ...f.configuration.iterations.map(i => ({ ...i, completed: false })),
+                    ...f.configuration.completedIterations.map(i => ({ ...i, completed: true })),
+                ];
+                options = iterations.map(i => ({ id: i.id, name: i.title }));
             }
             return {
                 id: f.id,
                 name: f.name,
                 type: f.__typename.replace('ProjectV2', '').replace('Field', ''),
+                dataType: f.dataType,
                 options,
+                iterations,
             };
         });
     }
@@ -1901,5 +1936,57 @@ export class GitHubAPI {
         }
 
         return events;
+    }
+
+    /**
+     * Fetch open milestones for a repo with enough context to run the
+     * planning-meeting timeline audit. Returns dueOn as an ISO date
+     * (or null) and the open issue count per milestone.
+     */
+    async listOpenMilestones(
+        repo: RepoInfo
+    ): Promise<{
+        milestones: Array<{
+            number: number;
+            title: string;
+            state: 'open' | 'closed';
+            dueOn: string | null;
+            openIssueCount: number;
+        }>;
+        /** True when the repo has >50 open milestones — audit should flag. */
+        truncated: boolean;
+    }> {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        interface Response {
+            repository: {
+                milestones: {
+                    pageInfo: { hasNextPage: boolean };
+                    nodes: Array<{
+                        number: number;
+                        title: string;
+                        state: string;
+                        dueOn: string | null;
+                        issues: { totalCount: number };
+                    }>;
+                };
+            };
+        }
+
+        const response: Response = await this.graphqlWithRetry(
+            queries.REPO_OPEN_MILESTONES_QUERY,
+            { owner: repo.owner, name: repo.name }
+        );
+
+        return {
+            milestones: response.repository.milestones.nodes.map((m) => ({
+                number: m.number,
+                title: m.title,
+                state: m.state.toLowerCase() === 'closed' ? 'closed' : 'open',
+                dueOn: m.dueOn ? m.dueOn.slice(0, 10) : null,
+                openIssueCount: m.issues.totalCount,
+            })),
+            truncated: response.repository.milestones.pageInfo.hasNextPage,
+        };
     }
 }

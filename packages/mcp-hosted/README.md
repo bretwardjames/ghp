@@ -173,7 +173,15 @@ docker run -p 8731:8731 \
 ## Related issues
 
 - #276 — Epic: Hosted GHP MCP server for runtight integration
-- #278 — **This package** (skeleton + HTTP + Bearer)
+- #278 — This package (skeleton + HTTP + Bearer)
 - #279 — OAuth 2.1 + well-known discovery
 - #280 — Docker + Railway deploy
-- #281 — runtight registration + E2E
+- #281 — runtight registration + E2E runbook (`test/e2e-runtight.md`)
+- #288 — Follow-up: re-enable `create_issue` on hosted by gating hook dispatch
+
+## End-to-end verification
+
+See [`test/e2e-runtight.md`](./test/e2e-runtight.md) for the 9-step
+manual runbook covering registration, OAuth flow, read/write tool
+calls, multi-tenancy cross-contamination check, token revocation,
+and disconnect.

@@ -16,8 +16,9 @@ export const meta: ToolMeta = {
     // Hook dispatch (`executeHooksForEvent('issue-created', ...)`) can run
     // user-supplied shell commands via `loadHooksConfig` + `runCommand`.
     // Classified local-only to match other hook-dispatching tools
-    // (start_work, create_pr, remove_worktree). Hosted mode must gate the
-    // hook block (tracked in #278) before this can be re-promoted to pure-api.
+    // (start_work, create_pr, remove_worktree). Re-enabling on hosted is
+    // tracked in #288 — a single-line GHP_MCP_MODE guard around the hook
+    // block is enough to flip this back to pure-api safely.
     capability: 'local-only',
 };
 

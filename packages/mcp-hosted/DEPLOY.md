@@ -101,6 +101,8 @@ GitHub OAuth App callback for this path: `https://<machine>.tail-xxx.ts.net:8443
 docker build -f packages/mcp-hosted/Dockerfile -t ghp-mcp-hosted .
 ```
 
+**Image layout:** the runtime container uses `pnpm deploy` output rather than the full monorepo. Inside the container, the working directory is `/app` and the entrypoint is `node dist/bin.js` (not `packages/mcp-hosted/dist/bin.js`). Workspace deps (`@bretwardjames/ghp-core`, `@bretwardjames/ghp-mcp`) are materialised as real `node_modules/` directories instead of symlinks.
+
 **`/oauth/authorize` returns 400 `invalid_redirect_uri`.** The MCP client's `redirect_uri` must be an exact match (including trailing slash, host case, default ports) of an entry in `GHP_ALLOWED_REDIRECT_URIS`. Copy/paste the exact string from the client's configuration.
 
 **GitHub consent screen says "The redirect_uri MUST match the registered callback URL".** Update the callback URL on your GitHub OAuth App to exactly `<GHP_HOSTED_BASE_URL>/oauth/callback`. GitHub is strict about scheme and host.

@@ -5,7 +5,7 @@
     "dockerfilePath": "packages/mcp-hosted/Dockerfile"
   },
   "deploy": {
-    "startCommand": "node packages/mcp-hosted/dist/bin.js",
+    "startCommand": "node dist/bin.js",
     "healthcheckPath": "/healthz",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

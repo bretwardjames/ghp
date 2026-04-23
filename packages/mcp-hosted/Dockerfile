@@ -25,13 +25,14 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/mcp-hosted/package.json packages/mcp-hosted/
-# The CLI + vscode packages are siblings in the workspace. We don't need
-# their source, but pnpm wants to see their manifests during `install`.
+# Sibling packages in the workspace — only their manifests are needed for
+# pnpm's workspace resolver, not their source.
 COPY packages/cli/package.json packages/cli/
 COPY apps/vscode/package.json apps/vscode/
 
 # Install deps for the hosted package and its transitive workspace graph.
-# `--filter ...` (no leading word) means "deps required by mcp-hosted."
+# `--filter ghp-mcp-hosted...` means "the hosted package plus everything
+# it depends on" (core, mcp), skipping cli and vscode.
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile \
         --filter @bretwardjames/ghp-mcp-hosted...
@@ -43,24 +44,22 @@ COPY packages/mcp-hosted/ packages/mcp-hosted/
 
 RUN pnpm --filter @bretwardjames/ghp-mcp-hosted... build
 
+# `pnpm deploy` produces a self-contained output: built dist + only
+# production dependencies, with workspace:* deps materialised as real
+# directories instead of symlinks. The result is portable, so the
+# runtime stage doesn't need pnpm at all and no second install is run.
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm deploy --filter @bretwardjames/ghp-mcp-hosted --prod /deploy
+
 # -------- runtime --------
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-RUN apk add --no-cache wget \
-    && corepack enable \
-    && corepack prepare pnpm@9.15.0 --activate
+RUN apk add --no-cache wget
 
-# Copy the whole workspace from the builder. pnpm deployed binaries rely
-# on workspace:* symlinks under node_modules, so a trimmed copy is risky;
-# the builder stage already dropped devDependencies via --prod implicit
-# install below.
-COPY --from=builder /app /app
-
-# Re-run install in --prod mode so devDependencies are pruned from node_modules.
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod \
-        --filter @bretwardjames/ghp-mcp-hosted...
+# Only the deployed output — no pnpm, no workspace manifests for
+# unrelated packages, no devDependencies.
+COPY --from=builder /deploy /app
 
 ENV NODE_ENV=production
 ENV GHP_MCP_MODE=hosted
@@ -72,4 +71,4 @@ USER node
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- "http://localhost:${PORT:-8731}/healthz" | grep -q ok || exit 1
 
-CMD ["node", "packages/mcp-hosted/dist/bin.js"]
+CMD ["node", "dist/bin.js"]

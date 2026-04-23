@@ -9,13 +9,16 @@ import { assertHostedMode } from './mode-guard.js';
  * platforms (runtight, custom AI products).
  *
  * Env:
- *   GHP_MCP_MODE           (required) must be 'hosted'
- *   PORT                   (default 3000)
- *   GHP_HOSTED_BASE_URL    (required in production) public https URL
- *   GHP_REPO               (optional) lock all sessions to owner/name
- *   GHP_ALLOWED_ORIGINS    (default '*') comma-separated CORS allowlist
- *   GHP_LOG_LEVEL          (default 'info')
- *   NODE_ENV               (default 'development')
+ *   GHP_MCP_MODE                      (required) must be 'hosted'
+ *   GHP_REPO                          (required) owner/name lock for every session
+ *   GHP_GITHUB_OAUTH_CLIENT_ID        (required) GitHub OAuth App client id
+ *   GHP_GITHUB_OAUTH_CLIENT_SECRET    (required) GitHub OAuth App client secret
+ *   GHP_ALLOWED_REDIRECT_URIS         (required) comma-separated client redirect_uri allowlist
+ *   PORT                              (default 8731)
+ *   GHP_HOSTED_BASE_URL               (required in production) public https URL
+ *   GHP_ALLOWED_ORIGINS               (default '*') CORS allowlist
+ *   GHP_OAUTH_STATE_TTL_SECONDS       (default 600)
+ *   NODE_ENV                          (default 'development')
  */
 async function main(): Promise<void> {
     assertHostedMode();

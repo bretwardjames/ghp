@@ -6,14 +6,23 @@ describe('loadConfig', () => {
         GHP_MCP_MODE: 'hosted',
         PORT: '3000',
         GHP_REPO: 'bretwardjames/ghp',
+        GHP_GITHUB_OAUTH_CLIENT_ID: 'test-client-id',
+        GHP_GITHUB_OAUTH_CLIENT_SECRET: 'test-client-secret',
+        GHP_ALLOWED_REDIRECT_URIS: 'https://runtight.test/oauth/callback',
     };
 
     it('accepts a minimal dev config', () => {
         const cfg = loadConfig({ ...base });
         expect(cfg.mode).toBe('hosted');
-        expect(cfg.port).toBe(3000);
+        expect(cfg.port).toBe(3000); // coerced from the string '3000' in base
         expect(cfg.lockedRepo).toBe('bretwardjames/ghp');
         expect(cfg.nodeEnv).toBe('development');
+    });
+
+    it('defaults PORT to 8731 when unset', () => {
+        const { PORT: _omit, ...withoutPort } = base;
+        const cfg = loadConfig(withoutPort);
+        expect(cfg.port).toBe(8731);
     });
 
     it('refuses to start when GHP_MCP_MODE is not hosted', () => {
@@ -56,6 +65,26 @@ describe('loadConfig', () => {
 
     it('validates GHP_REPO format', () => {
         expect(() => loadConfig({ ...base, GHP_REPO: 'no-slash' })).toThrow();
+    });
+
+    it('requires GHP_GITHUB_OAUTH_CLIENT_ID', () => {
+        const { GHP_GITHUB_OAUTH_CLIENT_ID: _omit, ...without } = base;
+        expect(() => loadConfig(without)).toThrow();
+    });
+
+    it('requires GHP_GITHUB_OAUTH_CLIENT_SECRET', () => {
+        const { GHP_GITHUB_OAUTH_CLIENT_SECRET: _omit, ...without } = base;
+        expect(() => loadConfig(without)).toThrow();
+    });
+
+    it('requires GHP_ALLOWED_REDIRECT_URIS', () => {
+        const { GHP_ALLOWED_REDIRECT_URIS: _omit, ...without } = base;
+        expect(() => loadConfig(without)).toThrow();
+    });
+
+    it('oauthStateTtlSeconds defaults to 600', () => {
+        const cfg = loadConfig({ ...base });
+        expect(cfg.oauthStateTtlSeconds).toBe(600);
     });
 });
 

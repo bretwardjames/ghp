@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.vscode
+.git
+.github
+**/*.log
+**/.env
+**/.env.*
+**/coverage
+tmp
+**/.DS_Store
+apps/vscode/out

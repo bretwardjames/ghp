@@ -153,6 +153,23 @@ pnpm --filter @bretwardjames/ghp-mcp-hosted test
 pnpm --filter @bretwardjames/ghp-mcp-hosted dev
 ```
 
+## Deployment
+
+See [`DEPLOY.md`](./DEPLOY.md) for the Railway step-by-step. Short version:
+
+```bash
+# from repo root
+docker build -f packages/mcp-hosted/Dockerfile -t ghp-mcp-hosted .
+docker run -p 8731:8731 \
+  -e GHP_MCP_MODE=hosted \
+  -e GHP_REPO=bretwardjames/ghp \
+  -e GHP_GITHUB_OAUTH_CLIENT_ID=... \
+  -e GHP_GITHUB_OAUTH_CLIENT_SECRET=... \
+  -e GHP_ALLOWED_REDIRECT_URIS=https://your-client/cb \
+  -e GHP_HOSTED_BASE_URL=https://your-domain \
+  ghp-mcp-hosted
+```
+
 ## Related issues
 
 - #276 — Epic: Hosted GHP MCP server for runtight integration

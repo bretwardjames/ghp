@@ -12,3 +12,16 @@ export {
     type ReviewSentinel,
 } from './review-sentinel.js';
 export { PlanningSessionStore } from './session-store.js';
+export {
+    buildQueue,
+    type QueueInputItem,
+    type QueueBuildInput,
+} from './queue-builder.js';
+export {
+    parsePriority,
+    priorityRank,
+    daysSince,
+    isFreshEnoughToSurface,
+    compareStalenessAndPriority,
+    type PriorityTier,
+} from './ranking.js';

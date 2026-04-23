@@ -185,7 +185,7 @@ export interface PlanningSession {
     /** Stack of items explicitly parked (returned to the bottom). */
     parked: number[];
     /** Currently-in-front-of-the-team item, for `planning.status` timing. */
-    activeItemNumber: number | null;
+    activeItem: PlanningItem | null;
     activeItemSince: number | null; // epoch ms
 }
 

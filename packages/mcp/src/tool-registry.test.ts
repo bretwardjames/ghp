@@ -48,6 +48,31 @@ vi.mock('@bretwardjames/ghp-core', () => ({
     validateNumericInput: vi.fn((n) => n),
     validateSafeString: vi.fn((s) => s),
     BranchLinker: vi.fn(),
+    planning: {
+        probeProjectFields: vi.fn(() => ({
+            projectId: 'P',
+            projectTitle: 'T',
+            detected: {},
+            fallbacks: [],
+            suggestions: [],
+        })),
+        auditTimeline: vi.fn(() => ({
+            iterations: { current: null, upcoming: [], completed: 0 },
+            milestones: { current: null, upcoming: [], stale: [] },
+            findings: [],
+        })),
+        buildQueue: vi.fn(() => []),
+        PlanningSessionStore: class {
+            start() {}
+            get() { return null; }
+            getActiveForOwner() { return null; }
+            update() {}
+            end() { return null; }
+            size() { return 0; }
+        },
+        upsertSentinel: vi.fn((body) => body ?? ''),
+        todayIsoDate: vi.fn(() => '2026-04-22'),
+    },
 }));
 
 // Import after mocks

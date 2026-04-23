@@ -199,8 +199,11 @@ describe('tool-registry', () => {
             expect(pureNames).not.toContain('release');
             expect(pureNames).not.toContain('sync_merged_prs');
             expect(pureNames).not.toContain('start_work');
-            expect(pureNames).not.toContain('stop_work');
             expect(pureNames).not.toContain('get_tags');
+
+            // create_issue dispatches user-configurable hooks — keep it
+            // local-only until hosted mode gates the hook block (#278).
+            expect(pureNames).not.toContain('create_issue');
         });
 
         it('pure-api list includes GraphQL-only tools', () => {
@@ -208,10 +211,11 @@ describe('tool-registry', () => {
 
             expect(pureNames).toContain('get_my_work');
             expect(pureNames).toContain('get_project_board');
-            expect(pureNames).toContain('create_issue');
             expect(pureNames).toContain('update_issue');
             expect(pureNames).toContain('move_issue');
             expect(pureNames).toContain('add_comment');
+            // stop_work only removes a label via GraphQL — no git, no hooks
+            expect(pureNames).toContain('stop_work');
         });
 
         it('getToolsByCapability returns the same result as direct exports', () => {
@@ -255,11 +259,12 @@ describe('tool-registry', () => {
             expect(registered).not.toContain('merge_pr');
             expect(registered).not.toContain('list_worktrees');
             expect(registered).not.toContain('remove_worktree');
+            expect(registered).not.toContain('create_issue');
             // pure-api still registered
             expect(registered).toContain('link_branch');
             expect(registered).toContain('unlink_branch');
             expect(registered).toContain('get_my_work');
-            expect(registered).toContain('create_issue');
+            expect(registered).toContain('update_issue');
         });
     });
 

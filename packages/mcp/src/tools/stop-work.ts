@@ -8,7 +8,7 @@ import type { ToolMeta } from '../types.js';
 export const meta: ToolMeta = {
     name: 'stop_work',
     category: 'action',
-    capability: 'local-only',
+    capability: 'pure-api',
     disabledByDefault: true,
 };
 

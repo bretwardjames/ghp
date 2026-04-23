@@ -283,9 +283,11 @@ describe('addIssueCommand', () => {
             });
 
             // Behavior: a non-numeric parent must not trigger an
-            // addSubIssue call. The user-facing warning for invalid
-            // parent numbers has since moved to the dedicated set-parent
-            // command; this path silently no-ops in add-issue today.
+            // addSubIssue call. add-issue surfaces the invalid input in
+            // the summary table (`Parent: Invalid: <input> ⚠`), not via
+            // the two-arg console.log that the old assertion looked for,
+            // so the previous log check became stale when the summary
+            // renderer consolidated its output.
             expect(api.addSubIssue).not.toHaveBeenCalled();
         });
     });

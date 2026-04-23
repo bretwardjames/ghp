@@ -10,10 +10,18 @@ on:
 
 # Cancel in-progress runs for the same PR/branch when a new push lands.
 # Keeps compute cost down on rapid force-pushes and saves a reviewer from
-# looking at a stale run.
+# looking at a stale run. The PR-number-or-ref key groups PR and
+# post-merge main runs into the same bucket so we don't double-run a
+# PR's final sync against the new main push.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+# Default permissions: read-only. This workflow doesn't push, comment,
+# or deploy; denying everything beyond `contents: read` guards against
+# a future repo-level default that hands out write tokens.
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
@@ -37,13 +45,19 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
-      # Cache turbo's local artifacts — on warm cache, build + test cuts
-      # from ~4s to sub-second for unchanged packages. Keyed by OS + lockfile
-      # so a lockfile bump busts the cache deterministically.
+      # Cache turbo's local artifacts. Turbo writes per-package caches under
+      # packages/*/.turbo and apps/*/.turbo, not just the workspace-root
+      # .turbo (which only holds daemon state). Caching all three paths is
+      # what actually restores task hashes + build outputs on warm runs.
+      # Keyed by OS + lockfile so a lockfile bump busts the cache
+      # deterministically.
       - name: Restore turbo cache
         uses: actions/cache@v4
         with:
-          path: .turbo
+          path: |
+            .turbo
+            packages/*/.turbo
+            apps/*/.turbo
           key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-

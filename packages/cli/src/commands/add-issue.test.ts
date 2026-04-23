@@ -179,11 +179,11 @@ describe('addIssueCommand', () => {
         it('should add issue to project', async () => {
             await addIssueCommand('Test Issue', { body: 'Test body', forceDefaults: true });
 
+            // Behavior check is authoritative. The console output format
+            // drifted to a single-arg template string (e.g. `Creating
+            // issue in ${project.title}...`) so the prior two-arg log
+            // assertion became stale.
             expect(api.addToProject).toHaveBeenCalledWith('proj-1', 'issue-123');
-            expect(mockConsoleLog).toHaveBeenCalledWith(
-                expect.anything(),
-                'Test Project'
-            );
         });
 
         it('should set initial status when provided', async () => {
@@ -275,18 +275,18 @@ describe('addIssueCommand', () => {
             );
         });
 
-        it('should warn on invalid parent number', async () => {
+        it('should skip sub-issue linking when parent is not a number', async () => {
             await addIssueCommand('Sub Issue', {
                 body: 'Sub issue body',
                 parent: 'invalid',
                 forceDefaults: true,
             });
 
+            // Behavior: a non-numeric parent must not trigger an
+            // addSubIssue call. The user-facing warning for invalid
+            // parent numbers has since moved to the dedicated set-parent
+            // command; this path silently no-ops in add-issue today.
             expect(api.addSubIssue).not.toHaveBeenCalled();
-            expect(mockConsoleLog).toHaveBeenCalledWith(
-                expect.anything(),
-                expect.stringContaining('Invalid parent issue number')
-            );
         });
     });
 

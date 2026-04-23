@@ -12,6 +12,12 @@ outside the repo.
 
 ## Prerequisites
 
+- [ ] `RUNTIGHT_HOST` set to a **tenant** host, not a bare API host.
+      runtight's middleware resolves `appId` from the subdomain, a
+      `?appId=<id>` query parameter, or an `x-app-id: <id>` header.
+      Hitting a bare host without one of these returns 400. Pick the
+      subdomain form for simplicity:
+      `export RUNTIGHT_HOST=<yourapp>.runtight.io`.
 - [ ] Hosted GHP MCP deployed and reachable at a public HTTPS URL.
       Use Railway per `DEPLOY.md`, or Tailscale Funnel for a dev run:
       `tailscale funnel --bg --https=8443 http://localhost:8731`.
@@ -75,18 +81,21 @@ curl -X POST "https://$RUNTIGHT_HOST/api/mcp-servers" \
 
 Capture the returned `id` — call it `$SERVER_ID`.
 
-Expected: 201 Created, `McpServer` row in runtight's database with
-`level: 'account'`, `authType: 'per_user'`, `transportType: 'streamable-http'`.
+Expected: 200 OK (runtight's handler doesn't explicitly set 201),
+`McpServer` row in runtight's database with `level: 'account'`,
+`authType: 'per_user'`, `transportType: 'streamable-http'`, and both
+`toolWhitelist` and `toolBlacklist` empty (so step 5's `add_comment`
+will be allowed through).
 
 ## 3. Start the OAuth flow
 
 ```bash
 curl -X POST "https://$RUNTIGHT_HOST/api/mcp-servers/$SERVER_ID/oauth/start" \
   -H "Cookie: __session=$RUNTIGHT_COOKIE"
-# → { "authUrl": "https://<ghp>/oauth/authorize?..." }
+# → { "authorizationUrl": "https://<ghp>/oauth/authorize?..." }
 ```
 
-Open the `authUrl` in a browser. You should see:
+Open the `authorizationUrl` in a browser. You should see:
 
 1. Brief redirect through our `/oauth/authorize`.
 2. GitHub's consent page for the OAuth App you registered — listing the
@@ -101,8 +110,13 @@ Check status:
 ```bash
 curl "https://$RUNTIGHT_HOST/api/mcp-servers/$SERVER_ID/oauth/status" \
   -H "Cookie: __session=$RUNTIGHT_COOKIE"
-# → { "status": "active" }
+# → { "status": "connected" }
 ```
+
+The `McpUserAuthStatus` enum values are `pending | connected | expired
+| revoked`. A fresh successful flow ends at `connected`. `expired`
+happens when GitHub rejects the token at tool-call time (see step 8),
+and `revoked` only comes from the explicit disconnect flow (step 9).
 
 Database check:
 
@@ -113,7 +127,7 @@ FROM "McpUserAuth"
 WHERE "serverId" = '<SERVER_ID>';
 ```
 
-Expected: one row, `status = 'active'`, `has_token = true`.
+Expected: one row, `status = 'connected'`, `has_token = true`.
 
 ## 4. Invoke a read tool from chat
 
@@ -132,9 +146,20 @@ Expected:
 
 Observability checks during the call:
 
-- **Hosted GHP logs:** one `POST /mcp` 200 response per chat turn. No
-  token value in logs (we use structured logs and the token is never
-  stringified).
+- **Hosted GHP logs:** one `POST /mcp` 200 response per chat turn.
+- **Token secrecy check.** Grab the first 8 chars of the GitHub token
+  from the `McpUserAuth.accessTokenEncrypted` decryption (or, easier,
+  from your GitHub settings where you stored it) and grep the hosted
+  logs for it:
+  ```bash
+  railway logs --service ghp-mcp-hosted | grep -c "$TOKEN_PREFIX"
+  # must be 0 — any non-zero result means a token value leaked into logs
+  ```
+  Also confirm no literal `Authorization:` header values appear:
+  ```bash
+  railway logs --service ghp-mcp-hosted | grep -E '^[^#]*Bearer '
+  # must return nothing
+  ```
 - **runtight logs:** `discoverExternalTools` trace + one
   `executeExternalToolCall` trace with `tool: "mcp__ghp__get_my_work"`.
 
@@ -194,8 +219,48 @@ to the same hosted GHP instance must never see each other's tokens.
    mine" at the same time.
 5. Verify each user sees only their own GitHub account's issues.
 
-If any user sees the other's data this is a critical multi-tenancy
-bug — file immediately and roll back the deploy.
+Two browser tabs tabbing between each other will serialize at the
+human level, which is not a real concurrency test. Supplement with a
+programmatic probe that races two bearers at once against the hosted
+`/mcp` endpoint directly:
+
+```bash
+# Decrypt both tokens into $TOKEN_A / $TOKEN_B (Prisma Studio works,
+# or add a temporary /debug/decrypt route gated behind an admin flag).
+INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"race","version":"1"}}}'
+CALL='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_my_work","arguments":{}}}'
+
+curl -s -X POST "$GHP_URL/mcp" \
+  -H "Authorization: Bearer $TOKEN_A" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d "$INIT" > /dev/null
+curl -s -X POST "$GHP_URL/mcp" \
+  -H "Authorization: Bearer $TOKEN_A" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d "$CALL" > a.json &
+
+curl -s -X POST "$GHP_URL/mcp" \
+  -H "Authorization: Bearer $TOKEN_B" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d "$INIT" > /dev/null
+curl -s -X POST "$GHP_URL/mcp" \
+  -H "Authorization: Bearer $TOKEN_B" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d "$CALL" > b.json &
+
+wait
+
+# Assert the two responses report different GitHub logins.
+grep -E "assignee|login|author" a.json b.json
+```
+
+If any user sees the other's data — or if the two responses show the
+same login — this is a critical multi-tenancy bug. File immediately
+and roll back the deploy.
 
 ## 8. Token revocation check
 
@@ -203,7 +268,23 @@ bug — file immediately and roll back the deploy.
    → **Revoke**.
 2. Back in runtight chat, ask "list my issues" again.
 3. Expected: the hosted GHP's call to GitHub returns 401; runtight
-   surfaces a "reauthenticate" state via OAuth status polling.
+   catches the 401 in `mcp-client-manager.ts` and flips the
+   `McpUserAuth` row to `status: 'expired'` (NOT `'revoked'` —
+   `'revoked'` is reserved for the explicit disconnect in step 9).
+4. Verify:
+   ```sql
+   SELECT status FROM "McpUserAuth"
+   WHERE "serverId" = '<SERVER_ID>' AND "accountId" = '<your-account-id>';
+   -- → expired
+   ```
+5. The runtight UI surfaces a "reauthenticate" state via the status
+   endpoint.
+
+Edge case: runtight's expiry-flip filter is
+`where: { status: 'connected' }`. If the row was already `'expired'`
+(e.g. a previous failed call this session), the update is a no-op
+and the DB value stays `'expired'`. This is correct behaviour, not a
+bug — flag if the DB stays at `'connected'` after a confirmed 401.
 
 ## 9. Disconnect flow
 
@@ -221,16 +302,17 @@ Confirm `McpUserAuth.status` flipped to `revoked` and
 All must be true before marking epic #276 as Done:
 
 - [ ] `/healthz` + `.well-known` + 401 `WWW-Authenticate` shape correct
-- [ ] runtight server registration returns 201 and DB row
-- [ ] `/oauth/start` returns a usable `authUrl`
+- [ ] runtight server registration returns 200 and DB row
+- [ ] `/oauth/start` returns a usable `authorizationUrl`
 - [ ] End-to-end consent redirect lands back in runtight UI with "Connected"
-- [ ] `McpUserAuth.status = 'active'` with encrypted token stored
+- [ ] `McpUserAuth.status = 'connected'` with encrypted token stored
 - [ ] Read tool (`get_my_work`) returns real data through chat
-- [ ] Write tool (`create_issue`) creates a real GitHub issue
+- [ ] Write tool (`add_comment`) posts a comment on a real GitHub issue
+- [ ] Hosted server logs grep clean for token prefix + literal Bearer values
 - [ ] Local-only tools (`create_worktree`, `merge_pr`, etc.) absent from
       available tools list
-- [ ] Two concurrent users, distinct tokens, no cross-contamination
-- [ ] GitHub-side token revocation propagates to runtight
+- [ ] Two concurrent users, distinct tokens, no cross-contamination (browser + programmatic probe)
+- [ ] GitHub-side token revocation flips `McpUserAuth.status` to `expired`
 - [ ] `/oauth/disconnect` flips `McpUserAuth.status` to `revoked`
 
 Once all pass, close epic #276.

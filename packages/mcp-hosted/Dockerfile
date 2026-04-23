@@ -33,8 +33,11 @@ COPY apps/vscode/package.json apps/vscode/
 # Install deps for the hosted package and its transitive workspace graph.
 # `--filter ghp-mcp-hosted...` means "the hosted package plus everything
 # it depends on" (core, mcp), skipping cli and vscode.
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile \
+#
+# No BuildKit cache mount: Railway's builder warns about unprefixed cache
+# mount IDs and some configurations reject them outright. Railway layers
+# are cached by the platform anyway, so the mount was redundant.
+RUN pnpm install --frozen-lockfile \
         --filter @bretwardjames/ghp-mcp-hosted...
 
 # Copy source for the three packages we actually build.
@@ -48,8 +51,7 @@ RUN pnpm --filter @bretwardjames/ghp-mcp-hosted... build
 # production dependencies, with workspace:* deps materialised as real
 # directories instead of symlinks. The result is portable, so the
 # runtime stage doesn't need pnpm at all and no second install is run.
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm deploy --filter @bretwardjames/ghp-mcp-hosted --prod /deploy
+RUN pnpm deploy --filter @bretwardjames/ghp-mcp-hosted --prod /deploy
 
 # -------- runtime --------
 FROM node:20-alpine AS runtime

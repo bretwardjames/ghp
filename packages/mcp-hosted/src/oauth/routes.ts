@@ -3,13 +3,15 @@ import type { Request, Response, Application } from 'express';
 import type { HostedConfig } from '../config.js';
 import {
     StateStore,
+    StateStoreCapacityError,
     type AuthorizeContext,
     type AuthCodeContext,
 } from './state-store.js';
-import { verifyPkce } from './pkce.js';
+import { verifyPkce, isValidChallenge } from './pkce.js';
 import {
     buildGithubAuthorizeUrl,
     exchangeGithubCode,
+    GithubExchangeError,
     REQUIRED_GITHUB_SCOPES,
 } from './github.js';
 import {
@@ -137,10 +139,11 @@ function handleAuthorize(req: Request, res: Response, deps: OAuthDeps): void {
         });
         return;
     }
-    if (!codeChallenge) {
+    if (!codeChallenge || !isValidChallenge(codeChallenge)) {
         sendAuthorizeError(res, clientRedirectUri, clientState, {
             error: 'invalid_request',
-            error_description: 'PKCE code_challenge is required.',
+            error_description:
+                'PKCE code_challenge is required and must be a 43-char base64url-encoded SHA-256 digest.',
         });
         return;
     }
@@ -153,13 +156,26 @@ function handleAuthorize(req: Request, res: Response, deps: OAuthDeps): void {
     }
 
     const serverState = randomToken(32);
-    deps.authorizeStore.set(serverState, {
-        codeChallenge,
-        clientRedirectUri,
-        clientState: clientState ?? '',
-        clientId,
-        createdAt: Date.now(),
-    });
+    try {
+        deps.authorizeStore.set(serverState, {
+            codeChallenge,
+            clientRedirectUri,
+            clientState: clientState ?? '',
+            clientId,
+            createdAt: Date.now(),
+        });
+    } catch (err) {
+        if (err instanceof StateStoreCapacityError) {
+            res.setHeader('Retry-After', '60');
+            res.status(503).json({
+                error: 'server_error',
+                error_description:
+                    'Authorization server is temporarily at capacity. Retry shortly.',
+            });
+            return;
+        }
+        throw err;
+    }
 
     const githubCallback = `${baseUrl(deps.config)}/oauth/callback`;
     const githubUrl = buildGithubAuthorizeUrl({
@@ -218,11 +234,26 @@ async function handleCallback(
             deps.fetchImpl
         );
     } catch (err) {
-        // Bounce back to the client with an OAuth error per RFC 6749 §4.1.2.1.
+        // Log the real reason server-side; surface only a generic
+        // message to the client via the redirect. Echoing GitHub's
+        // error_description to an attacker-controlled redirect could
+        // leak operational detail about our OAuth App state.
+        console.error(
+            JSON.stringify({
+                level: 'warn',
+                msg: 'github_token_exchange_failed',
+                error:
+                    err instanceof GithubExchangeError
+                        ? err.message
+                        : err instanceof Error
+                          ? err.message
+                          : String(err),
+            })
+        );
         sendAuthorizeError(res, authCtx.clientRedirectUri, authCtx.clientState, {
             error: 'server_error',
             error_description:
-                err instanceof Error ? err.message : 'GitHub token exchange failed.',
+                'Upstream authorization server rejected the code exchange.',
         });
         return;
     }

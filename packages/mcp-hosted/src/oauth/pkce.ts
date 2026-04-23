@@ -35,6 +35,17 @@ function isValidVerifier(verifier: string): boolean {
     return /^[A-Za-z0-9\-._~]+$/.test(verifier);
 }
 
+/**
+ * RFC 7636 §4.2: S256 code_challenge = base64url(SHA256(verifier)).
+ * The encoded output is always 43 chars, no padding, base64url alphabet.
+ * Validating at authorize time means verifyPkce's length check is
+ * defense-in-depth rather than the primary guarantee of correctness.
+ */
+export function isValidChallenge(challenge: string): boolean {
+    if (challenge.length !== 43) return false;
+    return /^[A-Za-z0-9_-]+$/.test(challenge);
+}
+
 function base64UrlSha256(input: string): string {
     return createHash('sha256')
         .update(input)

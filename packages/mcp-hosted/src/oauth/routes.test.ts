@@ -317,4 +317,90 @@ describe('OAuth flow', () => {
             expect(res.body.error).toBe('unsupported_grant_type');
         });
     });
+
+    describe('TTL expiry', () => {
+        it('/oauth/callback rejects an expired server state', async () => {
+            vi.useFakeTimers({ now: Date.now() });
+            try {
+                const appWithShortTtl = createApp(
+                    buildConfig({ oauthStateTtlSeconds: 60 })
+                );
+
+                const authorizeRes = await request(appWithShortTtl)
+                    .get('/oauth/authorize')
+                    .query({
+                        response_type: 'code',
+                        client_id: 'public',
+                        redirect_uri: CLIENT_REDIRECT,
+                        state: 'client-state',
+                        code_challenge: CHALLENGE,
+                        code_challenge_method: 'S256',
+                    });
+                const serverState = new URL(
+                    authorizeRes.headers.location
+                ).searchParams.get('state')!;
+
+                vi.advanceTimersByTime(61_000); // past 60s TTL
+
+                const callbackRes = await request(appWithShortTtl)
+                    .get('/oauth/callback')
+                    .query({
+                        code: 'github-code-123',
+                        state: serverState,
+                    });
+                expect(callbackRes.status).toBe(400);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('/oauth/token rejects an expired auth code', async () => {
+            vi.useFakeTimers({ now: Date.now() });
+            try {
+                const appWithShortTtl = createApp(
+                    buildConfig({ oauthStateTtlSeconds: 60 })
+                );
+
+                const authorizeRes = await request(appWithShortTtl)
+                    .get('/oauth/authorize')
+                    .query({
+                        response_type: 'code',
+                        client_id: 'public',
+                        redirect_uri: CLIENT_REDIRECT,
+                        state: 'client-state',
+                        code_challenge: CHALLENGE,
+                        code_challenge_method: 'S256',
+                    });
+                const serverState = new URL(
+                    authorizeRes.headers.location
+                ).searchParams.get('state')!;
+
+                const callbackRes = await request(appWithShortTtl)
+                    .get('/oauth/callback')
+                    .query({
+                        code: 'github-code-123',
+                        state: serverState,
+                    });
+                const authCode = new URL(
+                    callbackRes.headers.location
+                ).searchParams.get('code')!;
+
+                vi.advanceTimersByTime(61_000);
+
+                const tokenRes = await request(appWithShortTtl)
+                    .post('/oauth/token')
+                    .type('form')
+                    .send({
+                        grant_type: 'authorization_code',
+                        code: authCode,
+                        code_verifier: VERIFIER,
+                        redirect_uri: CLIENT_REDIRECT,
+                    });
+                expect(tokenRes.status).toBe(400);
+                expect(tokenRes.body.error).toBe('invalid_grant');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+    });
 });

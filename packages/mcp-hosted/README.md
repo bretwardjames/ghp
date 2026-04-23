@@ -69,7 +69,7 @@ curl -X POST http://localhost:8731/mcp \
 | `GHP_REPO`                       | yes      | —          | Locks every session to `owner/name`.                                       |
 | `GHP_GITHUB_OAUTH_CLIENT_ID`     | yes      | —          | GitHub OAuth App client id (created at https://github.com/settings/developers). |
 | `GHP_GITHUB_OAUTH_CLIENT_SECRET` | yes      | —          | GitHub OAuth App client secret.                                            |
-| `GHP_ALLOWED_REDIRECT_URIS`      | yes      | —          | Comma-separated exact redirect_uri allowlist. MCP clients whose redirect_uri is not in this list are rejected. |
+| `GHP_ALLOWED_REDIRECT_URIS`      | yes      | —          | Comma-separated exact redirect_uri allowlist. **Exact binary match.** Trailing slash, host casing, and explicit default ports all count — `https://x/cb` ≠ `https://x/cb/` ≠ `https://X/cb` ≠ `https://x:443/cb`. |
 | `PORT`                           | no       | `8731`     | HTTP listen port. Railway / Fly inject this. 8731 avoids common local collisions. |
 | `GHP_HOSTED_BASE_URL`            | prod     | —          | Public https URL. Required in production. Used to build OAuth metadata + the GitHub callback URL. |
 | `GHP_ALLOWED_ORIGINS`            | no       | `*`        | CORS allowlist.                                                            |

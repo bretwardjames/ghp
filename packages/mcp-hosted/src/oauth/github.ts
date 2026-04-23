@@ -79,14 +79,23 @@ export async function exchangeGithubCode(
     });
 
     if (!res.ok) {
-        throw new Error(
+        throw new GithubExchangeError(
             `GitHub token exchange failed: HTTP ${res.status} ${res.statusText}`
         );
     }
 
-    const payload = (await res.json()) as Record<string, unknown>;
+    let payload: Record<string, unknown>;
+    try {
+        payload = (await res.json()) as Record<string, unknown>;
+    } catch {
+        // Non-JSON body (HTML maintenance page, empty response, etc.)
+        throw new GithubExchangeError(
+            'Non-JSON response from GitHub token endpoint'
+        );
+    }
+
     if (payload.error) {
-        throw new Error(
+        throw new GithubExchangeError(
             `GitHub token exchange error: ${String(payload.error)} - ${String(
                 payload.error_description ?? ''
             )}`
@@ -95,7 +104,9 @@ export async function exchangeGithubCode(
 
     const accessToken = payload.access_token;
     if (typeof accessToken !== 'string' || accessToken.length === 0) {
-        throw new Error('GitHub token exchange returned no access_token');
+        throw new GithubExchangeError(
+            'GitHub token exchange returned no access_token'
+        );
     }
 
     return {
@@ -104,4 +115,17 @@ export async function exchangeGithubCode(
         tokenType:
             typeof payload.token_type === 'string' ? payload.token_type : 'bearer',
     };
+}
+
+/**
+ * Dedicated error type so callers can distinguish GitHub-exchange
+ * failures (which should surface a generic error_description to the
+ * client) from internal bugs (which should surface the real message
+ * server-side).
+ */
+export class GithubExchangeError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'GithubExchangeError';
+    }
 }

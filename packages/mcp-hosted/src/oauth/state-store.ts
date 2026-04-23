@@ -46,10 +46,26 @@ export interface AuthCodeContext {
 export class StateStore<T extends { createdAt: number }> {
     private readonly entries = new Map<string, T>();
 
-    constructor(private readonly ttlMs: number) {}
+    /**
+     * `ttlMs` — entries older than this are treated as absent.
+     * `maxEntries` — hard cap to bound memory. When full, `set` throws
+     * rather than silently evicting; the expected upstream response is
+     * to return 503 or rate-limit the caller. Chosen at 100_000 so that
+     * an attacker flooding /oauth/authorize cannot unbounded-grow the
+     * store even if they outrun the sweep interval.
+     */
+    constructor(
+        private readonly ttlMs: number,
+        private readonly maxEntries: number = 100_000
+    ) {}
 
     set(key: string, value: T): void {
         this.sweep();
+        if (this.entries.size >= this.maxEntries) {
+            throw new StateStoreCapacityError(
+                `StateStore capacity reached (${this.maxEntries}); refusing new entries.`
+            );
+        }
         this.entries.set(key, value);
     }
 
@@ -82,5 +98,16 @@ export class StateStore<T extends { createdAt: number }> {
                 this.entries.delete(key);
             }
         }
+    }
+}
+
+/**
+ * Thrown when a set() would exceed the store's maxEntries cap.
+ * Callers should catch and surface a 503 / Retry-After response.
+ */
+export class StateStoreCapacityError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'StateStoreCapacityError';
     }
 }

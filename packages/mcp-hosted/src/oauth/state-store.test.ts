@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { StateStore } from './state-store.js';
+import { StateStore, StateStoreCapacityError } from './state-store.js';
 
 type Entry = { createdAt: number; payload: string };
 
@@ -43,5 +43,15 @@ describe('StateStore', () => {
 
     it('returns null for unknown keys', () => {
         expect(store.take('nope')).toBeNull();
+    });
+
+    it('throws StateStoreCapacityError once maxEntries is reached', () => {
+        const capped = new StateStore<Entry>(10_000, 3);
+        capped.set('a', { createdAt: Date.now(), payload: 'x' });
+        capped.set('b', { createdAt: Date.now(), payload: 'x' });
+        capped.set('c', { createdAt: Date.now(), payload: 'x' });
+        expect(() =>
+            capped.set('d', { createdAt: Date.now(), payload: 'x' })
+        ).toThrow(StateStoreCapacityError);
     });
 });

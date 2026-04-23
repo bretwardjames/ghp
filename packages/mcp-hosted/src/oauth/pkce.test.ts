@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'crypto';
-import { verifyPkce } from './pkce.js';
+import { verifyPkce, isValidChallenge } from './pkce.js';
 
 function computeChallenge(verifier: string): string {
     return createHash('sha256')
@@ -33,13 +33,37 @@ describe('verifyPkce', () => {
         expect(verifyPkce(long, computeChallenge(long))).toBe(false);
     });
 
-    it('rejects verifier with disallowed characters', () => {
-        const bad = 'a'.repeat(43) + '!';
-        expect(verifyPkce(bad.slice(0, 43), computeChallenge(bad.slice(0, 43)))).toBe(true);
+    it('rejects verifier containing a disallowed character (at a valid length)', () => {
+        // 43 chars, includes '!' which is NOT in the RFC 7636 unreserved set.
+        // Should fail purely on charset, not length.
+        const bad = 'a'.repeat(42) + '!';
+        expect(bad.length).toBe(43);
         expect(verifyPkce(bad, computeChallenge(bad))).toBe(false);
     });
 
     it('rejects when method is not S256', () => {
         expect(verifyPkce(VERIFIER, VERIFIER, 'plain')).toBe(false);
+    });
+});
+
+describe('isValidChallenge', () => {
+    it('accepts a base64url-encoded SHA-256 digest (43 chars)', () => {
+        expect(isValidChallenge(CHALLENGE)).toBe(true);
+    });
+
+    it('rejects wrong-length challenges', () => {
+        expect(isValidChallenge('a'.repeat(42))).toBe(false);
+        expect(isValidChallenge('a'.repeat(44))).toBe(false);
+    });
+
+    it('rejects challenges with non-base64url chars', () => {
+        // base64url alphabet does NOT include '+', '/', or '='
+        const invalid = 'a'.repeat(41) + '+/=';
+        expect(invalid.length).toBe(44);
+        expect(isValidChallenge(invalid)).toBe(false);
+    });
+
+    it('rejects empty string', () => {
+        expect(isValidChallenge('')).toBe(false);
     });
 });

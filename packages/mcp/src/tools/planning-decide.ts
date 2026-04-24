@@ -3,7 +3,7 @@ import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
 import { planning } from '@bretwardjames/ghp-core';
-import { getPlanningStore } from './planning-session.js';
+import { getPlanningStore, hydrateActiveItemBody } from './planning-session.js';
 
 /** Tool metadata for registry */
 export const meta: ToolMeta = {
@@ -134,6 +134,7 @@ export function register(server: McpServer, context: ServerContext): void {
             session.queue = session.queue.slice(1);
             session.activeItem = nextItem;
             session.activeItemSince = nextItem ? Date.now() : null;
+            await hydrateActiveItemBody(context, repo, session.activeItem);
             store.update(session);
 
             return {

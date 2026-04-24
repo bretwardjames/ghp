@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
-import { getPlanningStore } from './planning-session.js';
+import { getPlanningStore, hydrateActiveItemBody } from './planning-session.js';
 
 /** Tool metadata for registry */
 export const meta: ToolMeta = {
@@ -17,7 +17,7 @@ export const meta: ToolMeta = {
  * the same meeting if there's time. No Last Reviewed update means
  * parked items will resurface next week exactly as they would have.
  */
-export function register(server: McpServer, _context: ServerContext): void {
+export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
         'planning_park',
         {
@@ -69,6 +69,11 @@ export function register(server: McpServer, _context: ServerContext): void {
             const nextItem = session.queue.shift() ?? null;
             session.activeItem = nextItem;
             session.activeItemSince = nextItem ? Date.now() : null;
+
+            const repo = await context.getRepo();
+            if (repo) {
+                await hydrateActiveItemBody(context, repo, session.activeItem);
+            }
             store.update(session);
 
             return {

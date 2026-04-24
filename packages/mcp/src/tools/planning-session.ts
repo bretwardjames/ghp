@@ -1,5 +1,7 @@
 import { planning } from '@bretwardjames/ghp-core';
+import type { RepoInfo } from '@bretwardjames/ghp-core';
 import { randomBytes } from 'crypto';
+import type { ServerContext } from '../server.js';
 
 /**
  * Process-wide planning session store.
@@ -34,4 +36,30 @@ export function newSessionId(): string {
         .replace(/=+$/, '')
         .replace(/\+/g, '-')
         .replace(/\//g, '_');
+}
+
+/**
+ * Populate an active item's `body` in-place by fetching from GitHub.
+ * Called each time a new item becomes active (planning_start's first
+ * pop + every planning_next / planning_decide / planning_park
+ * advance) so the LLM has the full description, not just the title.
+ *
+ * Body is cached on the item after first fetch within a session to
+ * avoid a re-fetch if the same item is parked and returns later.
+ */
+export async function hydrateActiveItemBody(
+    context: ServerContext,
+    repo: RepoInfo,
+    item: planning.PlanningItem | null
+): Promise<planning.PlanningItem | null> {
+    if (!item) return null;
+    if (typeof item.body === 'string') return item; // already fetched
+    try {
+        const details = await context.api.getIssueDetails(repo, item.number);
+        item.body = details?.body ?? '';
+    } catch {
+        // Non-fatal — LLM can still operate on title + fields.
+        item.body = '';
+    }
+    return item;
 }

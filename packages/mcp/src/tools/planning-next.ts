@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod';
 import type { ServerContext } from '../server.js';
 import type { ToolMeta } from '../types.js';
-import { getPlanningStore } from './planning-session.js';
+import { getPlanningStore, hydrateActiveItemBody } from './planning-session.js';
 
 /** Tool metadata for registry */
 export const meta: ToolMeta = {
@@ -20,13 +20,13 @@ export const meta: ToolMeta = {
  * For the normal flow, callers should prefer `planning_decide` which
  * records the verdict and advances in one step.
  */
-export function register(server: McpServer, _context: ServerContext): void {
+export function register(server: McpServer, context: ServerContext): void {
     server.registerTool(
         'planning_next',
         {
             title: 'Next Planning Item',
             description:
-                'Advance the planning queue to the next item without recording a decision. Returns { active, queueLength, remaining } or { active: null } when the queue is exhausted.',
+                'Advance the planning queue to the next item without recording a decision. Returns { active, queueLength, remaining } or { active: null } when the queue is exhausted. Active item\'s body is fetched lazily so the LLM has full discussion context.',
             inputSchema: {
                 sessionId: z.string().describe('Session id from planning_start'),
             },
@@ -50,6 +50,11 @@ export function register(server: McpServer, _context: ServerContext): void {
             session.queue = session.queue.slice(1);
             session.activeItem = nextItem;
             session.activeItemSince = nextItem ? Date.now() : null;
+
+            const repo = await context.getRepo();
+            if (repo) {
+                await hydrateActiveItemBody(context, repo, session.activeItem);
+            }
             store.update(session);
 
             return {

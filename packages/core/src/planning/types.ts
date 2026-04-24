@@ -147,6 +147,13 @@ export interface PlanningItem {
     assignees: string[];
     /** Queue slot this item came from (used by tests + UI). */
     bucket: PlanningBucket;
+    /**
+     * Issue body. Populated lazily when the item becomes the active
+     * discussion subject (via planning_next / planning_decide /
+     * planning_park) — we don't eagerly fetch bodies at queue-build
+     * time because that would scale linearly with queue size.
+     */
+    body?: string;
 }
 
 export type PlanningBucket =

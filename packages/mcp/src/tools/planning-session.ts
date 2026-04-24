@@ -1,4 +1,5 @@
 import { planning } from '@bretwardjames/ghp-core';
+import { randomBytes } from 'crypto';
 
 /**
  * Process-wide planning session store.
@@ -28,7 +29,6 @@ export function ownerKeyForProcess(): string {
 export function newSessionId(): string {
     // 16 bytes of crypto-random, base64url-encoded. Collision-resistant
     // enough for the ~2h session lifetime without bringing in uuid.
-    const { randomBytes } = require('crypto') as typeof import('crypto');
     return randomBytes(16)
         .toString('base64')
         .replace(/=+$/, '')

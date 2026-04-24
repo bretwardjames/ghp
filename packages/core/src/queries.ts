@@ -820,8 +820,8 @@ export const ISSUE_BODY_QUERY = `
         repository(owner: $owner, name: $name) {
             issueOrPullRequest(number: $number) {
                 __typename
-                ... on Issue { body }
-                ... on PullRequest { body }
+                ... on Issue { title body }
+                ... on PullRequest { title body }
             }
         }
     }

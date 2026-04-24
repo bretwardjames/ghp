@@ -66,11 +66,28 @@ export async function hydrateActiveItemBody(
         // Lean body-only fetch. Distinct from getIssueDetails (which
         // also pulls comments/labels/author/etc.) so one failing
         // sub-field doesn't take out the whole response.
-        const body = await context.api.getIssueBody(itemRepo, item.number);
-        if (body === null) {
-            item.body = `(issue ${itemRepo.fullName}#${item.number} not found — may have been deleted or moved)`;
+        const result = await context.api.getIssueBody(itemRepo, item.number);
+        if (!result.found) {
+            item.body = `(issue ${itemRepo.fullName}#${item.number} not found — may have been deleted, moved, or the token cannot resolve this repo)`;
+        } else if (result.body === null) {
+            // GraphQL returned the node but body is null. Most common
+            // cause: OAuth token has read:project (sufficient for
+            // title/fields via the projects graph) but not full `repo`
+            // scope for this owner — GitHub filters body content
+            // rather than erroring. Signal the operator clearly so
+            // they can re-authorize with correct scope.
+            console.error(
+                JSON.stringify({
+                    level: 'warn',
+                    msg: 'planning_body_null_probable_scope_issue',
+                    repo: itemRepo.fullName,
+                    issue: item.number,
+                    titleReturned: result.title !== null,
+                })
+            );
+            item.body = `(body not returned by GitHub for ${itemRepo.fullName}#${item.number}. Title came through${result.title !== null ? ' ✓' : ' ✗'}. Most likely the token lacks full \`repo\` scope for this owner — re-authorize the GHP MCP OAuth app including the target org.)`;
         } else {
-            item.body = body;
+            item.body = result.body;
         }
     } catch (err) {
         // Surface the error in the body field so the LLM (and the

@@ -1940,20 +1940,33 @@ export class GitHubAPI {
 
     /**
      * Lean body-only fetch for the planning hydration path. Works for
-     * both issues and PRs. Returns `null` when the record doesn't
-     * exist or can't be resolved; throws on transport / auth errors
-     * so the caller can surface them instead of silently swallowing.
+     * both issues and PRs. Throws on transport / auth errors so the
+     * caller can surface them instead of silently swallowing.
+     *
+     * Return shape distinguishes:
+     *   - `{ found: false }` — record doesn't exist / token can't resolve
+     *   - `{ body: null }`  — node resolved but body came back null
+     *                        (scope-limited / permission-filtered response)
+     *   - `{ body: '' }`    — issue legitimately has no body
+     *   - `{ body: '...' }` — normal case
      */
-    async getIssueBody(repo: RepoInfo, issueNumber: number): Promise<string | null> {
+    async getIssueBody(
+        repo: RepoInfo,
+        issueNumber: number
+    ): Promise<
+        | { found: false }
+        | { found: true; title: string | null; body: string | null }
+    > {
         if (!this.graphqlWithAuth) throw new Error('Not authenticated');
 
         const response: {
             repository: {
                 issueOrPullRequest: {
                     __typename: string;
-                    body?: string;
+                    title?: string | null;
+                    body?: string | null;
                 } | null;
-            };
+            } | null;
         } = await this.graphqlWithRetry(queries.ISSUE_BODY_QUERY, {
             owner: repo.owner,
             name: repo.name,
@@ -1961,8 +1974,12 @@ export class GitHubAPI {
         });
 
         const node = response.repository?.issueOrPullRequest;
-        if (!node) return null;
-        return node.body ?? '';
+        if (!node) return { found: false };
+        return {
+            found: true,
+            title: node.title ?? null,
+            body: typeof node.body === 'string' ? node.body : null,
+        };
     }
 
     /**

@@ -152,6 +152,7 @@ export function register(server: McpServer, context: ServerContext): void {
                         assignees: it.assignees,
                         lastReviewed: it.fields['Last Reviewed'] ?? null,
                         iterationTitle: it.fields['Sprint'] ?? null,
+                        repository: it.repository,
                     })),
                 meetingType,
                 currentSprintTitle,
@@ -163,7 +164,9 @@ export function register(server: McpServer, context: ServerContext): void {
             const active = queue.length > 0 ? queue[0] : null;
             // Hydrate the first item's body before we return so the LLM
             // has context for the opening discussion, not just the title.
-            await hydrateActiveItemBody(context, repo, active);
+            // Uses the item's own repo (multi-repo projects have items
+            // outside the session's default repo).
+            await hydrateActiveItemBody(context, active);
             const session: planning.PlanningSession = {
                 id: sessionId,
                 startedAt: Date.now(),

@@ -19,6 +19,8 @@ export interface QueueInputItem {
     /** ISO date from the Last Reviewed field, or sentinel, or null. */
     lastReviewed: string | null;
     iterationTitle: string | null;
+    /** `owner/name` the issue lives in — multi-repo projects need this. */
+    repository: string | null;
 }
 
 export interface QueueBuildInput {
@@ -78,6 +80,7 @@ export function buildQueue(input: QueueBuildInput): PlanningItem[] {
             lastReviewed: item.lastReviewed,
             assignees: item.assignees,
             bucket,
+            repository: item.repository,
         });
     }
 

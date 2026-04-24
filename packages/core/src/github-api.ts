@@ -1939,6 +1939,33 @@ export class GitHubAPI {
     }
 
     /**
+     * Lean body-only fetch for the planning hydration path. Works for
+     * both issues and PRs. Returns `null` when the record doesn't
+     * exist or can't be resolved; throws on transport / auth errors
+     * so the caller can surface them instead of silently swallowing.
+     */
+    async getIssueBody(repo: RepoInfo, issueNumber: number): Promise<string | null> {
+        if (!this.graphqlWithAuth) throw new Error('Not authenticated');
+
+        const response: {
+            repository: {
+                issueOrPullRequest: {
+                    __typename: string;
+                    body?: string;
+                } | null;
+            };
+        } = await this.graphqlWithRetry(queries.ISSUE_BODY_QUERY, {
+            owner: repo.owner,
+            name: repo.name,
+            number: issueNumber,
+        });
+
+        const node = response.repository?.issueOrPullRequest;
+        if (!node) return null;
+        return node.body ?? '';
+    }
+
+    /**
      * Fetch open milestones for a repo with enough context to run the
      * planning-meeting timeline audit. Returns dueOn as an ISO date
      * (or null) and the open issue count per milestone.

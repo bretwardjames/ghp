@@ -154,6 +154,13 @@ export interface PlanningItem {
      * time because that would scale linearly with queue size.
      */
     body?: string;
+    /**
+     * `owner/name` of the repo this issue lives in. A GitHub Project
+     * can aggregate items across multiple repos, so each item carries
+     * its own repo here — hydration + sentinel writes target THIS
+     * repo, not the session's default.
+     */
+    repository: string | null;
 }
 
 export type PlanningBucket =

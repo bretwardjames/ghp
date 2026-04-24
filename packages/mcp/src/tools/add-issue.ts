@@ -13,13 +13,11 @@ import {
 export const meta: ToolMeta = {
     name: 'create_issue',
     category: 'action',
-    // Hook dispatch (`executeHooksForEvent('issue-created', ...)`) can run
-    // user-supplied shell commands via `loadHooksConfig` + `runCommand`.
-    // Classified local-only to match other hook-dispatching tools
-    // (start_work, create_pr, remove_worktree). Re-enabling on hosted is
-    // tracked in #288 — a single-line GHP_MCP_MODE guard around the hook
-    // block is enough to flip this back to pure-api safely.
-    capability: 'local-only',
+    // Safe for hosted: the `issue-created` hook dispatch (which runs
+    // user-supplied shell commands) is gated on `GHP_MCP_MODE !== 'hosted'`
+    // inside the handler. On hosted that block is skipped entirely, so
+    // the tool is pure GitHub API. Stdio users retain the full hook path.
+    capability: 'pure-api',
 };
 
 /**
@@ -128,8 +126,14 @@ export function register(server: McpServer, context: ServerContext): void {
                     }
                 }
 
-                // Fire issue-created hook
-                if (hasHooksForEvent('issue-created')) {
+                // Fire issue-created hook — skipped in hosted mode where
+                // hooks would execute untrusted shell commands on a
+                // multi-tenant container that has no per-user config
+                // boundary. Stdio users keep hooks unchanged.
+                if (
+                    process.env.GHP_MCP_MODE !== 'hosted' &&
+                    hasHooksForEvent('issue-created')
+                ) {
                     const payload: IssueCreatedPayload = {
                         repo: `${repo.owner}/${repo.name}`,
                         issue: {

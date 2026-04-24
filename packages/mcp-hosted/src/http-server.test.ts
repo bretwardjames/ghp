@@ -220,8 +220,9 @@ describe('hosted http server', () => {
             expect(names).not.toContain('sync_merged_prs');
             expect(names).not.toContain('start_work');
             expect(names).not.toContain('get_tags');
-            // create_issue is local-only until #278 hook gate lands
-            expect(names).not.toContain('create_issue');
+            // create_issue is now pure-api on hosted: its hook dispatch
+            // is gated behind GHP_MCP_MODE=hosted (see #288).
+            expect(names).toContain('create_issue');
         });
     });
 });

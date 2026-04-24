@@ -14,6 +14,7 @@ function item(overrides: Partial<QueueInputItem>): QueueInputItem {
         assignees: [],
         lastReviewed: null,
         iterationTitle: null,
+        repository: 'owner/repo',
         ...overrides,
     };
 }

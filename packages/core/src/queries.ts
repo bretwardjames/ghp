@@ -807,3 +807,22 @@ export const REPO_OPEN_MILESTONES_QUERY = `
         }
     }
 `;
+
+/**
+ * Lean body-only fetch for the planning-meeting hydration path.
+ * Avoids the fuller ISSUE_DETAILS_QUERY (which also grabs labels,
+ * comments, author, etc.) — body is the only field the planning
+ * loop needs and one failure mode deep in an unrelated field would
+ * otherwise take out the whole response.
+ */
+export const ISSUE_BODY_QUERY = `
+    query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+            issueOrPullRequest(number: $number) {
+                __typename
+                ... on Issue { body }
+                ... on PullRequest { body }
+            }
+        }
+    }
+`;

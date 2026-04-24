@@ -44,22 +44,57 @@ export function newSessionId(): string {
  * pop + every planning_next / planning_decide / planning_park
  * advance) so the LLM has the full description, not just the title.
  *
+ * The fetch targets the item's OWN repo (parsed from `item.repository`),
+ * not the session's default repo — GitHub Projects can aggregate items
+ * from multiple repos and hydration must follow the actual source.
+ *
  * Body is cached on the item after first fetch within a session to
  * avoid a re-fetch if the same item is parked and returns later.
  */
 export async function hydrateActiveItemBody(
     context: ServerContext,
-    repo: RepoInfo,
     item: planning.PlanningItem | null
 ): Promise<planning.PlanningItem | null> {
     if (!item) return null;
     if (typeof item.body === 'string') return item; // already fetched
+    const itemRepo = parseItemRepository(item.repository);
+    if (!itemRepo) {
+        item.body = '(no repo attached to project item — likely a draft issue)';
+        return item;
+    }
     try {
-        const details = await context.api.getIssueDetails(repo, item.number);
-        item.body = details?.body ?? '';
-    } catch {
-        // Non-fatal — LLM can still operate on title + fields.
-        item.body = '';
+        // Lean body-only fetch. Distinct from getIssueDetails (which
+        // also pulls comments/labels/author/etc.) so one failing
+        // sub-field doesn't take out the whole response.
+        const body = await context.api.getIssueBody(itemRepo, item.number);
+        if (body === null) {
+            item.body = `(issue ${itemRepo.fullName}#${item.number} not found — may have been deleted or moved)`;
+        } else {
+            item.body = body;
+        }
+    } catch (err) {
+        // Surface the error in the body field so the LLM (and the
+        // operator looking at logs) can see WHY hydration failed,
+        // instead of seeing a mysterious empty string.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+            JSON.stringify({
+                level: 'warn',
+                msg: 'planning_hydrate_body_failed',
+                repo: itemRepo.fullName,
+                issue: item.number,
+                error: msg,
+            })
+        );
+        item.body = `(failed to fetch body: ${msg})`;
     }
     return item;
+}
+
+function parseItemRepository(repoString: string | null): RepoInfo | null {
+    if (!repoString || !repoString.includes('/')) return null;
+    const [owner, ...rest] = repoString.split('/');
+    const name = rest.join('/');
+    if (!owner || !name) return null;
+    return { owner, name, fullName: `${owner}/${name}` };
 }

@@ -5,6 +5,7 @@ import type { ToolMeta } from '../types.js';
 import { planning } from '@bretwardjames/ghp-core';
 import {
     getPlanningStore,
+    hydrateActiveItemBody,
     newSessionId,
     ownerKeyForProcess,
 } from './planning-session.js';
@@ -160,6 +161,9 @@ export function register(server: McpServer, context: ServerContext): void {
 
             const sessionId = newSessionId();
             const active = queue.length > 0 ? queue[0] : null;
+            // Hydrate the first item's body before we return so the LLM
+            // has context for the opening discussion, not just the title.
+            await hydrateActiveItemBody(context, repo, active);
             const session: planning.PlanningSession = {
                 id: sessionId,
                 startedAt: Date.now(),
